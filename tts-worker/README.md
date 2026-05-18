@@ -1,4 +1,4 @@
-# Scribble Heroes — realistic voice proxy
+# Scribble Heroes - realistic voice proxy
 
 A tiny Cloudflare Worker that turns text into a warm, child-friendly voice
 with OpenAI `gpt-4o-mini-tts`. It exists so the OpenAI API key is **never**
@@ -8,7 +8,7 @@ caches every phrase so each line is generated only once.
 ## One-time setup (about 5 minutes)
 
 You need: a free Cloudflare account, and an OpenAI API key
-(https://platform.openai.com/api-keys — add a small amount of credit, this
+(https://platform.openai.com/api-keys - add a small amount of credit, this
 costs cents).
 
 From this folder:
@@ -50,7 +50,7 @@ location.reload();
 
 ## Cost & safety
 
-- Key lives only as a Cloudflare encrypted secret — not in the app, not in git.
+- Key lives only as a Cloudflare encrypted secret - not in the app, not in git.
 - Requests are capped at 300 characters and limited to the `/tts` path.
 - Browser caches audio per phrase, so repeats are free and work offline.
 - `gpt-4o-mini-tts` is inexpensive (fractions of a cent per phrase); with

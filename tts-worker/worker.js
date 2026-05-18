@@ -1,5 +1,5 @@
 /* =========================================================================
-   Scribble Heroes — TTS proxy (Cloudflare Worker)
+   Scribble Heroes - TTS proxy (Cloudflare Worker)
 
    Holds the OpenAI API key as an encrypted secret (NEVER in the app or
    the repo) and turns short text into a warm, gentle child-friendly MP3
