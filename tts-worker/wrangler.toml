@@ -1,0 +1,6 @@
+name = "scribble-tts"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# The OpenAI key is NOT stored here. It is set once as an encrypted secret:
+#   npx wrangler secret put OPENAI_API_KEY

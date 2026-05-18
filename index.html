@@ -327,9 +327,38 @@ let _capT;
 function caption(t) { const c = $("#caption"); if (!c) return;
   c.textContent = t; c.classList.remove("hidden");
   clearTimeout(_capT); _capT = setTimeout(() => c.classList.add("hidden"), 5200); }
-function speak(text) {
-  caption(text);
-  if (S.settings.muted || !S.settings.voice || !("speechSynthesis" in window)) return;
+// ---- Realistic neural voice (OpenAI gpt-4o-mini-tts) -------------------
+// The key NEVER lives here. Requests go to a tiny serverless proxy that
+// holds the key as a secret (see /tts-worker). When no proxy is set, or
+// we're offline, or it fails, we fall back to the device voice so the
+// app always talks and stays fully usable offline. Each unique phrase is
+// cached, so it's spoken once then replays free and offline forever.
+const TTS_PROXY_URL = ""; // ← set to your deployed Worker URL after setup
+const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY_URL; } catch { return TTS_PROXY_URL; } };
+let _ttsAudio = null, _ttsCache = null;
+async function realisticSpeak(text) {
+  const base = ttsUrl();
+  if (!base || !navigator.onLine || !("caches" in window)) return false;
+  try {
+    const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
+      "&t=" + encodeURIComponent(text);
+    _ttsCache = _ttsCache || await caches.open("tts-v1");
+    let res = await _ttsCache.match(key);
+    if (!res) {
+      res = await fetch(key, { mode: "cors" });
+      if (!res.ok) return false;
+      try { await _ttsCache.put(key, res.clone()); } catch {}
+    }
+    const url = URL.createObjectURL(await res.blob());
+    if (_ttsAudio) try { _ttsAudio.pause(); } catch {}
+    _ttsAudio = new Audio(url);
+    _ttsAudio.volume = .95;
+    await _ttsAudio.play().catch(() => {});
+    return true;
+  } catch { return false; }
+}
+function deviceSpeak(text) {
+  if (!("speechSynthesis" in window)) return;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -340,6 +369,14 @@ function speak(text) {
     if (_voice) u.voice = _voice;
     speechSynthesis.speak(u);
   } catch {}
+}
+function speak(text) {
+  caption(text); // captions are ALWAYS shown (accessibility), even if muted
+  if (S.settings.muted || !S.settings.voice) return;
+  try { speechSynthesis.cancel(); } catch {}
+  if (_ttsAudio) try { _ttsAudio.pause(); } catch {}
+  // Try the realistic voice first; gracefully fall back to the device voice.
+  realisticSpeak(text).then(ok => { if (!ok) deviceSpeak(text); });
 }
 
 /* ----- 5. Haptics ------------------------------------------------------- */
