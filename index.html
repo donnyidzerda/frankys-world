@@ -235,6 +235,7 @@ const ICON_PATHS = {
   gallery: 'M4 6h16v12H4zM4 15l4-4 4 4 3-3 5 5',
   sticker: 'M12 4l2.3 4.7 5.2.8-3.8 3.6.9 5.1L12 15.8 7.4 18.2l.9-5.1L4.5 9.5l5.2-.8z',
   brush:   'M16 4l4 4-8 8H8v-4zM7 16c-2 1-3 4-4 5 2 0 4-1 5-3',
+  write:   'M5 19l2.6-.6L18 6.6 15.4 4 4 15.4zM14 7.4 16.6 10',
   gear:    'M12 9a3 3 0 100 6 3 3 0 000-6zM4 12h2M18 12h2M12 4v2M12 18v2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18',
   undo:    'M9 7L4 12l5 5M4 12h10a6 6 0 010 12',
   eraser:  'M7 17l-3-3 9-9 7 7-5 5zM7 17h12',
@@ -423,6 +424,7 @@ function buddySay(mood, text) {
    One small SVG per drawing. Used on home cards, stickers, completion.
    Keeps everything cohesive with the studio aesthetic. */
 function ART(id, size = 72) {
+  if (id && id.startsWith("word_")) return wordArt(id.slice(5), size);
   const w = `width="${size}" height="${size}" viewBox="0 0 100 100"`;
   const A = {
     sun:`<svg ${w}><g stroke="var(--ochre)" stroke-width="5" stroke-linecap="round">
@@ -470,6 +472,7 @@ const C = (cx, cy, r) =>
   `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
 
 const CATEGORIES = [
+  { id:"writing",  name:"Letters with Buddy" },
   { id:"animals",  name:"Animals" },
   { id:"vehicles", name:"Things That Go" },
   { id:"food",     name:"Good Food" },
@@ -569,6 +572,98 @@ const DRAWINGS = [
   ]},
 ];
 
+/* ----- 8b. Letters with Buddy — early handwriting practice -------------
+   Simple "ball & stick" manuscript letters Lucy can trace, exactly like
+   copying Papa's writing on paper. Each glyph is drawn through a mapper P
+   so it scales/positions anywhere; reuses the same ghost + demo + gentle
+   scoring as the drawings. Local box: x 0..adv, y 0..100, ascender top
+   y8, x-height top y38, baseline y78, descender bottom y98.
+   To add a word: add the letters it needs to GLYPH, then push it to WORDS. */
+const _ln = (P, x1, y1, x2, y2) => `M ${P.x(x1)} ${P.y(y1)} L ${P.x(x2)} ${P.y(y2)}`;
+const _cir = (P, cx, cy, r) => C(P.x(cx), P.y(cy), r * P.s);
+
+// Each glyph: adv = advance width, b = used [x0,y0,x1,y1] bounds (for
+// centring + metric scaling), d = strokes drawn through mapper P.
+const GLYPH = {
+  a:{ adv:54, b:[7,40,42,78], d:P=>[ _cir(P,24,58,17), _ln(P,42,40,42,78) ] },
+  c:{ adv:50, b:[14,39,42,78], d:P=>[ `M ${P.x(42)} ${P.y(45)} Q ${P.x(14)} ${P.y(40)} ${P.x(14)} ${P.y(58)} Q ${P.x(14)} ${P.y(78)} ${P.x(42)} ${P.y(72)}` ] },
+  h:{ adv:52, b:[12,8,36,78], d:P=>[ _ln(P,12,8,12,78), `M ${P.x(12)} ${P.y(52)} Q ${P.x(24)} ${P.y(40)} ${P.x(36)} ${P.y(52)} L ${P.x(36)} ${P.y(78)}` ] },
+  J:{ adv:58, b:[15,12,56,90], d:P=>[ `M ${P.x(42)} ${P.y(12)} L ${P.x(42)} ${P.y(72)} Q ${P.x(42)} ${P.y(90)} ${P.x(26)} ${P.y(86)} Q ${P.x(15)} ${P.y(83)} ${P.x(15)} ${P.y(72)}`, _ln(P,30,12,56,12) ] },
+  L:{ adv:56, b:[15,12,52,78], d:P=>[ `M ${P.x(15)} ${P.y(12)} L ${P.x(15)} ${P.y(78)} L ${P.x(52)} ${P.y(78)}` ] },
+  m:{ adv:66, b:[11,42,55,78], d:P=>[ _ln(P,11,40,11,78),
+        `M ${P.x(11)} ${P.y(50)} Q ${P.x(22)} ${P.y(40)} ${P.x(33)} ${P.y(50)} L ${P.x(33)} ${P.y(78)}`,
+        `M ${P.x(33)} ${P.y(50)} Q ${P.x(44)} ${P.y(40)} ${P.x(55)} ${P.y(50)} L ${P.x(55)} ${P.y(78)}` ] },
+  o:{ adv:56, b:[8,38,48,78], d:P=>[ _cir(P,28,58,20) ] },
+  p:{ adv:54, b:[13,40,49,98], d:P=>[ _ln(P,13,40,13,98), _cir(P,31,58,18) ] },
+  s:{ adv:52, b:[17,39,50,86], d:P=>[ `M ${P.x(40)} ${P.y(46)} Q ${P.x(22)} ${P.y(39)} ${P.x(23)} ${P.y(53)} Q ${P.x(24)} ${P.y(62)} ${P.x(37)} ${P.y(64)} Q ${P.x(50)} ${P.y(67)} ${P.x(46)} ${P.y(78)} Q ${P.x(38)} ${P.y(86)} ${P.x(17)} ${P.y(78)}` ] },
+  u:{ adv:52, b:[12,40,40,80], d:P=>[ `M ${P.x(12)} ${P.y(40)} L ${P.x(12)} ${P.y(68)} Q ${P.x(12)} ${P.y(80)} ${P.x(26)} ${P.y(80)} Q ${P.x(40)} ${P.y(80)} ${P.x(40)} ${P.y(68)} L ${P.x(40)} ${P.y(40)}`, _ln(P,40,40,40,80) ] },
+  y:{ adv:52, b:[12,40,40,96], d:P=>[ `M ${P.x(12)} ${P.y(40)} L ${P.x(12)} ${P.y(62)} Q ${P.x(12)} ${P.y(72)} ${P.x(26)} ${P.y(72)} L ${P.x(38)} ${P.y(64)}`,
+        `M ${P.x(40)} ${P.y(40)} L ${P.x(40)} ${P.y(86)} Q ${P.x(40)} ${P.y(98)} ${P.x(24)} ${P.y(94)}` ] },
+};
+
+// The words Lucy already practises with Papa, plus the children's names.
+const WORDS = ["mama", "papa", "oma", "opa", "Lucy", "Josh"];
+
+// Place a glyph at a common baseline with a consistent pen scale `s`
+// (x-height letters stay shorter than tall ones — just like real
+// handwriting practice on paper). Centred horizontally on `cx`.
+const placeGlyph = (g, s, baseY, cx) => {
+  const oy = baseY - 78 * s;            // local baseline y78 → world baseY
+  const ox = cx - ((g.b[0] + g.b[2]) / 2) * s;
+  return { s, x: lx => ox + lx * s, y: ly => oy + ly * s };
+};
+
+function letterSteps(word) {
+  const chars = [...word];
+  // One big letter per step — large, centred, on a steady baseline.
+  const steps = chars.map(ch => {
+    const g = GLYPH[ch];
+    const P = placeGlyph(g, 7.2, 720, 500);
+    return {
+      tip: `The letter “${ch}”`, icon: "write",
+      say: `Let's trace the letter ${ch.toUpperCase()}. Go nice and slow, just like Papa shows you.`,
+      d: g.d(P),
+    };
+  });
+  // Final step: the whole word together, scaled to fit the width.
+  const gap = 10;
+  const wl = chars.reduce((a, c) => a + (GLYPH[c].b[2] - GLYPH[c].b[0]), 0) + gap * (chars.length - 1);
+  const s = Math.min(7.2, 860 / wl);
+  let x = 500 - (wl * s) / 2; const all = [];
+  chars.forEach(c => {
+    const g = GLYPH[c], oy = 560 - 78 * s, ox = x - g.b[0] * s;
+    all.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s }));
+    x += (g.b[2] - g.b[0] + gap) * s;
+  });
+  steps.push({ tip: "The whole word", icon: "write",
+    say: `Now the whole word. You are writing ${word}. You can do it!`, d: all });
+  return steps;
+}
+WORDS.forEach(wd => DRAWINGS.push({
+  id: "word_" + wd, name: wd, category: "writing",
+  accent: "var(--sky)", finale: "bounce", steps: letterSteps(wd),
+}));
+
+// Small preview of a word in the same letterforms (cards, stickers, win).
+function wordArt(word, size) {
+  const chars = [...word].filter(c => GLYPH[c]);
+  const gap = 6;
+  const wl = chars.reduce((a, c) => a + (GLYPH[c].b[2] - GLYPH[c].b[0]), 0) + gap * (chars.length - 1);
+  const s = Math.min(0.92, 86 / wl);
+  const y0 = Math.min(...chars.map(c => GLYPH[c].b[1]));
+  const y1 = Math.max(...chars.map(c => GLYPH[c].b[3]));
+  const oy = 50 - ((y0 + y1) / 2) * s;
+  let x = 50 - (wl * s) / 2; const paths = [];
+  chars.forEach(c => {
+    const g = GLYPH[c], ox = x - g.b[0] * s;
+    paths.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s }));
+    x += (g.b[2] - g.b[0] + gap) * s;
+  });
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${
+    paths.map(d => `<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")
+  }</svg>`;
+}
+
 /* ----- 9. Router ------------------------------------------------------- */
 const APP = $("#app");
 function applyFlags() {
@@ -600,39 +695,55 @@ function Splash() {
   s.append(
     el("div", { cls: "float", html: Buddy("happy", 168) }),
     el("div", { cls: "t-display", textContent: "Scribble Heroes" }),
-    el("div", { cls: "t-body muted", textContent: "Buddy's drawing studio" }),
+    el("div", { cls: "t-body muted", textContent: "Made by Papa — for Lucy & Josh" }),
   );
-  const card = el("div", { cls: "card", css: "padding:26px;width:min(540px,92vw);display:flex;flex-direction:column;gap:18px;margin-top:6px;text-align:left" });
-  card.append(
-    el("div", { cls: "t-label", textContent: "Your name" }),
-    el("input", { id: "nm", placeholder: "Type your name", maxLength: 14,
-      css: "font:inherit;font-size:22px;font-weight:800;padding:15px 18px;border-radius:16px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" }),
-    el("div", { cls: "t-label", textContent: "How old are you?" }),
-  );
-  const seg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:16px;border:1px solid var(--line)" });
+  const card = el("div", { cls: "card", css: "padding:24px;width:min(540px,92vw);display:flex;flex-direction:column;gap:14px;margin-top:6px;text-align:left" });
+
+  const input = el("input", { id: "nm", placeholder: "Type a name", maxLength: 14,
+    css: "font:inherit;font-size:22px;font-weight:800;padding:15px 18px;border-radius:16px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
+
   let age = 2;
+  const seg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:16px;border:1px solid var(--line)" });
+  const setAge = a => { age = a;
+    [...seg.children].forEach((c, i) => { const on = i + 1 === a;
+      c.style.background = on ? "var(--ink)" : "transparent";
+      c.style.color = on ? "var(--cream)" : "var(--ink-soft)"; }); };
   [1, 2, 3].forEach(a => {
     const b = el("button", { cls: "btn", textContent: `Age ${a}`,
-      css: `flex:1;box-shadow:none;border:none;background:${a === 2 ? "var(--ink)" : "transparent"};color:${a === 2 ? "var(--cream)" : "var(--ink-soft)"}` });
-    b.onclick = () => { age = a; Sound.fx.tap(); buzz(12);
-      [...seg.children].forEach((c, i) => {
-        const on = i + 1 === a;
-        c.style.background = on ? "var(--ink)" : "transparent";
-        c.style.color = on ? "var(--cream)" : "var(--ink-soft)";
-      }); };
+      css: "flex:1;box-shadow:none;border:none;background:transparent;color:var(--ink-soft)" });
+    b.onclick = () => { Sound.fx.tap(); buzz(12); setAge(a); };
     seg.append(b);
   });
-  const start = el("button", { cls: "btn btn-primary t-head", css: "margin-top:4px",
-    html: `Begin ${ic("next", 22, "#fff")}` });
+  setAge(2);
+
+  // Quick family profiles — one tap for Lucy or Josh.
+  const profRow = el("div", { css: "display:flex;gap:10px" });
+  const prof = (nm, ag) => {
+    const b = el("button", { cls: "btn btn-primary t-head", css: "flex:1", textContent: nm });
+    b.onclick = () => { Sound.fx.tap(); buzz(12); input.value = nm; if (ag) setAge(ag); };
+    return b;
+  };
+  profRow.append(prof("Lucy", 3), prof("Josh", 0));
+
+  const start = el("button", { cls: "btn btn-go t-head", css: "margin-top:2px",
+    html: `Start ${ic("next", 22, "#fff")}` });
   start.onclick = () => {
-    S.name = ($("#nm").value || "friend").trim().slice(0, 14);
+    S.name = (input.value || "friend").trim().slice(0, 14);
     S.age = age; S.onboarded = true; save();
     Sound.fx.win(); buzz([18, 30]); maybeInstall(); go("home");
   };
-  card.append(seg, start);
+  card.append(
+    el("div", { cls: "t-label", textContent: "Who is playing?" }),
+    profRow,
+    el("div", { cls: "t-label", textContent: "or type a name" }),
+    input,
+    el("div", { cls: "t-label", textContent: "How old are you?" }),
+    seg,
+    start,
+  );
   s.append(card);
   APP.append(s);
-  setTimeout(() => speak("Hello. I'm Buddy. Tell me your name, and we'll make some drawings together."), 600);
+  setTimeout(() => speak("Hello, I'm Buddy. Are you Lucy, or Josh? Tap your name to begin."), 600);
 }
 let _install;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); _install = e; });
@@ -1227,7 +1338,8 @@ function Settings() {
      </ul>
      <p class="t-body"><b>Tip:</b> sit alongside and describe what you see
      ("you made a long curvy line") rather than asking "what is it?". Keep sessions
-     short. There are no ads, no accounts, and no tracking — it works fully offline.</p>` });
+     short. There are no ads, no accounts, and no tracking — it works fully offline.</p>
+     <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Made with love by Papa, for Lucy &amp; Josh. The “Letters with Buddy” section lets Lucy trace mama, papa, oma, opa and her own name — just like copying your writing on paper.</p>` });
   wrap.append(note);
   s.append(wrap);
   APP.append(s);
