@@ -333,7 +333,7 @@ function caption(t) { const c = $("#caption"); if (!c) return;
 // we're offline, or it fails, we fall back to the device voice so the
 // app always talks and stays fully usable offline. Each unique phrase is
 // cached, so it's spoken once then replays free and offline forever.
-const TTS_PROXY_URL = ""; // ← set to your deployed Worker URL after setup
+const TTS_PROXY_URL = "https://scribble-tts.donny-idzerda.workers.dev";
 const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY_URL; } catch { return TTS_PROXY_URL; } };
 let _ttsAudio = null, _ttsCache = null;
 async function realisticSpeak(text) {

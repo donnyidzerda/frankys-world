@@ -1,2 +1,4 @@
 .claude/
 .DS_Store
+tts-worker/.wrangler/
+tts-worker/node_modules/
