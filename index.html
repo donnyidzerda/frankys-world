@@ -191,8 +191,8 @@ const SAVE_KEY = "scribble-heroes-v2";
 const defaultState = () => ({
   name: "", age: 2, onboarded: false,
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
-  settings: { voice: true, slowVoice: false, music: true, sound: true,
-    haptics: true, contrast: false, calm: false },
+  settings: { muted: false, voice: true, slowVoice: false, music: true,
+    sound: true, haptics: true, contrast: false, calm: false },
 });
 let S = load();
 function load() {
@@ -248,6 +248,7 @@ const ICON_PATHS = {
   play:    'M8 5l11 7-11 7z',
   x:       'M6 6l12 12M18 6L6 18',
   sound:   'M5 9v6h4l5 4V5L9 9zM17 9.5a4 4 0 010 5',
+  mute:    'M5 9v6h4l5 4V5L9 9zM16 10l5 4M21 10l-5 4',
   music:   'M9 18V6l10-2v12M9 18a3 3 0 11-6 0 3 3 0 016 0zM19 16a3 3 0 11-6 0 3 3 0 016 0z',
   slow:    'M12 7v5l3 2M12 21a9 9 0 110-18 9 9 0 010 18z',
   buzz:    'M12 4v2M12 18v2M5 7l1.4 1.4M17.6 15.6L19 17M5 17l1.4-1.4M17.6 8.4L19 7M9 9h6v6H9z',
@@ -268,7 +269,8 @@ const Sound = (() => {
     master = ac.createGain(); master.gain.value = .42; master.connect(ac.destination);
     mGain = ac.createGain(); mGain.gain.value = 0; mGain.connect(master); };
   const tone = (f, dur = .18, type = "sine", vol = .4, slide = 0) => {
-    if (!S.settings.sound) return; ensure(); if (ac.state === "suspended") ac.resume();
+    if (S.settings.muted || !S.settings.sound) return;
+    ensure(); if (ac.state === "suspended") ac.resume();
     const o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
     lp.type = "lowpass"; lp.frequency.value = 2600;
     o.type = type; o.frequency.value = f;
@@ -289,12 +291,12 @@ const Sound = (() => {
     sticker: () => seq([659, 784, 988], .14),
   };
   const startMusic = () => {
-    if (!S.settings.music || S.settings.calm) return;
+    if (S.settings.muted || !S.settings.music || S.settings.calm) return;
     ensure(); if (ac.state === "suspended") ac.resume();
     mGain.gain.linearRampToValueAtTime(.05, ac.currentTime + 3);
     const scale = [261, 293, 329, 392, 440]; let i = 0;
     clearInterval(mTimer);
-    mTimer = setInterval(() => { if (!S.settings.music) return;
+    mTimer = setInterval(() => { if (S.settings.muted || !S.settings.music) return;
       const o = ac.createOscillator(), g = ac.createGain();
       o.type = "sine"; o.frequency.value = scale[(i += 2) % scale.length];
       g.gain.setValueAtTime(.0001, ac.currentTime);
@@ -327,7 +329,7 @@ function caption(t) { const c = $("#caption"); if (!c) return;
   clearTimeout(_capT); _capT = setTimeout(() => c.classList.add("hidden"), 5200); }
 function speak(text) {
   caption(text);
-  if (!S.settings.voice || !("speechSynthesis" in window)) return;
+  if (S.settings.muted || !S.settings.voice || !("speechSynthesis" in window)) return;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -613,7 +615,7 @@ function Home() {
   const stat = el("div", { cls: "card", css: "display:flex;gap:18px;padding:12px 18px;align-items:center;font-weight:800" });
   const pill = (icon, n, c) => `<span style="display:inline-flex;align-items:center;gap:7px;color:var(--ink)">${ic(icon, 20, c)} ${n}</span>`;
   stat.innerHTML = pill("flame", S.streak, "var(--clay)") + pill("star", S.stars, "var(--ochre)") + pill("sticker", S.stickers.length, "var(--sage)");
-  top.append(stat);
+  top.append(stat, muteBtn());
   s.append(top);
 
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
@@ -844,6 +846,7 @@ function DrawScreen(id) {
   back.onclick = () => { Sound.fx.tap(); go("home"); };
   head.append(back,
     el("div", { css: "flex:1", html: `<div class="t-title">${D.name}</div>` }),
+    muteBtn(),
     el("div", { id: "buddy", "data-size": 60, html: Buddy("happy", 60) }));
   s.append(head);
 
@@ -1114,7 +1117,8 @@ function Settings() {
   s.append(header("For Grown-ups"));
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
 
-  [["voice", "sound", "Buddy's voice"],
+  [["muted", "mute", "Mute all sound"],
+   ["voice", "sound", "Buddy's voice"],
    ["slowVoice", "slow", "Slower, clearer speech"],
    ["music", "music", "Quiet background music"],
    ["sound", "sound", "Sound effects"],
@@ -1129,6 +1133,12 @@ function Settings() {
       S.settings[k] = !S.settings[k]; save(); Sound.fx.tap(); buzz(12);
       swh.classList.toggle("on", S.settings[k]); applyFlags();
       if (k === "music") S.settings.music ? Sound.startMusic() : Sound.stopMusic();
+      if (k === "muted") {
+        if (S.settings.muted) {
+          Sound.stopMusic();
+          if ("speechSynthesis" in window) try { speechSynthesis.cancel(); } catch {}
+        } else if (S.settings.music) Sound.startMusic();
+      }
     };
     wrap.append(row);
   });
@@ -1178,11 +1188,31 @@ function Settings() {
   APP.append(s);
 }
 
+// One-tap master mute — silences effects, voice, and music together.
+// Captions stay on (accessibility). Reachable on every play screen, so a
+// grown-up never has to go through the parent-gated settings to hush it.
+function muteBtn() {
+  const b = el("button", { cls: "btn btn-quiet btn-icon" });
+  b.setAttribute("aria-label", "Turn sound on or off");
+  const render = () => b.innerHTML =
+    ic(S.settings.muted ? "mute" : "sound", 22, S.settings.muted ? "var(--ink-soft)" : "var(--clay)");
+  render();
+  b.onclick = () => {
+    S.settings.muted = !S.settings.muted; save(); buzz(12); render();
+    if (S.settings.muted) {
+      Sound.stopMusic();
+      if ("speechSynthesis" in window) try { speechSynthesis.cancel(); } catch {}
+    } else if (S.settings.music) Sound.startMusic();
+  };
+  return b;
+}
+
 function header(title) {
   const h = el("div", { css: "display:flex;align-items:center;gap:12px;padding:18px 20px 6px" });
   const b = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
   b.onclick = () => { Sound.fx.tap(); buzz(12); go("home"); };
-  h.append(b, el("div", { cls: "t-title", textContent: title }));
+  h.append(b, el("div", { cls: "t-title", textContent: title }),
+    el("div", { css: "flex:1" }), muteBtn());
   return h;
 }
 
