@@ -116,7 +116,7 @@
   .well.sel{ transform:scale(1.16); }
   .well.sel::after{ content:''; position:absolute; inset:-7px; border-radius:50%;
     border:3px solid var(--ink); opacity:.55; }
-  .chip{ display:flex; align-items:center; gap:8px; padding:11px 16px; border-radius:14px;
+  .chip{ display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:14px;
     background:var(--surface-2); font-weight:800; box-shadow:var(--sh-sm);
     border:1px solid rgba(226,216,196,.8); }
   .chip.sel{ background:var(--ink); color:var(--cream); }
@@ -699,11 +699,14 @@ function makeEngine(stage, opts = {}) {
   }
   new ResizeObserver(resize).observe(stage); resize();
   const L2P = v => (v / 1000) * size;
+  // Brush sizes are tuned for a 560px reference canvas; scale to the
+  // actual canvas so strokes look right on small phones (not huge).
+  const REF = 560;
 
   const st = { color: COLORS[0], brush: "crayon", down: false, pts: [], strokes: 0 };
   function style() {
     ctx.strokeStyle = st.color;
-    ctx.lineWidth = cfg.brush * (st.brush === "marker" ? 1.12 : 1);
+    ctx.lineWidth = Math.max(5, cfg.brush * (size / REF) * (st.brush === "marker" ? 1.12 : 1));
     ctx.globalAlpha = st.brush === "crayon" ? .9 : 1;
     ctx.shadowBlur = st.brush === "glow" ? 16 : 0;
     ctx.shadowColor = st.color;
@@ -813,7 +816,7 @@ function makeEngine(stage, opts = {}) {
 }
 
 function toolbar(engine) {
-  const bar = el("div", { css: "display:flex;flex-direction:column;gap:12px;align-items:center;padding:8px 16px" });
+  const bar = el("div", { css: "display:flex;flex-direction:column;gap:8px;align-items:center;padding:4px 14px" });
   const cols = el("div", { css: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center" });
   COLORS.forEach((c, i) => {
     const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
@@ -841,32 +844,29 @@ function DrawScreen(id) {
   let i = 0;
   const s = el("div", { cls: "screen" });
 
-  const head = el("div", { css: "display:flex;align-items:center;gap:12px;padding:16px 20px 6px" });
+  const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:12px 16px 2px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
   back.onclick = () => { Sound.fx.tap(); go("home"); };
   head.append(back,
     el("div", { css: "flex:1", html: `<div class="t-title">${D.name}</div>` }),
     muteBtn(),
-    el("div", { id: "buddy", "data-size": 60, html: Buddy("happy", 60) }));
+    el("div", { id: "buddy", "data-size": 44, html: Buddy("happy", 44) }));
   s.append(head);
 
-  const progWrap = el("div", { css: "padding:2px 22px 8px;display:flex;align-items:center;gap:12px" });
+  const progWrap = el("div", { css: "padding:2px 18px 4px;display:flex;align-items:center;gap:10px" });
   const prog = el("div", { cls: "prog", css: "flex:1", html: "<i style='width:0'></i>" });
   const pNum = el("div", { cls: "t-label", css: "white-space:nowrap" });
   progWrap.append(prog, pNum);
   s.append(progWrap);
 
-  const banner = el("div", { cls: "card", css: "margin:6px 20px;padding:16px 18px;display:flex;align-items:center;gap:14px" });
-  banner.innerHTML = `<div id="sIcon" style="background:var(--surface-2);border-radius:14px;padding:10px"></div>
+  const banner = el("div", { cls: "card", css: "margin:2px 16px;padding:10px 14px;display:flex;align-items:center;gap:12px" });
+  banner.innerHTML = `<div id="sIcon" style="background:var(--surface-2);border-radius:12px;padding:7px"></div>
     <div id="sTip" class="t-head" style="flex:1"></div>`;
   s.append(banner);
 
   const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(86vw,560px);margin:auto" });
   sw.append(stage); s.append(sw);
-  s.append(el("div", { id: "caption", cls: "caption t-body hidden",
-    css: "position:absolute;left:50%;transform:translateX(-50%);bottom:206px;max-width:90vw;text-align:center" }));
-
   const engine = makeEngine(stage, { onStroke: () => {
     if (Math.random() < .4) buddySay("happy", rand([
       "That's it. Keep going.", "I see your line growing.",
@@ -874,6 +874,10 @@ function DrawScreen(id) {
       "Good. Take all the time you need.",
     ]));
   }});
+  // Buddy's speech caption is pinned to the canvas, so it can never sit
+  // on top of the colour selectors no matter how small the screen is.
+  stage.append(el("div", { id: "caption", cls: "caption t-body hidden",
+    css: "position:absolute;left:50%;bottom:12px;transform:translateX(-50%);max-width:92%;text-align:center;pointer-events:none;z-index:5" }));
   s.append(toolbar(engine));
 
   // Helpers in a compact row; Next is a full-width primary button on its
@@ -892,7 +896,7 @@ function DrawScreen(id) {
     mk("eraser", "Clear", () => { engine.clear(); engine.setGhost(steps[i].d); }),
   );
   const next = mk("next", "Next", () => advance(), { primary: true });
-  const nextWrap = el("div", { css: "padding:8px 16px calc(14px + env(safe-area-inset-bottom))" });
+  const nextWrap = el("div", { css: "padding:6px 16px calc(10px + env(safe-area-inset-bottom))" });
   nextWrap.append(next);
   s.append(helpers, nextWrap);
   APP.append(s);
@@ -1083,8 +1087,6 @@ function FreeDraw() {
   const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(90vw,620px);margin:auto" });
   sw.append(stage); s.append(sw);
-  s.append(el("div", { id: "caption", cls: "caption t-body hidden",
-    css: "position:absolute;left:50%;transform:translateX(-50%);bottom:212px" }));
   let n = 0;
   const engine = makeEngine(stage, { onStroke: () => {
     if (++n % 5 === 0) speak(rand([
@@ -1093,6 +1095,8 @@ function FreeDraw() {
       "That's lovely. Keep going.",
       "It's all yours. There's no wrong way.",
     ])); }});
+  stage.append(el("div", { id: "caption", cls: "caption t-body hidden",
+    css: "position:absolute;left:50%;bottom:12px;transform:translateX(-50%);max-width:92%;text-align:center;pointer-events:none;z-index:5" }));
   s.append(toolbar(engine));
   const row = el("div", { css: "display:flex;gap:10px;padding:6px 18px calc(14px + env(safe-area-inset-bottom))" });
   const mk = (icon, label, fn, kind) => {
