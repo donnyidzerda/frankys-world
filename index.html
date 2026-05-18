@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#33302B" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Scribble Heroes" />
+<title>Scribble Heroes — Buddy's Studio</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%23EFE7D8'/%3E%3Ccircle cx='256' cy='258' r='150' fill='%23E0884A'/%3E%3Cellipse cx='256' cy='284' rx='104' ry='86' fill='%23FBF3E7'/%3E%3C/svg%3E" />
+
+<!-- Tailwind v4 browser build + canvas-confetti. Both cached offline by the service worker. -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
+
+<style>
+  /* =======================================================================
+     DESIGN SYSTEM
+     A warm, gallery-paper aesthetic — not neon, not gradient-y. Earthy,
+     considered accents (clay / sage / ochre / sky / rose / plum), soft
+     layered shadows, a rounded system typeface, and restrained motion.
+     Built for calm focus on iPads & phones; high-contrast + calm modes.
+     ======================================================================= */
+  :root{
+    --bg:#EFE7D8; --bg-2:#E7DCC8; --surface:#FFFFFF; --surface-2:#FBF6EC;
+    --ink:#34302A; --ink-soft:#7A7164; --line:#E2D8C4;
+    --clay:#C9633F; --sage:#6E8C5E; --ochre:#D89A36; --sky:#5E8AA0;
+    --rose:#CF8585; --plum:#7C6C90; --cream:#FBF3E7;
+    --r:26px; --r-sm:18px;
+    --sh-sm:0 1px 2px rgba(52,48,42,.05), 0 3px 8px rgba(52,48,42,.07);
+    --sh:0 2px 6px rgba(52,48,42,.06), 0 16px 34px rgba(52,48,42,.10);
+    --sh-lg:0 4px 10px rgba(52,48,42,.07), 0 28px 56px rgba(52,48,42,.14);
+    --ring:rgba(201,99,63,.35);
+  }
+  *{ -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; box-sizing:border-box; }
+  html,body{ margin:0; height:100%; overflow:hidden; overscroll-behavior:none; touch-action:manipulation;
+    color:var(--ink); background:var(--bg);
+    font-family:'Nunito','Quicksand',ui-rounded,-apple-system,'SF Pro Rounded',
+      'Segoe UI',system-ui,sans-serif;
+    font-feature-settings:"ss01" 1; -webkit-font-smoothing:antialiased; }
+  body{ background-image:
+      radial-gradient(rgba(52,48,42,.025) 1px, transparent 1px);
+    background-size:26px 26px; }
+  #app{ position:fixed; inset:0; display:flex; flex-direction:column; }
+  button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
+  svg{ display:block; }
+
+  /* Fluid, hierarchical type — heavy but tight, never childish-cheap. */
+  .t-display{ font-size:clamp(30px,6.4vw,52px); font-weight:800; letter-spacing:-.02em; line-height:1.04; }
+  .t-title{ font-size:clamp(20px,4vw,30px); font-weight:800; letter-spacing:-.015em; line-height:1.12; }
+  .t-head{ font-size:clamp(17px,3vw,22px); font-weight:800; letter-spacing:-.01em; }
+  .t-body{ font-size:clamp(15px,2.4vw,18px); font-weight:600; line-height:1.55; }
+  .t-label{ font-size:clamp(12px,2vw,14px); font-weight:700; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-soft); }
+  .muted{ color:var(--ink-soft); }
+
+  /* Components */
+  .card{ background:var(--surface); border-radius:var(--r); box-shadow:var(--sh);
+    border:1px solid rgba(226,216,196,.7); }
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:10px;
+    border-radius:999px; font-weight:800; padding:16px 26px; font-size:clamp(15px,2.6vw,18px);
+    background:var(--surface); color:var(--ink); box-shadow:var(--sh-sm);
+    border:1px solid rgba(226,216,196,.8);
+    transition:transform .14s cubic-bezier(.2,.7,.3,1), box-shadow .14s, background .14s; }
+  .btn:active{ transform:translateY(2px) scale(.99); box-shadow:var(--sh-sm); }
+  .btn:focus-visible{ outline:none; box-shadow:0 0 0 4px var(--ring), var(--sh-sm); }
+  .btn-primary{ background:var(--clay); color:#fff; border-color:transparent; }
+  .btn-go{ background:var(--sage); color:#fff; border-color:transparent; }
+  .btn-quiet{ background:var(--surface-2); }
+  .btn-icon{ padding:14px; border-radius:18px; }
+
+  .screen{ position:absolute; inset:0; display:flex; flex-direction:column;
+    animation:rise .32s cubic-bezier(.2,.7,.3,1); }
+  @keyframes rise{ from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none} }
+  .pop{ animation:pop .26s cubic-bezier(.2,.8,.3,1.05); }
+  @keyframes pop{ from{opacity:0; transform:scale(.94)} to{opacity:1; transform:scale(1)} }
+  .float{ animation:float 6s ease-in-out infinite; }
+  @keyframes float{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-9px)} }
+  .nudge{ animation:nudge .6s ease; }
+  @keyframes nudge{ 0%,100%{transform:rotate(0)} 30%{transform:rotate(-5deg)} 70%{transform:rotate(5deg)} }
+  body.calm .float,body.calm .nudge{ animation:none !important; }
+
+  /* Speech bubble (Buddy) — soft, paper-like, no harsh outline */
+  .bubble{ position:relative; background:var(--surface); color:var(--ink);
+    border-radius:20px; padding:14px 18px; font-weight:700; box-shadow:var(--sh-sm);
+    border:1px solid rgba(226,216,196,.8); }
+  .bubble::after{ content:''; position:absolute; left:30px; bottom:-11px;
+    width:18px; height:18px; background:var(--surface); transform:rotate(45deg);
+    border-right:1px solid rgba(226,216,196,.8); border-bottom:1px solid rgba(226,216,196,.8); }
+
+  /* Drawing stage: a framed sheet of paper */
+  .stage{ position:relative; touch-action:none; }
+  #paper{ position:absolute; inset:0; width:100%; height:100%; border-radius:var(--r);
+    background:var(--cream);
+    background-image:radial-gradient(rgba(52,48,42,.03) 1px, transparent 1px);
+    background-size:20px 20px;
+    box-shadow:inset 0 0 0 1px rgba(52,48,42,.05), var(--sh); }
+  canvas#pad{ position:absolute; inset:0; width:100%; height:100%; border-radius:var(--r); }
+  #ghost,#demo{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  #ghost path{ fill:none; stroke:var(--ink); stroke-opacity:.16; stroke-width:26;
+    stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:1 42;
+    transition:stroke .3s, stroke-opacity .3s, stroke-width .3s; }
+  #ghost.help path{ stroke:var(--clay); stroke-opacity:.55; stroke-width:34; }
+
+  /* Step progress */
+  .prog{ height:8px; border-radius:999px; background:rgba(52,48,42,.10); overflow:hidden; }
+  .prog > i{ display:block; height:100%; border-radius:999px; background:var(--sage);
+    transition:width .5s cubic-bezier(.2,.7,.3,1); }
+
+  /* Colour wells + brush chips */
+  .well{ width:clamp(44px,10vw,60px); height:clamp(44px,10vw,60px); border-radius:50%;
+    box-shadow:var(--sh-sm), inset 0 0 0 2px rgba(255,255,255,.5);
+    transition:transform .14s cubic-bezier(.2,.7,.3,1); position:relative; }
+  .well.sel{ transform:scale(1.16); }
+  .well.sel::after{ content:''; position:absolute; inset:-7px; border-radius:50%;
+    border:3px solid var(--ink); opacity:.55; }
+  .chip{ display:flex; align-items:center; gap:8px; padding:11px 16px; border-radius:14px;
+    background:var(--surface-2); font-weight:800; box-shadow:var(--sh-sm);
+    border:1px solid rgba(226,216,196,.8); }
+  .chip.sel{ background:var(--ink); color:var(--cream); }
+  .chip.sel svg{ stroke:var(--cream); }
+
+  /* Switch */
+  .sw{ width:58px; height:34px; border-radius:999px; background:rgba(52,48,42,.18);
+    position:relative; transition:background .2s; flex:none; }
+  .sw.on{ background:var(--sage); }
+  .sw i{ position:absolute; top:4px; left:4px; width:26px; height:26px; border-radius:50%;
+    background:#fff; box-shadow:var(--sh-sm); transition:transform .2s cubic-bezier(.2,.7,.3,1); }
+  .sw.on i{ transform:translateX(24px); }
+
+  .grid{ display:grid; gap:14px; grid-template-columns:repeat(2,1fr); }
+  @container (min-width:560px){ .grid{ grid-template-columns:repeat(3,1fr); } }
+  @media (min-width:760px){ .grid{ grid-template-columns:repeat(3,1fr); } }
+  .scroll{ overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .hidden{ display:none !important; }
+  .caption{ background:rgba(52,48,42,.86); color:var(--cream);
+    border-radius:14px; padding:9px 16px; font-weight:700; backdrop-filter:blur(6px); }
+  .row{ display:flex; align-items:center; }
+  .stack{ display:flex; flex-direction:column; }
+
+  /* Accessibility modes */
+  body.hc{ --bg:#000; --surface:#fff; --surface-2:#fff; --ink:#000; --ink-soft:#222;
+    --line:#000; --cream:#fff; }
+  body.hc{ background:#000; }
+  body.hc #ghost path{ stroke:#000; stroke-opacity:.7; }
+  body.hc .card,body.hc .btn{ border:2px solid #000; }
+  @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   SCRIBBLE HEROES — BUDDY'S STUDIO
+   A process-over-product drawing experience for 1–3 year olds.
+
+   Pedagogy embedded in code (2025–26 early-childhood research):
+   • Process over product — we never block, grade, or correct. A quality
+     read only scales how warm the celebration is; every child advances.
+   • Descriptive praise — we narrate the marks the child actually made
+     ("you drew a long curving line"), not empty hype. Calm, specific, warm.
+   • Age-adaptive — brush size, forgiveness, pacing, language shift 1→3.
+   • Growth mindset & neurodiversity — high-contrast, calm mode, slow clear
+     voice, always-on captions, gentle motion, zero frustration.
+   • Child-directed — open exploration inside every step; Buddy is kind.
+   ========================================================================= */
+
+/* ----- 0. Tiny DOM helpers --------------------------------------------- */
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, props = {}, kids = []) => {
+  const n = document.createElement(tag);
+  for (const k in props) {
+    if (k === "html") n.innerHTML = props[k];
+    else if (k === "css") n.style.cssText = props[k];
+    else if (k === "cls") n.className = props[k];
+    else if (k in n) n[k] = props[k];
+    else n.setAttribute(k, props[k]);
+  }
+  for (const c of [].concat(kids)) c != null && n.append(c.nodeType ? c : document.createTextNode(c));
+  return n;
+};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a) => a[(Math.random() * a.length) | 0];
+
+/* ----- 1. Persistent state --------------------------------------------- */
+const SAVE_KEY = "scribble-heroes-v2";
+const defaultState = () => ({
+  name: "", age: 2, onboarded: false,
+  stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
+  settings: { voice: true, slowVoice: false, music: true, sound: true,
+    haptics: true, contrast: false, calm: false },
+});
+let S = load();
+function load() {
+  try {
+    const r = JSON.parse(localStorage.getItem(SAVE_KEY));
+    return r ? Object.assign(defaultState(), r,
+      { settings: Object.assign(defaultState().settings, r.settings || {}) }) : defaultState();
+  } catch { return defaultState(); }
+}
+const save = () => localStorage.setItem(SAVE_KEY, JSON.stringify(S));
+function touchStreak() {
+  const today = new Date().toDateString();
+  if (S.lastPlay === today) return;
+  const yest = new Date(Date.now() - 864e5).toDateString();
+  S.streak = S.lastPlay === yest ? S.streak + 1 : 1;
+  S.lastPlay = today; save();
+}
+
+/* IndexedDB gallery (PNG blobs) */
+let _db;
+const db = () => _db || (_db = new Promise((res, rej) => {
+  const r = indexedDB.open("scribble-gallery", 1);
+  r.onupgradeneeded = () => r.result.createObjectStore("art", { keyPath: "id" });
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+}));
+async function galleryAdd(rec) { const d = await db();
+  return new Promise(r => { d.transaction("art", "readwrite").objectStore("art").put(rec).onsuccess = r; }); }
+async function galleryAll() { const d = await db();
+  return new Promise(res => { const o = [];
+    d.transaction("art").objectStore("art").openCursor().onsuccess = e => {
+      const c = e.target.result; c ? (o.push(c.value), c.continue()) : res(o.sort((a, b) => b.id - a.id)); }; }); }
+async function galleryDel(id) { const d = await db();
+  return new Promise(r => { d.transaction("art", "readwrite").objectStore("art").delete(id).onsuccess = r; }); }
+
+/* ----- 2. Icons — hand-built line set (no emoji anywhere) --------------- */
+// 24×24, 2.4 stroke, round caps. `ic(name)` returns an inline <svg> string.
+const ICON_PATHS = {
+  back:    'M15 5l-7 7 7 7',
+  home:    'M4 11l8-7 8 7M6 10v9h12v-9',
+  gallery: 'M4 6h16v12H4zM4 15l4-4 4 4 3-3 5 5',
+  sticker: 'M12 4l2.3 4.7 5.2.8-3.8 3.6.9 5.1L12 15.8 7.4 18.2l.9-5.1L4.5 9.5l5.2-.8z',
+  brush:   'M16 4l4 4-8 8H8v-4zM7 16c-2 1-3 4-4 5 2 0 4-1 5-3',
+  gear:    'M12 9a3 3 0 100 6 3 3 0 000-6zM4 12h2M18 12h2M12 4v2M12 18v2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18',
+  undo:    'M9 7L4 12l5 5M4 12h10a6 6 0 010 12',
+  eraser:  'M7 17l-3-3 9-9 7 7-5 5zM7 17h12',
+  help:    'M9 9a3 3 0 116 0c0 2-3 2.5-3 5M12 18.5h.01',
+  share:   'M12 15V4M8 8l4-4 4 4M5 13v6h14v-6',
+  save:    'M12 4v11M8 11l4 4 4-4M5 19h14',
+  next:    'M9 5l7 7-7 7',
+  star:    'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9L12 17l-5.2 2.7 1-5.9L3.5 9.7l5.9-.9z',
+  check:   'M5 13l4 4 10-11',
+  flame:   'M12 3c1 3-2 4-2 7a2 2 0 004 0c0-1 0-2-.5-3 2 1 3.5 3 3.5 6a5 5 0 11-10 0c0-4 3.5-5 5-10z',
+  play:    'M8 5l11 7-11 7z',
+  x:       'M6 6l12 12M18 6L6 18',
+  sound:   'M5 9v6h4l5 4V5L9 9zM17 9.5a4 4 0 010 5',
+  music:   'M9 18V6l10-2v12M9 18a3 3 0 11-6 0 3 3 0 016 0zM19 16a3 3 0 11-6 0 3 3 0 016 0z',
+  slow:    'M12 7v5l3 2M12 21a9 9 0 110-18 9 9 0 010 18z',
+  buzz:    'M12 4v2M12 18v2M5 7l1.4 1.4M17.6 15.6L19 17M5 17l1.4-1.4M17.6 8.4L19 7M9 9h6v6H9z',
+  contrast:'M12 3a9 9 0 100 18zM12 3a9 9 0 010 18',
+  calm:    'M12 21c5-3 7-7 7-11a7 7 0 00-14 0c0 4 2 8 7 11zM12 21V8',
+};
+function ic(name, size = 24, color = "currentColor", w = 2.4) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none"
+    stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"
+    aria-hidden="true"><path d="${ICON_PATHS[name] || ''}"/></svg>`;
+}
+
+/* ----- 3. Sound (Web Audio) — soft, musical, never jarring ------------- */
+const Sound = (() => {
+  let ac, master, mGain, mTimer;
+  const ensure = () => { if (ac) return;
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = .42; master.connect(ac.destination);
+    mGain = ac.createGain(); mGain.gain.value = 0; mGain.connect(master); };
+  const tone = (f, dur = .18, type = "sine", vol = .4, slide = 0) => {
+    if (!S.settings.sound) return; ensure(); if (ac.state === "suspended") ac.resume();
+    const o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 2600;
+    o.type = type; o.frequency.value = f;
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(50, f + slide), ac.currentTime + dur);
+    g.gain.setValueAtTime(.0001, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol, ac.currentTime + .03);
+    g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + dur);
+    o.connect(lp); lp.connect(g); g.connect(master); o.start(); o.stop(ac.currentTime + dur + .03);
+  };
+  const seq = (ns, gap = .14) => ns.forEach((n, i) => setTimeout(() => tone(n, .26, "sine", .38), i * gap * 1000));
+  // Warm, restrained palette — gentle marimba-ish tones, no arcade beeps.
+  const fx = {
+    tap:     () => tone(440, .12, "sine", .26),
+    stroke:  () => tone(300 + Math.random() * 90, .14, "sine", .20),
+    step:    () => seq([523, 659, 784]),
+    soft:    () => seq([392, 523], .16),
+    win:     () => seq([523, 659, 784, 988], .15),
+    sticker: () => seq([659, 784, 988], .14),
+  };
+  const startMusic = () => {
+    if (!S.settings.music || S.settings.calm) return;
+    ensure(); if (ac.state === "suspended") ac.resume();
+    mGain.gain.linearRampToValueAtTime(.05, ac.currentTime + 3);
+    const scale = [261, 293, 329, 392, 440]; let i = 0;
+    clearInterval(mTimer);
+    mTimer = setInterval(() => { if (!S.settings.music) return;
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sine"; o.frequency.value = scale[(i += 2) % scale.length];
+      g.gain.setValueAtTime(.0001, ac.currentTime);
+      g.gain.linearRampToValueAtTime(.5, ac.currentTime + .8);
+      g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + 3);
+      o.connect(g); g.connect(mGain); o.start(); o.stop(ac.currentTime + 3.1);
+    }, 2400);
+  };
+  const stopMusic = () => { clearInterval(mTimer); if (mGain) mGain.gain.value = 0; };
+  return { fx, startMusic, stopMusic, ensure };
+})();
+
+/* ----- 4. Voice — calm, warm, natural; descriptive not manic ----------- */
+let _voice = null;
+function pickVoice() {
+  if (!("speechSynthesis" in window)) return;
+  const v = speechSynthesis.getVoices();
+  // Prefer high-quality natural voices over the robotic defaults.
+  _voice =
+    v.find(x => /samantha|allison|ava|serena|moira|karen|catherine/i.test(x.name)) ||
+    v.find(x => /google (us|uk) english/i.test(x.name)) ||
+    v.find(x => /aria|jenny|libby|natasha/i.test(x.name)) ||
+    v.find(x => x.lang === "en-US" && /female/i.test(x.name)) ||
+    v.find(x => x.lang && x.lang.startsWith("en")) || v[0] || null;
+}
+if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); }
+let _capT;
+function caption(t) { const c = $("#caption"); if (!c) return;
+  c.textContent = t; c.classList.remove("hidden");
+  clearTimeout(_capT); _capT = setTimeout(() => c.classList.add("hidden"), 5200); }
+function speak(text) {
+  caption(text);
+  if (!S.settings.voice || !("speechSynthesis" in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    // Warm and natural: gentle pace, near-natural pitch (no chipmunk).
+    u.rate = S.settings.slowVoice ? .74 : .9;
+    u.pitch = 1.06;
+    u.volume = .95;
+    if (_voice) u.voice = _voice;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+
+/* ----- 5. Haptics ------------------------------------------------------- */
+const buzz = p => { if (S.settings.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
+
+/* ----- 6. Buddy — a calm, well-drawn fox; mood swaps the expression ----- */
+function Buddy(mood = "warm", size = 140) {
+  const I = "#34302A";
+  const mouth = {
+    warm:  `<path d="M88 122 Q100 132 112 122" stroke="${I}" stroke-width="6" fill="none" stroke-linecap="round"/>`,
+    happy: `<path d="M84 120 Q100 140 116 120" stroke="${I}" stroke-width="7" fill="none" stroke-linecap="round"/>`,
+    wow:   `<ellipse cx="100" cy="126" rx="9" ry="11" fill="${I}"/>`,
+    rest:  `<path d="M90 124 H110" stroke="${I}" stroke-width="6" fill="none" stroke-linecap="round"/>`,
+  };
+  const eyeR = mood === "wow" ? 8 : 6.5;
+  const hat = S.buddyLevel >= 3
+    ? `<path d="M64 50 Q100 18 136 50 Z" fill="var(--rose)"/><circle cx="100" cy="24" r="7" fill="var(--ochre)"/>` : "";
+  return `<svg viewBox="0 0 200 210" width="${size}" height="${size * 1.05}" aria-hidden="true">
+    <path d="M152 150 Q190 156 184 196 Q170 208 156 196 Q150 174 152 150Z" fill="var(--plum)"/>
+    <rect x="170" y="186" width="22" height="12" rx="5" transform="rotate(38 181 192)" fill="var(--ochre)"/>
+    <path d="M58 84 L46 34 L96 62 Z" fill="var(--clay)"/>
+    <path d="M142 84 L154 34 L104 62 Z" fill="var(--clay)"/>
+    <path d="M63 78 L57 50 L86 64 Z" fill="#F0CDB4"/>
+    <path d="M137 78 L143 50 L114 64 Z" fill="#F0CDB4"/>
+    <circle cx="100" cy="108" r="70" fill="#E0884A"/>
+    <ellipse cx="100" cy="128" rx="48" ry="40" fill="var(--cream)"/>
+    <circle cx="76" cy="100" r="${eyeR}" fill="${I}"/>
+    <circle cx="124" cy="100" r="${eyeR}" fill="${I}"/>
+    <path d="M93 114 Q100 120 107 114" stroke="${I}" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="100" cy="112" r="4.5" fill="${I}"/>
+    ${mouth[mood] || mouth.warm}
+    <circle cx="62" cy="120" r="8" fill="var(--rose)" opacity=".35"/>
+    <circle cx="138" cy="120" r="8" fill="var(--rose)" opacity=".35"/>
+    ${hat}
+  </svg>`;
+}
+function buddySay(mood, text) {
+  const b = $("#buddy");
+  if (b) b.innerHTML = Buddy(mood, +b.dataset.size || 92);
+  if (text) speak(text);
+}
+
+/* ----- 7. Subject illustrations — flat brand-palette art (no emoji) ----
+   One small SVG per drawing. Used on home cards, stickers, completion.
+   Keeps everything cohesive with the studio aesthetic. */
+function ART(id, size = 72) {
+  const w = `width="${size}" height="${size}" viewBox="0 0 100 100"`;
+  const A = {
+    sun:`<svg ${w}><g stroke="var(--ochre)" stroke-width="5" stroke-linecap="round">
+      <path d="M50 12V4M50 96v-8M88 50h8M4 50h8M76 24l6-6M18 82l6-6M76 76l6 6M18 18l6 6"/></g>
+      <circle cx="50" cy="50" r="24" fill="var(--ochre)"/>
+      <path d="M42 52q8 8 16 0" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`,
+    cat:`<svg ${w}><path d="M30 38 26 18 46 32Z" fill="#9C9488"/><path d="M70 38 74 18 54 32Z" fill="#9C9488"/>
+      <circle cx="50" cy="56" r="30" fill="#ABA398"/><circle cx="40" cy="52" r="4" fill="var(--ink)"/>
+      <circle cx="60" cy="52" r="4" fill="var(--ink)"/><path d="M46 62q4 4 8 0" stroke="var(--ink)" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <g stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"><path d="M52 60H72M52 64H70M48 60H28M48 64H30"/></g></svg>`,
+    fish:`<svg ${w}><path d="M64 50Q48 26 30 50Q48 74 64 50Z" fill="var(--sky)"/>
+      <path d="M64 50 82 36V64Z" fill="var(--sky)"/><circle cx="40" cy="46" r="3.5" fill="#fff"/>
+      <circle cx="39" cy="46" r="1.8" fill="var(--ink)"/></svg>`,
+    flower:`<svg ${w}><path d="M50 60V92" stroke="var(--sage)" stroke-width="5" stroke-linecap="round"/>
+      <path d="M50 78q14-6 18 6q-12 4-18-6" fill="var(--sage)"/>
+      <g fill="var(--rose)"><circle cx="50" cy="28" r="13"/><circle cx="68" cy="44" r="13"/>
+      <circle cx="50" cy="60" r="13"/><circle cx="32" cy="44" r="13"/></g>
+      <circle cx="50" cy="44" r="11" fill="var(--ochre)"/></svg>`,
+    car:`<svg ${w}><rect x="14" y="50" width="72" height="20" rx="6" fill="var(--clay)"/>
+      <path d="M28 50 38 36H62L72 50Z" fill="var(--clay)"/><rect x="40" y="38" width="20" height="11" rx="2" fill="var(--sky)"/>
+      <circle cx="32" cy="72" r="9" fill="var(--ink)"/><circle cx="68" cy="72" r="9" fill="var(--ink)"/></svg>`,
+    rocket:`<svg ${w}><path d="M42 34Q50 16 58 34V66H42Z" fill="var(--plum)"/>
+      <path d="M42 56 32 74 42 70Z" fill="var(--clay)"/><path d="M58 56 68 74 58 70Z" fill="var(--clay)"/>
+      <circle cx="50" cy="44" r="7" fill="var(--sky)"/><path d="M44 66q6 16 12 0Z" fill="var(--ochre)"/></svg>`,
+    apple:`<svg ${w}><path d="M50 34q26-4 22 24 0 24-22 24-22 0-22-24 0-28 22-24Z" fill="var(--clay)"/>
+      <path d="M50 34V22" stroke="#6E5A40" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M52 26q12-6 16 4-12 4-16-4Z" fill="var(--sage)"/></svg>`,
+    happy:`<svg ${w}><circle cx="50" cy="50" r="34" fill="var(--ochre)"/>
+      <circle cx="40" cy="44" r="4" fill="var(--ink)"/><circle cx="60" cy="44" r="4" fill="var(--ink)"/>
+      <path d="M38 58q12 16 24 0" stroke="var(--ink)" stroke-width="4" fill="none" stroke-linecap="round"/></svg>`,
+    star:`<svg ${w}><path d="M50 14 60 38 86 40 66 56 72 82 50 68 28 82 34 56 14 40 40 38Z" fill="var(--ochre)"/></svg>`,
+    monster:`<svg ${w}><path d="M30 40Q50 20 70 40Q80 64 64 78Q50 88 36 78Q20 64 30 40Z" fill="var(--plum)"/>
+      <circle cx="50" cy="50" r="13" fill="#fff"/><circle cx="50" cy="51" r="6" fill="var(--ink)"/>
+      <g stroke="var(--plum)" stroke-width="4" stroke-linecap="round"><path d="M40 26 38 14M50 22V10M60 26 62 14"/></g></svg>`,
+  };
+  return A[id] || A.sun;
+}
+
+/* ----- 8. Drawings data — easy to extend ------------------------------
+   drawing = { id, name, art-id implied by id, category, accent, finale, steps[] }
+   step    = { tip(short), say(spoken, calm), icon(line-icon name), d:[svg paths] }
+   Ghost paths use a 1000×1000 viewBox. finale ∈ fly|wag|bounce|spin|grow.
+   Add one: copy a block, change name/category/paths. Add ART() entry too. */
+const C = (cx, cy, r) =>
+  `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
+
+const CATEGORIES = [
+  { id:"animals",  name:"Animals" },
+  { id:"vehicles", name:"Things That Go" },
+  { id:"food",     name:"Good Food" },
+  { id:"faces",    name:"Faces & Feelings" },
+  { id:"nature",   name:"Outside" },
+  { id:"space",    name:"Up in Space" },
+  { id:"monsters", name:"Friendly Monsters" },
+];
+
+const DRAWINGS = [
+  { id:"sun", name:"The Sun", category:"nature", accent:"var(--ochre)", finale:"spin", steps:[
+    { tip:"A big round circle", icon:"star", say:"Let's start with a big round circle. Take your time.",
+      d:[ C(500,500,200) ] },
+    { tip:"Lines going out", icon:"play", say:"Now draw some lines going out, like sunshine.",
+      d:[ "M500 230 L500 110","M770 500 L890 500","M500 770 L500 890","M230 500 L110 500",
+          "M690 310 L780 220","M690 690 L780 780","M310 690 L220 780","M310 310 L220 220" ] },
+    { tip:"A gentle smile", icon:"check", say:"And a soft little smile at the bottom.",
+      d:[ "M420 540 Q500 630 580 540" ] },
+  ]},
+  { id:"cat", name:"A Cat", category:"animals", accent:"#9C9488", finale:"wag", steps:[
+    { tip:"A round head", icon:"star", say:"Make a round head for the cat. Slow and steady.",
+      d:[ C(500,520,210) ] },
+    { tip:"Two pointy ears", icon:"play", say:"Two pointy ears, right on the top.",
+      d:[ "M340 360 L300 180 L470 320 Z","M660 360 L700 180 L530 320 Z" ] },
+    { tip:"Two little eyes", icon:"star", say:"Now two little eyes so the cat can see you.",
+      d:[ C(430,500,26), C(570,500,26) ] },
+    { tip:"Long whiskers", icon:"play", say:"And some long, soft whiskers.",
+      d:[ "M470 580 L300 560","M470 600 L300 620","M530 580 L700 560","M530 600 L700 620" ] },
+  ]},
+  { id:"fish", name:"A Fish", category:"animals", accent:"var(--sky)", finale:"wag", steps:[
+    { tip:"A round body", icon:"star", say:"Draw a round little fish body.",
+      d:[ "M620 500 Q500 300 360 500 Q500 700 620 500 Z" ] },
+    { tip:"A swishy tail", icon:"play", say:"Add a swishy tail so it can swim.",
+      d:[ "M620 500 L780 380 L780 620 Z" ] },
+    { tip:"One bright eye", icon:"star", say:"And one bright, happy eye.",
+      d:[ C(430,460,24) ] },
+  ]},
+  { id:"flower", name:"A Flower", category:"nature", accent:"var(--rose)", finale:"grow", steps:[
+    { tip:"A small middle", icon:"star", say:"Begin with a small circle in the middle.",
+      d:[ C(500,420,90) ] },
+    { tip:"Soft round petals", icon:"play", say:"Now soft round petals, all the way around.",
+      d:[ C(500,270,85), C(650,420,85), C(500,570,85), C(350,420,85) ] },
+    { tip:"A tall stem", icon:"play", say:"A tall green stem, going down.",
+      d:[ "M500 660 L500 900" ] },
+    { tip:"One leaf", icon:"check", say:"And one happy leaf.",
+      d:[ "M500 780 Q640 740 660 850 Q560 870 500 780 Z" ] },
+  ]},
+  { id:"car", name:"A Car", category:"vehicles", accent:"var(--clay)", finale:"fly", steps:[
+    { tip:"The car body", icon:"star", say:"Draw the long body of the car.",
+      d:[ "M180 560 L820 560 L820 680 L180 680 Z" ] },
+    { tip:"A little roof", icon:"play", say:"Add a little roof on top.",
+      d:[ "M320 560 L420 440 L620 440 L700 560" ] },
+    { tip:"Two round wheels", icon:"star", say:"Two round wheels, so it can roll.",
+      d:[ C(330,690,70), C(670,690,70) ] },
+  ]},
+  { id:"rocket", name:"A Rocket", category:"space", accent:"var(--plum)", finale:"fly", steps:[
+    { tip:"A tall body", icon:"star", say:"Draw a tall rocket, all the way up.",
+      d:[ "M420 300 Q500 200 580 300 L580 700 L420 700 Z" ] },
+    { tip:"Two fins", icon:"play", say:"Two fins on the sides to keep it steady.",
+      d:[ "M420 560 L320 720 L420 700 Z","M580 560 L680 720 L580 700 Z" ] },
+    { tip:"A round window", icon:"star", say:"A round window to see the stars.",
+      d:[ C(500,440,60) ] },
+    { tip:"A little flame", icon:"play", say:"And a little flame, ready to go.",
+      d:[ "M440 700 Q500 850 560 700" ] },
+  ]},
+  { id:"apple", name:"An Apple", category:"food", accent:"var(--clay)", finale:"bounce", steps:[
+    { tip:"A round apple", icon:"star", say:"Draw a nice round apple.",
+      d:[ "M500 360 Q760 360 720 620 Q650 820 500 820 Q350 820 280 620 Q240 360 500 360 Z" ] },
+    { tip:"A small stem", icon:"play", say:"A small stem on the top.",
+      d:[ "M500 360 L520 250" ] },
+    { tip:"One green leaf", icon:"check", say:"And one green leaf beside it.",
+      d:[ "M520 280 Q650 230 670 340 Q570 360 520 280 Z" ] },
+  ]},
+  { id:"happy", name:"A Happy Face", category:"faces", accent:"var(--ochre)", finale:"bounce", steps:[
+    { tip:"A big round face", icon:"star", say:"Make a big round face.",
+      d:[ C(500,500,260) ] },
+    { tip:"Two eyes", icon:"star", say:"Two eyes, looking right at you.",
+      d:[ C(410,440,34), C(590,440,34) ] },
+    { tip:"A wide smile", icon:"check", say:"And a wide, warm smile.",
+      d:[ "M360 580 Q500 720 640 580" ] },
+  ]},
+  { id:"star", name:"A Star", category:"space", accent:"var(--ochre)", finale:"spin", steps:[
+    { tip:"Trace the star", icon:"play", say:"Follow the star, one point at a time.",
+      d:[ "M500 200 L580 420 L810 420 L630 560 L700 790 L500 650 L300 790 L370 560 L190 420 L420 420 Z" ] },
+    { tip:"A few sparkles", icon:"star", say:"Add a few small sparkles around it.",
+      d:[ "M250 250 L250 320","M215 285 L285 285","M760 740 L760 810","M725 775 L795 775" ] },
+  ]},
+  { id:"monster", name:"A Friendly Monster", category:"monsters", accent:"var(--plum)", finale:"bounce", steps:[
+    { tip:"A soft blobby body", icon:"star", say:"Draw a soft, round, blobby body.",
+      d:[ "M300 380 Q500 240 700 380 Q780 620 600 760 Q500 820 400 760 Q220 620 300 380 Z" ] },
+    { tip:"One big eye", icon:"star", say:"Give it one big, friendly eye.",
+      d:[ C(500,460,90) ] },
+    { tip:"Two wavy arms", icon:"play", say:"Two wavy arms, for waving hello.",
+      d:[ "M300 520 Q160 480 180 620","M700 520 Q840 480 820 620" ] },
+    { tip:"A little hair", icon:"play", say:"And a little hair on top.",
+      d:[ "M380 300 L360 180","M500 270 L500 150","M620 300 L640 180" ] },
+  ]},
+];
+
+/* ----- 9. Router ------------------------------------------------------- */
+const APP = $("#app");
+function applyFlags() {
+  document.body.classList.toggle("hc", S.settings.contrast);
+  document.body.classList.toggle("calm", S.settings.calm);
+}
+function go(screen, data) {
+  applyFlags(); APP.innerHTML = "";
+  ({ splash:Splash, home:Home, draw:DrawScreen, win:WinScreen,
+     gallery:GalleryScreen, stickers:StickerScreen, free:FreeDraw,
+     settings:Settings }[screen] || Home)(data);
+}
+window.addEventListener("DOMContentLoaded", () => {
+  applyFlags();
+  const q = new URLSearchParams(location.search).get("screen");
+  if (!S.onboarded) Splash();
+  else if (q === "freedraw") FreeDraw();
+  else if (q === "gallery") GalleryScreen();
+  else Home();
+});
+window.addEventListener("pointerdown", function once() {
+  Sound.ensure(); Sound.startMusic();
+  window.removeEventListener("pointerdown", once);
+}, { once: true });
+
+/* ----- 10. Splash / onboarding ----------------------------------------- */
+function Splash() {
+  const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:28px;gap:18px" });
+  s.append(
+    el("div", { cls: "float", html: Buddy("happy", 168) }),
+    el("div", { cls: "t-display", textContent: "Scribble Heroes" }),
+    el("div", { cls: "t-body muted", textContent: "Buddy's drawing studio" }),
+  );
+  const card = el("div", { cls: "card", css: "padding:26px;width:min(540px,92vw);display:flex;flex-direction:column;gap:18px;margin-top:6px;text-align:left" });
+  card.append(
+    el("div", { cls: "t-label", textContent: "Your name" }),
+    el("input", { id: "nm", placeholder: "Type your name", maxLength: 14,
+      css: "font:inherit;font-size:22px;font-weight:800;padding:15px 18px;border-radius:16px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" }),
+    el("div", { cls: "t-label", textContent: "How old are you?" }),
+  );
+  const seg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:16px;border:1px solid var(--line)" });
+  let age = 2;
+  [1, 2, 3].forEach(a => {
+    const b = el("button", { cls: "btn", textContent: `Age ${a}`,
+      css: `flex:1;box-shadow:none;border:none;background:${a === 2 ? "var(--ink)" : "transparent"};color:${a === 2 ? "var(--cream)" : "var(--ink-soft)"}` });
+    b.onclick = () => { age = a; Sound.fx.tap(); buzz(12);
+      [...seg.children].forEach((c, i) => {
+        const on = i + 1 === a;
+        c.style.background = on ? "var(--ink)" : "transparent";
+        c.style.color = on ? "var(--cream)" : "var(--ink-soft)";
+      }); };
+    seg.append(b);
+  });
+  const start = el("button", { cls: "btn btn-primary t-head", css: "margin-top:4px",
+    html: `Begin ${ic("next", 22, "#fff")}` });
+  start.onclick = () => {
+    S.name = ($("#nm").value || "friend").trim().slice(0, 14);
+    S.age = age; S.onboarded = true; save();
+    Sound.fx.win(); buzz([18, 30]); maybeInstall(); go("home");
+  };
+  card.append(seg, start);
+  s.append(card);
+  APP.append(s);
+  setTimeout(() => speak("Hello. I'm Buddy. Tell me your name, and we'll make some drawings together."), 600);
+}
+let _install;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); _install = e; });
+function maybeInstall() { if (_install) setTimeout(() => _install && _install.prompt(), 1400); }
+
+/* ----- 11. Home -------------------------------------------------------- */
+function Home() {
+  touchStreak();
+  const s = el("div", { cls: "screen" });
+  const top = el("div", { css: "display:flex;align-items:center;gap:14px;padding:20px 22px 8px" });
+  top.append(
+    el("div", { id: "buddy", "data-size": 76, html: Buddy("warm", 76) }),
+    el("div", { css: "flex:1", html:
+      `<div class="t-title">Hello, ${S.name}</div>
+       <div class="t-body muted">What would you like to draw?</div>` }),
+  );
+  const stat = el("div", { cls: "card", css: "display:flex;gap:18px;padding:12px 18px;align-items:center;font-weight:800" });
+  const pill = (icon, n, c) => `<span style="display:inline-flex;align-items:center;gap:7px;color:var(--ink)">${ic(icon, 20, c)} ${n}</span>`;
+  stat.innerHTML = pill("flame", S.streak, "var(--clay)") + pill("star", S.stars, "var(--ochre)") + pill("sticker", S.stickers.length, "var(--sage)");
+  top.append(stat);
+  s.append(top);
+
+  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
+  CATEGORIES.forEach(cat => {
+    const items = DRAWINGS.filter(d => d.category === cat.id);
+    if (!items.length) return;
+    wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: cat.name }));
+    const grid = el("div", { cls: "grid" });
+    items.forEach(d => {
+      const stars = S.completed[d.id];
+      const c = el("button", { cls: "card pop",
+        css: "padding:18px 16px;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;background:var(--surface)" });
+      c.innerHTML =
+        `<div style="background:var(--surface-2);border-radius:20px;padding:14px">${ART(d.id, 76)}</div>
+         <div class="t-head">${d.name}</div>` +
+        (stars ? `<div style="position:absolute;top:12px;right:12px;display:flex;gap:2px">${
+          Array.from({ length: stars }, () => ic("star", 16, "var(--ochre)")).join("")}</div>` : "");
+      c.onclick = () => { Sound.fx.tap(); buzz(14); go("draw", d.id); };
+      grid.append(c);
+    });
+    wrap.append(grid);
+  });
+  s.append(wrap, nav("home"));
+  APP.append(s);
+  buddySay("warm", `Hello ${S.name}. Pick something you'd like to draw.`);
+}
+
+function nav(active) {
+  const bar = el("div", { css: "position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(239,231,216,.9);backdrop-filter:blur(10px);border-top:1px solid var(--line)" });
+  const mk = (label, icon, fn, key) => {
+    const on = active === key;
+    const b = el("button", { css: `flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-radius:16px;font-weight:800;font-size:12px;color:${on ? "var(--ink)" : "var(--ink-soft)"};background:${on ? "var(--surface)" : "transparent"};box-shadow:${on ? "var(--sh-sm)" : "none"}` });
+    b.innerHTML = ic(icon, 23, on ? "var(--clay)" : "var(--ink-soft)") + `<span>${label}</span>`;
+    b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); };
+    return b;
+  };
+  bar.append(
+    mk("Draw", "brush", () => go("free"), "free"),
+    mk("Gallery", "gallery", () => go("gallery"), "gallery"),
+    mk("Stickers", "sticker", () => go("stickers"), "stickers"),
+  );
+  // Parent-only: hold 800ms (toddlers tap, adults hold).
+  const g = el("button", { css: "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-radius:16px;font-weight:800;font-size:12px;color:var(--ink-soft)" });
+  g.innerHTML = ic("gear", 23, "var(--ink-soft)") + "<span>Grown-ups</span>";
+  let hold;
+  g.addEventListener("pointerdown", () => hold = setTimeout(() => { Sound.fx.soft(); buzz(30); go("settings"); }, 800));
+  const cancel = () => clearTimeout(hold);
+  g.addEventListener("pointerup", cancel); g.addEventListener("pointerleave", cancel);
+  g.addEventListener("click", () => speak("Grown-ups, press and hold this to open settings."));
+  bar.append(g);
+  return bar;
+}
+
+/* ----- 12. Drawing engine (canvas, brushes, ghost, scoring) ------------ */
+const COLORS = ["#CC4B3C", "#E2952F", "#EBC44A", "#6E9E5F", "#5C90A8", "#8A6FA0"];
+const AGE = {
+  1: { brush: 58, tol: 150, pass: .10, oneStep: true },
+  2: { brush: 46, tol: 112, pass: .18, oneStep: false },
+  3: { brush: 34, tol: 80,  pass: .30, oneStep: false },
+};
+function makeEngine(stage, opts = {}) {
+  const cfg = AGE[S.age] || AGE[2];
+  const paper = el("div", { id: "paper" });
+  const cv = el("canvas", { id: "pad" });
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const ghost = document.createElementNS(SVGNS, "svg"); ghost.id = "ghost"; ghost.setAttribute("viewBox", "0 0 1000 1000");
+  const demo = document.createElementNS(SVGNS, "svg"); demo.id = "demo"; demo.setAttribute("viewBox", "0 0 1000 1000");
+  stage.append(paper, cv, ghost, demo);
+
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  let DPR = 1, size = 0;
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    size = Math.min(r.width, r.height);
+    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+    const prev = (size && cv.width) ? ctx.getImageData(0, 0, cv.width, cv.height) : null;
+    cv.width = size * DPR; cv.height = size * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    if (prev) ctx.putImageData(prev, 0, 0);
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+  const L2P = v => (v / 1000) * size;
+
+  const st = { color: COLORS[0], brush: "crayon", down: false, pts: [], strokes: 0 };
+  function style() {
+    ctx.strokeStyle = st.color;
+    ctx.lineWidth = cfg.brush * (st.brush === "marker" ? 1.12 : 1);
+    ctx.globalAlpha = st.brush === "crayon" ? .9 : 1;
+    ctx.shadowBlur = st.brush === "glow" ? 16 : 0;
+    ctx.shadowColor = st.color;
+  }
+  function sparkle(x, y) {
+    for (let i = 0; i < 3; i++) { ctx.save();
+      ctx.fillStyle = rand(["#fff", st.color, "#EBC44A"]); ctx.globalAlpha = .85;
+      ctx.beginPath();
+      ctx.arc(x + (Math.random() - .5) * 36, y + (Math.random() - .5) * 36, Math.random() * 3.5 + 1, 0, 7);
+      ctx.fill(); ctx.restore(); }
+  }
+  function smooth() {
+    const p = st.pts; if (p.length < 3) return;
+    style(); ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
+    for (let i = 1; i < p.length - 1; i++) {
+      const mx = (p[i].x + p[i + 1].x) / 2, my = (p[i].y + p[i + 1].y) / 2;
+      ctx.quadraticCurveTo(p[i].x, p[i].y, mx, my);
+    }
+    ctx.stroke();
+    if (st.brush === "glow") sparkle(p[p.length - 1].x, p[p.length - 1].y);
+  }
+  const xy = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); st.down = true; st.pts = [xy(e)]; Sound.fx.stroke(); });
+  cv.addEventListener("pointermove", e => {
+    if (!st.down) return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of evs) st.pts.push(xy(ev));
+    smooth();
+  });
+  function end() {
+    if (!st.down) return;
+    if (st.pts.length < 3 && st.pts[0]) { // a tap still leaves a mark
+      style(); ctx.beginPath();
+      ctx.arc(st.pts[0].x, st.pts[0].y, ctx.lineWidth / 2, 0, 7);
+      ctx.fillStyle = st.color; ctx.fill();
+    }
+    st.down = false; st.strokes++; st.pts = [];
+    buzz(14); opts.onStroke && opts.onStroke(st.strokes);
+  }
+  cv.addEventListener("pointerup", end);
+  cv.addEventListener("pointercancel", end);
+  cv.addEventListener("pointerleave", end);
+
+  let gp = [];
+  function setGhost(arr) {
+    ghost.innerHTML = ""; demo.innerHTML = ""; ghost.classList.remove("help"); gp = arr;
+    arr.forEach(d => { const p = document.createElementNS(SVGNS, "path"); p.setAttribute("d", d); ghost.append(p); });
+  }
+  let raf;
+  function playDemo() {
+    cancelAnimationFrame(raf); demo.innerHTML = "";
+    const tmp = document.createElementNS(SVGNS, "path");
+    const dot = document.createElementNS(SVGNS, "circle");
+    dot.setAttribute("r", "22"); dot.setAttribute("fill", "var(--clay)");
+    dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", "6");
+    demo.append(dot);
+    let i = 0;
+    const run = () => {
+      if (i >= gp.length) { demo.innerHTML = ""; return; }
+      tmp.setAttribute("d", gp[i]);
+      const len = tmp.getTotalLength() || 1, dur = clamp(len * 1.7, 800, 2800), t0 = performance.now();
+      const fr = now => {
+        const k = clamp((now - t0) / dur, 0, 1), pt = tmp.getPointAtLength(k * len);
+        dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
+        if (k < 1) raf = requestAnimationFrame(fr); else { i++; run(); }
+      };
+      raf = requestAnimationFrame(fr);
+    };
+    run();
+  }
+  function helpMe() { ghost.classList.add("help"); setTimeout(() => ghost.classList.remove("help"), 4500); playDemo(); }
+
+  // Forgiving coverage score (0..1). Never blocks — only scales warmth.
+  function score() {
+    if (!gp.length) return 1;
+    const img = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    const tol = Math.round(L2P(cfg.tol) * DPR), step = Math.max(3, Math.round(tol / 4));
+    const tmp = document.createElementNS(SVGNS, "path");
+    let hit = 0, tot = 0;
+    for (const d of gp) {
+      tmp.setAttribute("d", d);
+      const len = tmp.getTotalLength() || 1, n = clamp(Math.round(len / 26), 8, 80);
+      for (let i = 0; i <= n; i++) {
+        const pt = tmp.getPointAtLength((i / n) * len);
+        const cx = Math.round(L2P(pt.x) * DPR), cy = Math.round(L2P(pt.y) * DPR);
+        tot++; let f = false;
+        for (let dy = -tol; dy <= tol && !f; dy += step)
+          for (let dx = -tol; dx <= tol && !f; dx += step) {
+            const px = cx + dx, py = cy + dy;
+            if (px < 0 || py < 0 || px >= cv.width || py >= cv.height) continue;
+            if (img[(py * cv.width + px) * 4 + 3] > 24) f = true;
+          }
+        if (f) hit++;
+      }
+    }
+    return tot ? hit / tot : 1;
+  }
+  const clear = () => ctx.clearRect(0, 0, cv.width, cv.height);
+  const undo = () => { ctx.save(); ctx.globalCompositeOperation = "destination-out";
+    ctx.globalAlpha = .5; ctx.fillRect(0, 0, cv.width, cv.height); ctx.restore(); };
+  const toPNG = () => { const o = document.createElement("canvas");
+    o.width = cv.width; o.height = cv.height; const c = o.getContext("2d");
+    c.fillStyle = "#FBF3E7"; c.fillRect(0, 0, o.width, o.height); c.drawImage(cv, 0, 0);
+    return new Promise(r => o.toBlob(r, "image/png")); };
+  return { st, setGhost, helpMe, playDemo, score, clear, undo, toPNG, cfg,
+           get strokes() { return st.strokes; } };
+}
+
+function toolbar(engine) {
+  const bar = el("div", { css: "display:flex;flex-direction:column;gap:12px;align-items:center;padding:8px 16px" });
+  const cols = el("div", { css: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center" });
+  COLORS.forEach((c, i) => {
+    const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
+    b.onclick = () => { engine.st.color = c; Sound.fx.tap(); buzz(12);
+      [...cols.children].forEach(x => x.classList.remove("sel")); b.classList.add("sel"); };
+    cols.append(b);
+  });
+  const br = el("div", { css: "display:flex;gap:10px" });
+  [["crayon", "Crayon", "brush"], ["marker", "Marker", "save"], ["glow", "Glow", "star"]].forEach(([k, label, icon], i) => {
+    const b = el("button", { cls: "chip" + (i === 0 ? " sel" : ""),
+      html: ic(icon, 18, i === 0 ? "var(--cream)" : "var(--ink)") + `<span>${label}</span>` });
+    b.onclick = () => { engine.st.brush = k; Sound.fx.tap(); buzz(12);
+      [...br.children].forEach(x => { x.classList.remove("sel"); x.querySelector("svg").setAttribute("stroke", "var(--ink)"); });
+      b.classList.add("sel"); b.querySelector("svg").setAttribute("stroke", "var(--cream)"); };
+    br.append(b);
+  });
+  bar.append(cols, br);
+  return bar;
+}
+
+/* ----- 13. Guided drawing ---------------------------------------------- */
+function DrawScreen(id) {
+  const D = DRAWINGS.find(d => d.id === id) || DRAWINGS[0];
+  const steps = (AGE[S.age].oneStep) ? D.steps.slice(0, Math.min(2, D.steps.length)) : D.steps;
+  let i = 0;
+  const s = el("div", { cls: "screen" });
+
+  const head = el("div", { css: "display:flex;align-items:center;gap:12px;padding:16px 20px 6px" });
+  const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
+  back.onclick = () => { Sound.fx.tap(); go("home"); };
+  head.append(back,
+    el("div", { css: "flex:1", html: `<div class="t-title">${D.name}</div>` }),
+    el("div", { id: "buddy", "data-size": 60, html: Buddy("happy", 60) }));
+  s.append(head);
+
+  const progWrap = el("div", { css: "padding:2px 22px 8px;display:flex;align-items:center;gap:12px" });
+  const prog = el("div", { cls: "prog", css: "flex:1", html: "<i style='width:0'></i>" });
+  const pNum = el("div", { cls: "t-label", css: "white-space:nowrap" });
+  progWrap.append(prog, pNum);
+  s.append(progWrap);
+
+  const banner = el("div", { cls: "card", css: "margin:6px 20px;padding:16px 18px;display:flex;align-items:center;gap:14px" });
+  banner.innerHTML = `<div id="sIcon" style="background:var(--surface-2);border-radius:14px;padding:10px"></div>
+    <div id="sTip" class="t-head" style="flex:1"></div>`;
+  s.append(banner);
+
+  const sw = el("div", { css: "flex:1;display:flex;align-items:center;justify-content:center;padding:6px 18px" });
+  const stage = el("div", { cls: "stage", css: "width:min(86vw,560px);aspect-ratio:1/1;max-height:54vh" });
+  sw.append(stage); s.append(sw);
+  s.append(el("div", { id: "caption", cls: "caption t-body hidden",
+    css: "position:absolute;left:50%;transform:translateX(-50%);bottom:206px;max-width:90vw;text-align:center" }));
+
+  const engine = makeEngine(stage, { onStroke: () => {
+    if (Math.random() < .4) buddySay("happy", rand([
+      "That's it. Keep going.", "I see your line growing.",
+      "Nice and slow. Lovely.", "You're really working hard.",
+      "Good. Take all the time you need.",
+    ]));
+  }});
+  s.append(toolbar(engine));
+
+  const acts = el("div", { css: "display:flex;gap:10px;padding:6px 18px calc(14px + env(safe-area-inset-bottom))" });
+  const mk = (icon, label, fn, primary) => {
+    const b = el("button", { cls: "btn " + (primary ? "btn-go" : "btn-quiet"),
+      css: primary ? "flex:1" : "", html: ic(icon, 20, primary ? "#fff" : "var(--ink)") + `<span>${label}</span>` });
+    b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); };
+    return b;
+  };
+  acts.append(
+    mk("help", "Show me", () => { engine.helpMe(); speak("Watch the dot, then you try. There's no rush."); }),
+    mk("undo", "Undo", () => engine.undo()),
+    mk("eraser", "Clear", () => { engine.clear(); engine.setGhost(steps[i].d); }),
+  );
+  const next = mk("next", "Next", () => advance(), true);
+  acts.append(next);
+  s.append(acts);
+  APP.append(s);
+
+  function show() {
+    const stp = steps[i];
+    prog.firstChild.style.width = (i / steps.length) * 100 + "%";
+    pNum.textContent = `Step ${i + 1} of ${steps.length}`;
+    $("#sIcon").innerHTML = ic(stp.icon, 26, D.accent);
+    const tip = $("#sTip"); tip.textContent = stp.tip;
+    tip.classList.remove("pop"); void tip.offsetWidth; tip.classList.add("pop");
+    engine.setGhost(stp.d);
+    next.querySelector("span").textContent = (i === steps.length - 1) ? "All done" : "Next";
+    buddySay("happy", stp.say);
+    setTimeout(() => engine.playDemo(), 800);
+  }
+  const scores = [];
+  function advance() {
+    scores[i] = engine.score();
+    const ok = scores[i] >= engine.cfg.pass;
+    if (ok) {
+      Sound.fx.step(); burst(.3);
+      buddySay("happy", rand([
+        `That looks wonderful, ${S.name}.`,
+        `You drew that all by yourself. Well done.`,
+        `Look at the marks you made. Really good work.`,
+      ]));
+    } else {
+      Sound.fx.soft();
+      buddySay("warm", rand([
+        `Every mark you make is good, ${S.name}. Let's keep going.`,
+        `There's no wrong way to draw. On to the next part.`,
+        `I like how you did that. Let's carry on.`,
+      ]));
+    }
+    prog.firstChild.style.width = ((i + 1) / steps.length) * 100 + "%";
+    i++;
+    if (i >= steps.length) return finish();
+    setTimeout(show, ok ? 1100 : 950);
+  }
+  async function finish() {
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const stars = avg >= engine.cfg.pass * 1.6 ? 3 : avg >= engine.cfg.pass ? 2 : 1;
+    const blob = await engine.toPNG();
+    S.completed[D.id] = Math.max(S.completed[D.id] || 0, stars);
+    S.stars += stars;
+    if (!S.stickers.includes(D.id)) S.stickers.push(D.id);
+    if (S.stars > S.buddyLevel * 8) S.buddyLevel++;
+    save();
+    await galleryAdd({ id: Date.now(), name: D.name, art: D.id, blob });
+    go("win", { D, stars, blob });
+  }
+  show();
+}
+
+/* ----- 14. Completion -------------------------------------------------- */
+function WinScreen({ D, stars, blob }) {
+  const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:24px;gap:14px" });
+  const url = URL.createObjectURL(blob);
+  s.append(el("div", { id: "caption", cls: "caption t-body hidden",
+    css: "position:absolute;top:20px;left:50%;transform:translateX(-50%)" }));
+  s.append(el("div", { cls: "t-display", textContent: `You did it, ${S.name}` }));
+  const starsRow = el("div", { css: "display:flex;gap:6px",
+    html: Array.from({ length: 3 }, (_, k) =>
+      ic("star", 30, k < stars ? "var(--ochre)" : "rgba(52,48,42,.18)")).join("") });
+  s.append(starsRow);
+  const fin = el("div", { id: "fin", css: "margin:4px 0", html: ART(D.id, 110) });
+  const frame = el("div", { cls: "card", css: "padding:12px;background:var(--cream)" });
+  frame.append(el("img", { src: url, alt: "Your drawing",
+    css: "width:min(62vw,280px);border-radius:14px;display:block" }));
+  s.append(fin, frame);
+  s.append(el("div", { cls: "bubble t-body", css: "margin-top:14px",
+    textContent: `You earned the ${D.name} sticker.` }));
+
+  const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px" });
+  const mk = (icon, label, fn, kind) => {
+    const b = el("button", { cls: "btn " + (kind || "btn-quiet"),
+      html: ic(icon, 20, kind === "btn-primary" || kind === "btn-go" ? "#fff" : "var(--ink)") + `<span>${label}</span>` });
+    b.onclick = () => { Sound.fx.tap(); buzz(14); fn(); };
+    return b;
+  };
+  const list = DRAWINGS, nxt = list[(list.findIndex(x => x.id === D.id) + 1) % list.length];
+  row.append(
+    mk("undo", "Draw again", () => go("draw", D.id)),
+    mk("next", "Next drawing", () => go("draw", nxt.id), "btn-go"),
+    mk("gallery", "Gallery", () => go("gallery")),
+    mk("share", "Share", async () => {
+      const f = new File([blob], `${D.name}.png`, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [f] }))
+        navigator.share({ files: [f], title: "My drawing" }).catch(() => {});
+      else el("a", { href: url, download: `${D.name}.png` }).click();
+    }),
+    mk("home", "Home", () => go("home")),
+  );
+  s.append(row);
+  APP.append(s);
+
+  Sound.fx.win(); buzz([20, 40, 20]); burst(1);
+  finale($("#fin"), D.finale);
+  setTimeout(() => Sound.fx.sticker(), 1300);
+  setTimeout(() => speak(rand([
+    `That's really good work, ${S.name}. You stayed with it the whole way, and you made something all your own.`,
+    `Look what you made, ${S.name}. You used your own hands and your own ideas. I'm proud of you.`,
+    `Well done, ${S.name}. Drawing takes patience, and you had plenty of it today.`,
+  ])), 700);
+}
+function finale(node, kind) {
+  if (!node || S.settings.calm) return;
+  const a = {
+    fly:    [{ transform: "translateY(0)" }, { transform: "translateY(-220px)", opacity: .5 }],
+    bounce: [{ transform: "translateY(0)" }, { transform: "translateY(-46px)" }, { transform: "translateY(0)" }],
+    wag:    [{ transform: "rotate(-8deg)" }, { transform: "rotate(8deg)" }, { transform: "rotate(-8deg)" }],
+    spin:   [{ transform: "rotate(0)" }, { transform: "rotate(360deg)" }],
+    grow:   [{ transform: "scale(.6)" }, { transform: "scale(1.06)" }, { transform: "scale(1)" }],
+  };
+  node.animate(a[kind] || a.bounce,
+    { duration: kind === "fly" ? 2200 : 1400, iterations: kind === "wag" ? 3 : 2, easing: "cubic-bezier(.3,.7,.3,1)" });
+}
+function burst(scale = 1) {
+  if (S.settings.calm || typeof confetti !== "function") return;
+  confetti({ particleCount: Math.round(90 * scale), spread: 78, origin: { y: .62 },
+    colors: ["#C9633F", "#D89A36", "#6E8C5E", "#5E8AA0", "#CF8585", "#7C6C90"],
+    scalar: 1.05, disableForReducedMotion: true, ticks: 160 });
+}
+
+/* ----- 15. Gallery ----------------------------------------------------- */
+async function GalleryScreen() {
+  const s = el("div", { cls: "screen" });
+  s.append(header("Gallery"));
+  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
+  const items = await galleryAll();
+  if (!items.length) {
+    wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-top:48px",
+      textContent: "Nothing here yet. Finish a drawing and it will be saved here." }));
+  } else {
+    const grid = el("div", { cls: "grid" });
+    items.forEach(rec => {
+      const url = URL.createObjectURL(rec.blob);
+      const c = el("div", { cls: "card", css: "padding:10px;display:flex;flex-direction:column;gap:8px" });
+      c.innerHTML = `<img src="${url}" style="width:100%;border-radius:14px"/>
+        <div class="t-head" style="text-align:center">${rec.name}</div>`;
+      const r = el("div", { css: "display:flex;gap:8px" });
+      const dl = el("button", { cls: "btn btn-quiet", css: "flex:1;padding:11px",
+        html: ic("share", 18) });
+      dl.onclick = () => { const f = new File([rec.blob], rec.name + ".png", { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f] }).catch(() => {});
+        else el("a", { href: url, download: rec.name + ".png" }).click(); };
+      const del = el("button", { cls: "btn btn-quiet", css: "flex:1;padding:11px", html: ic("eraser", 18) });
+      del.onclick = async () => { Sound.fx.tap(); await galleryDel(rec.id); GalleryScreen(); };
+      r.append(dl, del); c.append(r); grid.append(c);
+    });
+    wrap.append(grid);
+  }
+  s.append(wrap, nav("gallery"));
+  APP.append(s);
+}
+
+/* ----- 16. Sticker book ------------------------------------------------ */
+function StickerScreen() {
+  const s = el("div", { cls: "screen" });
+  s.append(header("Stickers"));
+  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
+  wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-bottom:12px",
+    textContent: `${S.stickers.length} of ${DRAWINGS.length} collected` }));
+  const grid = el("div", { cls: "grid" });
+  DRAWINGS.forEach(d => {
+    const have = S.stickers.includes(d.id);
+    const c = el("button", { cls: "card", css: `padding:22px;display:flex;align-items:center;justify-content:center;${have ? "" : "opacity:.4"}` });
+    c.innerHTML = have ? ART(d.id, 78)
+      : `<div style="filter:grayscale(1) opacity(.5)">${ART(d.id, 78)}</div>`;
+    c.onclick = () => {
+      if (!have) { speak(`Draw the ${d.name.toLowerCase()} to earn this sticker.`); return; }
+      Sound.fx.sticker(); buzz(26);
+      c.classList.remove("nudge"); void c.offsetWidth; c.classList.add("nudge");
+      speak(`This is your ${d.name} sticker. You earned it.`);
+    };
+    grid.append(c);
+  });
+  wrap.append(grid);
+  s.append(wrap, nav("stickers"));
+  APP.append(s);
+}
+
+/* ----- 17. Free draw --------------------------------------------------- */
+function FreeDraw() {
+  const s = el("div", { cls: "screen" });
+  s.append(header("Free Draw"));
+  const sw = el("div", { css: "flex:1;display:flex;align-items:center;justify-content:center;padding:6px 18px" });
+  const stage = el("div", { cls: "stage", css: "width:min(90vw,620px);aspect-ratio:1/1;max-height:60vh" });
+  sw.append(stage); s.append(sw);
+  s.append(el("div", { id: "caption", cls: "caption t-body hidden",
+    css: "position:absolute;left:50%;transform:translateX(-50%);bottom:212px" }));
+  let n = 0;
+  const engine = makeEngine(stage, { onStroke: () => {
+    if (++n % 5 === 0) speak(rand([
+      "I like the colours you're choosing.",
+      "You can draw anything you imagine here.",
+      "That's lovely. Keep going.",
+      "It's all yours. There's no wrong way.",
+    ])); }});
+  s.append(toolbar(engine));
+  const row = el("div", { css: "display:flex;gap:10px;padding:6px 18px calc(14px + env(safe-area-inset-bottom))" });
+  const mk = (icon, label, fn, kind) => {
+    const b = el("button", { cls: "btn " + (kind || "btn-quiet"), css: "flex:1",
+      html: ic(icon, 20, kind === "btn-go" ? "#fff" : "var(--ink)") + `<span>${label}</span>` });
+    b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); }; return b;
+  };
+  row.append(
+    mk("undo", "Undo", () => engine.undo()),
+    mk("eraser", "Clear", () => engine.clear()),
+    mk("save", "Save", async () => {
+      const blob = await engine.toPNG();
+      await galleryAdd({ id: Date.now(), name: "Free Draw", art: "star", blob });
+      Sound.fx.win(); burst(.5);
+      speak(`I saved that to your gallery, ${S.name}. Good work.`);
+    }, "btn-go"),
+  );
+  s.append(row, nav("free"));
+  APP.append(s);
+  buddySay("warm", `This is your space, ${S.name}. Draw whatever you like.`);
+}
+
+/* ----- 18. Settings (parent) ------------------------------------------- */
+function Settings() {
+  const s = el("div", { cls: "screen" });
+  s.append(header("For Grown-ups"));
+  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
+
+  [["voice", "sound", "Buddy's voice"],
+   ["slowVoice", "slow", "Slower, clearer speech"],
+   ["music", "music", "Quiet background music"],
+   ["sound", "sound", "Sound effects"],
+   ["haptics", "buzz", "Gentle vibration"],
+   ["contrast", "contrast", "High-contrast mode"],
+   ["calm", "calm", "Calm mode — less motion & sound"]].forEach(([k, icon, label]) => {
+    const row = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
+    const swh = el("div", { cls: "sw" + (S.settings[k] ? " on" : ""), html: "<i></i>" });
+    row.append(el("div", { html: ic(icon, 22, "var(--ink-soft)") }),
+      el("div", { cls: "t-head", css: "flex:1", textContent: label }), swh);
+    row.onclick = () => {
+      S.settings[k] = !S.settings[k]; save(); Sound.fx.tap(); buzz(12);
+      swh.classList.toggle("on", S.settings[k]); applyFlags();
+      if (k === "music") S.settings.music ? Sound.startMusic() : Sound.stopMusic();
+    };
+    wrap.append(row);
+  });
+
+  const prof = el("div", { cls: "card", css: "padding:18px;display:flex;flex-direction:column;gap:12px" });
+  prof.append(el("div", { cls: "t-head", html: `Artist: <b>${S.name}</b>` }),
+    el("div", { cls: "t-label", textContent: "Age setting" }));
+  const seg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
+  [1, 2, 3].forEach(a => {
+    const b = el("button", { textContent: `Age ${a}`,
+      css: `flex:1;padding:12px;border-radius:10px;font-weight:800;background:${S.age === a ? "var(--ink)" : "transparent"};color:${S.age === a ? "var(--cream)" : "var(--ink-soft)"}` });
+    b.onclick = () => { S.age = a; save(); Sound.fx.tap(); Settings(); };
+    seg.append(b);
+  });
+  prof.append(seg);
+  const reset = el("button", { cls: "btn", css: "background:var(--clay);color:#fff;border-color:transparent;margin-top:4px",
+    html: ic("eraser", 18, "#fff") + "<span>Reset everything</span>" });
+  reset.onclick = async () => {
+    if (confirm("Erase the name, stars, stickers and all saved drawings?")) {
+      localStorage.removeItem(SAVE_KEY);
+      (await galleryAll()).forEach(r => galleryDel(r.id));
+      S = defaultState(); save(); Splash();
+    }
+  };
+  prof.append(reset);
+  wrap.append(prof);
+
+  const note = el("div", { cls: "card", css: "padding:20px;line-height:1.6", html:
+    `<div class="t-title" style="margin-bottom:10px">Why this works</div>
+     <p class="t-body">Scribble Heroes follows a <b>process-over-product</b> approach.
+     The app never corrects or scores your child's drawing. Buddy responds warmly to
+     <i>every</i> mark, because at this age the value is in the <i>doing</i> — the
+     grip, the movement, the choice — not in how the picture turns out.</p>
+     <p class="t-body" style="margin-top:10px">Through play, your child practises:</p>
+     <ul class="t-body" style="margin:8px 0 8px 20px">
+       <li><b>Fine motor control</b> — grip, pressure, hand–eye coordination.</li>
+       <li><b>Sequencing</b> — following short, ordered steps.</li>
+       <li><b>Shape &amp; space</b> — circles, lines, and triangles.</li>
+       <li><b>Confidence</b> — effort-based, descriptive encouragement.</li>
+       <li><b>Language</b> — Buddy names and narrates calmly, slowly if you choose.</li>
+     </ul>
+     <p class="t-body"><b>Tip:</b> sit alongside and describe what you see
+     ("you made a long curvy line") rather than asking "what is it?". Keep sessions
+     short. There are no ads, no accounts, and no tracking — it works fully offline.</p>` });
+  wrap.append(note);
+  s.append(wrap);
+  APP.append(s);
+}
+
+function header(title) {
+  const h = el("div", { css: "display:flex;align-items:center;gap:12px;padding:18px 20px 6px" });
+  const b = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
+  b.onclick = () => { Sound.fx.tap(); buzz(12); go("home"); };
+  h.append(b, el("div", { cls: "t-title", textContent: title }));
+  return h;
+}
+
+/* ----- 19. Service worker ---------------------------------------------- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () =>
+    navigator.serviceWorker.register("./sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
