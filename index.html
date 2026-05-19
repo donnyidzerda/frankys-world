@@ -632,6 +632,13 @@ const CATEGORIES = [
   { id:"animals" }, { id:"vehicles" }, { id:"food" },
   { id:"faces" }, { id:"nature" }, { id:"space" }, { id:"monsters" },
 ];
+// The app is split into 3 parts: Draw / Read / Write. Reading is its own
+// adaptive flow (the Lezen pillar); these map categories to Draw or Write.
+const CAT_GROUP = {
+  writing:"write", alphabet:"write", numbers:"write", shapes:"write",
+  animals:"draw", vehicles:"draw", food:"draw", faces:"draw",
+  nature:"draw", space:"draw", monsters:"draw",
+};
 
 /* ----- 8c. Languages: Dutch (default), English, Spanish ----------------
    Every spoken + visible string lives here. t(key) returns the current
@@ -648,7 +655,10 @@ const I18N = {
     splashIntro:"Hallo, ik ben Buddy. Ben jij Lucy of Josh? Tik op je naam om te beginnen.",
     hello:n=>`Hallo, ${n}`, whatDraw:"Wat wil je tekenen?",
     buddyHome:n=>`Hallo ${n}. Kies iets om te tekenen.`,
-    nDraw:"Tekenen", nGallery:"Mijn werk", nStickers:"Stickers", nGrown:"Ouders",
+    nDraw:"Tekenen", nHome:"Start", nGallery:"Mijn werk", nStickers:"Stickers", nGrown:"Ouders",
+    pill_read:"Lezen", pillSub_read:"Klanken en woordjes met Buddy",
+    pill_write:"Schrijven", pillSub_write:"Letters, cijfers en vormen natrekken",
+    pill_draw:"Tekenen", pillSub_draw:"Dieren, voertuigen en vrij tekenen",
     grownHint:"Volwassenen: houd deze knop ingedrukt om de instellingen te openen.",
     stepOf:(i,m)=>`Stap ${i} van ${m}`,
     showMe:"Doe voor", undo:"Terug", clear:"Wissen", next:"Verder", allDone:"Klaar!",
@@ -701,7 +711,10 @@ const I18N = {
     splashIntro:"Hello, I'm Buddy. Are you Lucy, or Josh? Tap your name to begin.",
     hello:n=>`Hello, ${n}`, whatDraw:"What would you like to draw?",
     buddyHome:n=>`Hello ${n}. Pick something you'd like to draw.`,
-    nDraw:"Draw", nGallery:"Gallery", nStickers:"Stickers", nGrown:"Grown-ups",
+    nDraw:"Draw", nHome:"Home", nGallery:"Gallery", nStickers:"Stickers", nGrown:"Grown-ups",
+    pill_read:"Reading", pillSub_read:"Sounds and words with Buddy",
+    pill_write:"Writing", pillSub_write:"Trace letters, numbers and shapes",
+    pill_draw:"Drawing", pillSub_draw:"Animals, vehicles and free drawing",
     grownHint:"Grown-ups, press and hold this to open settings.",
     stepOf:(i,m)=>`Step ${i} of ${m}`,
     showMe:"Show me", undo:"Undo", clear:"Clear", next:"Next", allDone:"All done",
@@ -754,7 +767,10 @@ const I18N = {
     splashIntro:"Hola, soy Buddy. ¿Eres Lucy o Josh? Toca tu nombre para empezar.",
     hello:n=>`Hola, ${n}`, whatDraw:"¿Qué quieres dibujar?",
     buddyHome:n=>`Hola ${n}. Elige algo para dibujar.`,
-    nDraw:"Dibujar", nGallery:"Galería", nStickers:"Pegatinas", nGrown:"Adultos",
+    nDraw:"Dibujar", nHome:"Inicio", nGallery:"Galería", nStickers:"Pegatinas", nGrown:"Adultos",
+    pill_read:"Leer", pillSub_read:"Sonidos y palabras con Buddy",
+    pill_write:"Escribir", pillSub_write:"Trazar letras, números y formas",
+    pill_draw:"Dibujar", pillSub_draw:"Animales, vehículos y dibujo libre",
     grownHint:"Adultos: mantén pulsado este botón para abrir los ajustes.",
     stepOf:(i,m)=>`Paso ${i} de ${m}`,
     showMe:"Muéstrame", undo:"Deshacer", clear:"Borrar", next:"Siguiente", allDone:"¡Listo!",
@@ -943,8 +959,8 @@ const I18N_X = {
     sheetActs:["Schrijf mama, papa, oma, opa voor en laat het natekenen op papier.","Teken samen vormen in de lucht met je vinger.","Tel hardop tot tien met blokjes of traptreden.","Praat over kleuren tijdens een wandeling.","Laat je kind een tekening aan jou uitleggen."],
     sheetFooter:"Houd sessies kort. Ga ernaast zitten en benoem wat je ziet. Geen advertenties, geen account, werkt offline.",
     readTitle:"Lezen met Buddy", readSub:n=>`Je kent al ${n} klanken. Tik om te oefenen!`,
-    readListen:"Luister naar Buddy", readWhichLetter:"Welke letter zegt dit?",
-    readWhichWord:"Welk woord zei Buddy?", readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
+    readListen:"Luister naar Buddy", readWhichLetter:"Welke letter hoor je?",
+    readWhichWord:"Welk woord hoor je?", readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
     phLabel:"Letters leren via", phSound:"Klank (Montessori)", phName:"Letternaam",
     phHint:"Klank: Buddy zegt de klank, zoals mmm voor maan (Montessori). Letternaam: Buddy zegt em, es, enzovoort.",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
@@ -978,8 +994,8 @@ const I18N_X = {
     sheetActs:["Write mama, papa, oma, opa and let them copy it on paper.","Draw shapes in the air together with a finger.","Count to ten out loud using blocks or stairs.","Talk about colours on a walk.","Have your child explain a drawing to you."],
     sheetFooter:"Keep sessions short. Sit alongside and describe what you see. No ads, no account, works offline.",
     readTitle:"Reading with Buddy", readSub:n=>`You know ${n} sounds. Tap to practise!`,
-    readListen:"Listen to Buddy", readWhichLetter:"Which letter says this?",
-    readWhichWord:"Which word did Buddy say?", readAgain:"Again", readNext:"Next", readMore:"Read more",
+    readListen:"Listen to Buddy", readWhichLetter:"Which letter do you hear?",
+    readWhichWord:"Which word do you hear?", readAgain:"Again", readNext:"Next", readMore:"Read more",
     phLabel:"Learn letters by", phSound:"Sound (Montessori)", phName:"Letter name",
     phHint:"Sound: Buddy says the sound, like mmm for moon (Montessori). Letter name: Buddy says em, es, and so on.",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
@@ -1013,8 +1029,8 @@ const I18N_X = {
     sheetActs:["Escribe mama, papa, oma, opa y que lo copie en papel.","Dibujad formas en el aire con el dedo.","Contad hasta diez en voz alta con bloques o escalones.","Hablad de los colores en un paseo.","Que tu hijo te explique un dibujo."],
     sheetFooter:"Sesiones cortas. Siéntate al lado y describe lo que ves. Sin anuncios, sin cuenta, funciona sin conexión.",
     readTitle:"Leer con Buddy", readSub:n=>`Ya conoces ${n} sonidos. ¡Toca para practicar!`,
-    readListen:"Escucha a Buddy", readWhichLetter:"¿Qué letra dice esto?",
-    readWhichWord:"¿Qué palabra dijo Buddy?", readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
+    readListen:"Escucha a Buddy", readWhichLetter:"¿Qué letra escuchas?",
+    readWhichWord:"¿Qué palabra escuchas?", readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
     phLabel:"Aprender letras por", phSound:"Sonido (Montessori)", phName:"Nombre de letra",
     phHint:"Sonido: Buddy dice el sonido, como mmm de mano (Montessori). Nombre: Buddy dice eme, ese, etc.",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
@@ -1737,51 +1753,74 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); _insta
 function maybeInstall() { if (_install) setTimeout(() => _install && _install.prompt(), 1400); }
 
 /* ----- 11. Home -------------------------------------------------------- */
-function Home() {
+// Home is a 3-part chooser (Draw / Read / Write). With a mode it shows
+// just that part's lessons, with a back arrow to the chooser.
+function Home(mode) {
   touchStreak();
   const s = el("div", { cls: "screen" });
-  const top = el("div", { css: "display:flex;align-items:center;gap:14px;padding:20px 22px 8px" });
-  // Tapping the name/Buddy opens the profile picker (switch child).
-  const who = el("button", { css: "flex:1;display:flex;align-items:center;gap:14px;text-align:left;background:none",
-    html: `<span id="buddy" data-size="76">${Buddy("warm", 76)}</span>
-      <span><span class="t-title">${t("hello")(S.name)}</span><br>
-      <span class="t-body muted">${t("whatDraw")}</span></span>` });
-  who.onclick = () => { Sound.fx.tap(); buzz(12); ProfilePicker(); };
-  top.append(who);
-  const stat = el("div", { cls: "card", css: "display:flex;gap:18px;padding:12px 18px;align-items:center;font-weight:800" });
-  const pill = (icon, n, c) => `<span style="display:inline-flex;align-items:center;gap:7px;color:var(--ink)">${ic(icon, 20, c)} ${n}</span>`;
-  stat.innerHTML = pill("flame", S.streak, "var(--clay)") + pill("star", S.stars, "var(--ochre)") + pill("sticker", S.stickers.length, "var(--sage)");
-  top.append(stat, muteBtn());
-  s.append(top);
 
-  // Buddy's world: grows as stars are earned. New elements pop in once
-  // (compared against the stars seen on the last Home visit). A small
-  // hint shows how many stars until the next surprise.
-  const prevSeen = S.worldSeenStars || 0;
-  const nextStep = WORLD_STEPS.find(x => x > S.stars);
-  const hint = nextStep ? t("worldNext")(nextStep - S.stars) : t("worldDone");
-  const world = el("div", { cls: "card", css: "margin:6px 20px 0;padding:10px 12px 6px;background:linear-gradient(180deg,#EAF1F4,#F4EFE2)" });
-  world.innerHTML = worldSVG(S.stars, prevSeen) +
-    `<div class="t-label" style="text-align:center;margin-top:2px">${t("worldTitle")}</div>
-     <div class="t-body muted" style="text-align:center;font-size:13px;margin-top:1px">${hint}</div>`;
-  s.append(world);
-  if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
+  if (!mode) {
+    const top = el("div", { css: "display:flex;align-items:center;gap:14px;padding:20px 22px 8px" });
+    const who = el("button", { css: "flex:1;display:flex;align-items:center;gap:14px;text-align:left;background:none",
+      html: `<span id="buddy" data-size="76">${Buddy("warm", 76)}</span>
+        <span><span class="t-title">${t("hello")(S.name)}</span><br>
+        <span class="t-body muted">${t("whatDraw")}</span></span>` });
+    who.onclick = () => { Sound.fx.tap(); buzz(12); ProfilePicker(); };
+    const stat = el("div", { cls: "card", css: "display:flex;gap:18px;padding:12px 18px;align-items:center;font-weight:800" });
+    const pillS = (icon, n, c) => `<span style="display:inline-flex;align-items:center;gap:7px;color:var(--ink)">${ic(icon, 20, c)} ${n}</span>`;
+    stat.innerHTML = pillS("flame", S.streak, "var(--clay)") + pillS("star", S.stars, "var(--ochre)") + pillS("sticker", S.stickers.length, "var(--sage)");
+    top.append(who, stat, muteBtn());
+    s.append(top);
 
-  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
-  CATEGORIES.forEach(cat => {
-    if (cat.id === "reading") {            // single big card -> reading engine
-      wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: catName("reading") }));
-      const rc = el("button", { cls: "card pop",
-        css: "padding:20px;display:flex;align-items:center;gap:16px;background:var(--sky);color:#fff;width:100%" });
-      const done = readMasteredCount();
-      rc.innerHTML =
-        `<div style="background:rgba(255,255,255,.22);border-radius:18px;padding:12px">${ic("play", 30, "#fff")}</div>
-         <div style="text-align:left;flex:1"><div class="t-title">${t("readTitle")}</div>
-         <div class="t-body" style="opacity:.9">${t("readSub")(done)}</div></div>`;
-      rc.onclick = () => { Sound.fx.tap(); buzz(14); go("read"); };
-      const g = el("div", { cls: "grid" }); g.append(rc); wrap.append(g);
-      return;
-    }
+    const prevSeen = S.worldSeenStars || 0;
+    const nextStep = WORLD_STEPS.find(x => x > S.stars);
+    const hint = nextStep ? t("worldNext")(nextStep - S.stars) : t("worldDone");
+    const world = el("div", { cls: "card", css: "margin:6px 20px 0;padding:10px 12px 6px;background:linear-gradient(180deg,#EAF1F4,#F4EFE2)" });
+    world.innerHTML = worldSVG(S.stars, prevSeen) +
+      `<div class="t-label" style="text-align:center;margin-top:2px">${t("worldTitle")}</div>
+       <div class="t-body muted" style="text-align:center;font-size:13px;margin-top:1px">${hint}</div>`;
+    s.append(world);
+    if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
+
+    const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 116px;container-type:inline-size" });
+    const pillar = (key, icon, col, fn) => {
+      const b = el("button", { cls: "card pop",
+        css: `padding:22px;display:flex;align-items:center;gap:18px;background:${col};color:#fff;width:100%;margin-bottom:14px` });
+      b.innerHTML =
+        `<div style="background:rgba(255,255,255,.22);border-radius:18px;padding:14px">${ic(icon, 34, "#fff")}</div>
+         <div style="text-align:left;flex:1"><div class="t-title">${t("pill_" + key)}</div>
+         <div class="t-body" style="opacity:.92">${t("pillSub_" + key)}</div></div>`;
+      b.onclick = () => { Sound.fx.tap(); buzz(14); fn(); };
+      return b;
+    };
+    wrap.append(
+      pillar("read", "play", "var(--sky)", () => go("read")),
+      pillar("write", "write", "var(--sage)", () => go("home", "write")),
+      pillar("draw", "brush", "var(--clay)", () => go("home", "draw")),
+    );
+    s.append(wrap, nav("home"));
+    APP.append(s);
+    buddySay("warm", t("buddyHome")(S.name));
+    if (S.settings.foundations && Math.random() < .6)
+      setTimeout(() => speak(rnd("found")), 4000);
+    return;
+  }
+
+  // A part page (Draw or Write): slim header + that part's lessons.
+  const head = el("div", { css: "display:flex;align-items:center;gap:12px;padding:16px 20px 6px" });
+  const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
+  back.onclick = () => { Sound.fx.tap(); go("home"); };
+  head.append(back, el("div", { cls: "t-title", css: "flex:1", textContent: t("pill_" + mode) }), muteBtn());
+  s.append(head);
+  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:8px 20px 116px;container-type:inline-size" });
+  if (mode === "draw") {
+    const fd = el("button", { cls: "card pop",
+      css: "padding:18px;display:flex;align-items:center;gap:14px;background:var(--surface);width:100%;margin-bottom:4px" });
+    fd.innerHTML = `<div style="background:var(--surface-2);border-radius:16px;padding:12px">${ic("brush", 26, "var(--clay)")}</div><div class="t-head">${t("freeTitle")}</div>`;
+    fd.onclick = () => { Sound.fx.tap(); buzz(14); go("free"); };
+    const g = el("div", { cls: "grid" }); g.append(fd); wrap.append(g);
+  }
+  CATEGORIES.filter(c => CAT_GROUP[c.id] === mode).forEach(cat => {
     const items = DRAWINGS.filter(d => d.category === cat.id);
     if (!items.length) return;
     wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: catName(cat.id) }));
@@ -1802,10 +1841,6 @@ function Home() {
   });
   s.append(wrap, nav("home"));
   APP.append(s);
-  buddySay("warm", t("buddyHome")(S.name));
-  // Optional Foundations: a gentle character line, parent-enabled.
-  if (S.settings.foundations && Math.random() < .6)
-    setTimeout(() => speak(rnd("found")), 4000);
 }
 
 function nav(active) {
@@ -1818,7 +1853,7 @@ function nav(active) {
     return b;
   };
   bar.append(
-    mk(t("nDraw"), "brush", () => go("free"), "free"),
+    mk(t("nHome"), "home", () => go("home"), "home"),
     mk(t("nGallery"), "gallery", () => go("gallery"), "gallery"),
     mk(t("nStickers"), "sticker", () => go("stickers"), "stickers"),
   );
