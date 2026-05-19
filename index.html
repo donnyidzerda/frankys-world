@@ -69,7 +69,19 @@
   .btn-primary{ background:var(--clay); color:#fff; border-color:transparent; }
   .btn-go{ background:var(--sage); color:#fff; border-color:transparent; }
   .btn-quiet{ background:var(--surface-2); }
-  .btn-icon{ padding:14px; border-radius:18px; }
+  .btn-icon{ padding:14px; border-radius:var(--r-sm); }
+  /* Fridge-door gallery */
+  .fridge{ background:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,.5), transparent 40%),
+      repeating-linear-gradient(45deg,#e7dcc4 0 6px,#e3d7bd 6px 12px); }
+  .photo{ position:relative; background:#fff; padding:10px 10px 14px;
+    box-shadow:var(--sh); border-radius:4px; }
+  .photo:nth-child(3n){ transform:rotate(-2.2deg); }
+  .photo:nth-child(3n+1){ transform:rotate(1.6deg); }
+  .photo:nth-child(3n+2){ transform:rotate(-.8deg); }
+  .photo .tape{ position:absolute; top:-10px; left:50%; width:64px; height:22px;
+    transform:translateX(-50%) rotate(-3deg);
+    background:rgba(214,196,150,.55); box-shadow:0 1px 2px rgba(0,0,0,.08); }
 
   .screen{ position:absolute; inset:0; display:flex; flex-direction:column;
     animation:rise .32s cubic-bezier(.2,.7,.3,1); }
@@ -101,12 +113,14 @@
   #ghost,#demo{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   /* --gw is nudged by invisible dynamic difficulty (more help when a
      child struggles, less when they're cruising). Never punishing. */
+  /* pathLength=100 on every ghost path makes the dotted guide evenly
+     spaced on tight curves AND long straights (arc-length normalized). */
   #ghost path{ fill:none; stroke:var(--ink); stroke-opacity:.16;
     stroke-width:var(--gw,26);
-    stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:1 42;
+    stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:.55 3.6;
     transition:stroke .3s, stroke-opacity .3s, stroke-width .4s; }
   #ghost.help path{ stroke:var(--clay); stroke-opacity:.55; stroke-width:34; }
-  #ghost.pen path{ stroke-width:var(--gw,15); stroke-dasharray:1 26; stroke-opacity:.22; }
+  #ghost.pen path{ stroke-width:var(--gw,15); stroke-dasharray:.5 2.4; stroke-opacity:.22; }
   #ghost.pen.help path{ stroke-width:20; }
 
   /* Step progress */
@@ -877,6 +891,12 @@ const I18N_X = {
     resetConfirm:"Alle gegevens van dit kind wissen?",
     worldTitle:"De wereld van Buddy groeit met je mee",
     modeDraw:"Tekenen", modeStamp:"Stempel", modeFill:"Vullen", modeMirror:"Spiegel",
+    shareApp:"App delen", shareText:"Een rustige, reclamevrije teken-app voor kleintjes.",
+    parentSheet:"Ouderblad afdrukken", sheetTitle:"Scribble Heroes - voor de ouder",
+    sheetIntro:n=>`Wat ${n} oefent: fijne motoriek, volgorde, vormen, letters en taal.`,
+    sheetLessons:"oefeningen af", sheetActsTitle:"Doe dit samen, weg van het scherm:",
+    sheetActs:["Schrijf mama, papa, oma, opa voor en laat het natekenen op papier.","Teken samen vormen in de lucht met je vinger.","Tel hardop tot tien met blokjes of traptreden.","Praat over kleuren tijdens een wandeling.","Laat je kind een tekening aan jou uitleggen."],
+    sheetFooter:"Houd sessies kort. Ga ernaast zitten en benoem wat je ziet. Geen advertenties, geen account, werkt offline.",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
@@ -896,6 +916,12 @@ const I18N_X = {
     resetConfirm:"Erase this child's data?",
     worldTitle:"Buddy's world grows as you play",
     modeDraw:"Draw", modeStamp:"Stamp", modeFill:"Fill", modeMirror:"Mirror",
+    shareApp:"Share app", shareText:"A calm, ad-free drawing app for little ones.",
+    parentSheet:"Print parent sheet", sheetTitle:"Scribble Heroes - for the parent",
+    sheetIntro:n=>`What ${n} is practising: fine motor, sequencing, shapes, letters and language.`,
+    sheetLessons:"lessons done", sheetActsTitle:"Do these together, away from the screen:",
+    sheetActs:["Write mama, papa, oma, opa and let them copy it on paper.","Draw shapes in the air together with a finger.","Count to ten out loud using blocks or stairs.","Talk about colours on a walk.","Have your child explain a drawing to you."],
+    sheetFooter:"Keep sessions short. Sit alongside and describe what you see. No ads, no account, works offline.",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
@@ -915,6 +941,12 @@ const I18N_X = {
     resetConfirm:"¿Borrar los datos de este niño?",
     worldTitle:"El mundo de Buddy crece al jugar",
     modeDraw:"Dibujar", modeStamp:"Sello", modeFill:"Rellenar", modeMirror:"Espejo",
+    shareApp:"Compartir app", shareText:"Una app de dibujo tranquila y sin anuncios para los peques.",
+    parentSheet:"Imprimir hoja", sheetTitle:"Scribble Heroes - para el adulto",
+    sheetIntro:n=>`Lo que practica ${n}: motricidad fina, secuencia, formas, letras y lenguaje.`,
+    sheetLessons:"lecciones hechas", sheetActsTitle:"Haced esto juntos, sin pantalla:",
+    sheetActs:["Escribe mama, papa, oma, opa y que lo copie en papel.","Dibujad formas en el aire con el dedo.","Contad hasta diez en voz alta con bloques o escalones.","Hablad de los colores en un paseo.","Que tu hijo te explique un dibujo."],
+    sheetFooter:"Sesiones cortas. Siéntate al lado y describe lo que ves. Sin anuncios, sin cuenta, funciona sin conexión.",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
@@ -1639,7 +1671,8 @@ function makeEngine(stage, opts = {}) {
   let gp = [];
   function setGhost(arr) {
     ghost.innerHTML = ""; demo.innerHTML = ""; ghost.classList.remove("help"); gp = arr;
-    arr.forEach(d => { const p = document.createElementNS(SVGNS, "path"); p.setAttribute("d", d); ghost.append(p); });
+    arr.forEach(d => { const p = document.createElementNS(SVGNS, "path");
+      p.setAttribute("d", d); p.setAttribute("pathLength", "100"); ghost.append(p); });
   }
   let raf, demoF = 1;
   const setDemoFactor = f => { demoF = clamp(f, .6, 1.6); };
@@ -1737,7 +1770,7 @@ function DrawScreen(id) {
   const steps = (AGE[S.age].oneStep && !D.pen)
     ? built.slice(0, Math.min(2, built.length)) : built;
   let i = 0;
-  const s = el("div", { cls: "screen" });
+  const s = el("div", { cls: "screen play" });
 
   const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:12px 16px 2px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
@@ -1759,7 +1792,7 @@ function DrawScreen(id) {
     <div id="sTip" class="t-head" style="flex:1"></div>`;
   s.append(banner);
 
-  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
+  const sw = el("div", { cls: "sw", css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(86vw,560px);margin:auto" });
   sw.append(stage); s.append(sw);
   const engine = makeEngine(stage, { onStroke: () => {
@@ -1929,18 +1962,20 @@ function burst(scale = 1) {
 async function GalleryScreen() {
   const s = el("div", { cls: "screen" });
   s.append(header(t("galleryTitle")));
-  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
+  const wrap = el("div", { cls: "scroll fridge", css: "flex:1;padding:18px 20px 116px;container-type:inline-size" });
   const items = await galleryAll();
   if (!items.length) {
-    wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-top:48px",
+    wrap.append(el("div", { cls: "t-body", css: "text-align:center;margin-top:48px;color:var(--ink)",
       textContent: t("galleryEmpty") }));
   } else {
-    const grid = el("div", { cls: "grid" });
+    const grid = el("div", { cls: "grid", css: "gap:22px" });
     items.forEach(rec => {
+      if (!(rec.blob instanceof Blob)) return; // skip malformed records
       const url = URL.createObjectURL(rec.blob);
-      const c = el("div", { cls: "card", css: "padding:10px;display:flex;flex-direction:column;gap:8px" });
-      c.innerHTML = `<img src="${url}" style="width:100%;border-radius:14px"/>
-        <div class="t-head" style="text-align:center">${rec.name}</div>`;
+      const c = el("div", { cls: "photo", css: "display:flex;flex-direction:column;gap:8px" });
+      c.innerHTML = `<span class="tape"></span>
+        <img src="${url}" style="width:100%;border-radius:2px"/>
+        <div class="t-head" style="text-align:center;color:var(--ink)">${rec.name}</div>`;
       const r = el("div", { css: "display:flex;gap:8px" });
       const dl = el("button", { cls: "btn btn-quiet", css: "flex:1;padding:11px",
         html: ic("share", 18) });
@@ -1985,9 +2020,9 @@ function StickerScreen() {
 
 /* ----- 17. Free draw --------------------------------------------------- */
 function FreeDraw() {
-  const s = el("div", { cls: "screen" });
+  const s = el("div", { cls: "screen play" });
   s.append(header(t("freeTitle")));
-  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
+  const sw = el("div", { cls: "sw", css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(90vw,620px);margin:auto" });
   sw.append(stage); s.append(sw);
   let n = 0;
@@ -2149,6 +2184,43 @@ function Settings() {
   };
   prof.append(reset);
   wrap.append(prof);
+
+  // Share with another family + offline printable parent sheet.
+  const shareCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;gap:10px;flex-wrap:wrap" });
+  const shareBtn = el("button", { cls: "btn btn-quiet", css: "flex:1",
+    html: ic("share", 18) + `<span>${t("shareApp")}</span>` });
+  shareBtn.onclick = async () => {
+    Sound.fx.tap();
+    const data = { title: "Scribble Heroes", text: t("shareText"), url: location.href.split("?")[0] };
+    try { if (navigator.share) await navigator.share(data);
+      else { await navigator.clipboard.writeText(data.url); alert(data.url); } } catch {}
+  };
+  const sheetBtn = el("button", { cls: "btn btn-quiet", css: "flex:1",
+    html: ic("save", 18) + `<span>${t("parentSheet")}</span>` });
+  sheetBtn.onclick = () => {
+    Sound.fx.tap();
+    const acts = t("sheetActs").map(a => `<li>${a}</li>`).join("");
+    const lessons = Object.keys(S.completed || {}).length;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8">
+      <title>${t("sheetTitle")}</title><style>
+      body{font:16px/1.6 -apple-system,system-ui,sans-serif;color:#2b2722;max-width:640px;margin:40px auto;padding:0 24px}
+      h1{font-size:26px;margin:0 0 4px} .muted{color:#766}
+      .stat{display:flex;gap:24px;margin:18px 0;font-weight:700}
+      ul{margin:10px 0 0 20px} .foot{margin-top:28px;color:#766;font-size:14px}
+      @media print{button{display:none}}</style></head><body>
+      <h1>${t("sheetTitle")}</h1>
+      <div class="muted">${t("sheetIntro")(S.name)}</div>
+      <div class="stat"><span>⭐ ${S.stars}</span><span>${t("ageWord")} ${S.age}</span><span>${lessons} ${t("sheetLessons")}</span></div>
+      <h3>${t("sheetActsTitle")}</h3><ul>${acts}</ul>
+      <div class="foot">${t("sheetFooter")}</div>
+      <button onclick="print()" style="margin-top:24px;padding:12px 20px;border:0;border-radius:10px;background:#C9633F;color:#fff;font:inherit;font-weight:800">${t("parentSheet")}</button>
+      </body></html>`);
+    w.document.close();
+  };
+  shareCard.append(shareBtn, sheetBtn);
+  wrap.append(shareCard);
 
   const note = el("div", { cls: "card", css: "padding:20px;line-height:1.6", html: t("note") });
   wrap.append(note);
