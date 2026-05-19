@@ -196,22 +196,101 @@ const ageOf = (y, m, d) => {
 };
 
 /* ----- 1. Persistent state --------------------------------------------- */
-const SAVE_KEY = "scribble-heroes-v2";
+/* Multi-profile storage. Each child has their own snapshot (name, age,
+   language, stars, stickers, progress, streak) plus their own gallery.
+   An index tracks which profiles exist and which is active. Legacy
+   single-profile data is migrated into the first profile so NOTHING is
+   lost. Settings are per-profile too, so a Spanish cousin can have ES
+   while Lucy stays NL. */
+const SAVE_KEY = "scribble-heroes-v2";          // legacy single-profile key
+const IDX_KEY  = "scribble-heroes-idx";
+const pKey = id => SAVE_KEY + "::" + id;
+const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
 const defaultState = () => ({
-  name: "", age: 2, onboarded: false, lang: "nl",
+  id: null, name: "", age: 2, onboarded: false, lang: "nl",
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
     sound: true, haptics: true, contrast: false, calm: false, limit: "soft" },
 });
+function loadIdx() {
+  try { const i = JSON.parse(localStorage.getItem(IDX_KEY)); if (i && i.ids) return i; } catch {}
+  return null;
+}
+const saveIdx = i => localStorage.setItem(IDX_KEY, JSON.stringify(i));
+function readProfile(id) {
+  try {
+    const r = JSON.parse(localStorage.getItem(pKey(id)));
+    if (!r) return null;
+    const s = Object.assign(defaultState(), r,
+      { settings: Object.assign(defaultState().settings, r.settings || {}) });
+    s.id = id; return s;
+  } catch { return null; }
+}
 let S = load();
 function load() {
-  try {
-    const r = JSON.parse(localStorage.getItem(SAVE_KEY));
-    return r ? Object.assign(defaultState(), r,
-      { settings: Object.assign(defaultState().settings, r.settings || {}) }) : defaultState();
-  } catch { return defaultState(); }
+  let idx = loadIdx();
+  if (!idx) {
+    // First run with this version: migrate any legacy single profile.
+    let legacy = null;
+    try { legacy = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch {}
+    if (legacy && legacy.onboarded) {
+      const id = genId();
+      legacy.id = id;
+      localStorage.setItem(pKey(id), JSON.stringify(legacy));
+      idx = { active: id, ids: [id], legacyPid: id };
+    } else {
+      idx = { active: null, ids: [], legacyPid: null };
+    }
+    saveIdx(idx);
+  }
+  if (idx.active) {
+    const s = readProfile(idx.active);
+    if (s) return s;
+  }
+  return defaultState(); // no profile yet -> Splash
 }
-const save = () => localStorage.setItem(SAVE_KEY, JSON.stringify(S));
+function save() {
+  if (!S.id) return;
+  localStorage.setItem(pKey(S.id), JSON.stringify(S));
+  const idx = loadIdx() || { active: S.id, ids: [], legacyPid: null };
+  if (!idx.ids.includes(S.id)) idx.ids.push(S.id);
+  idx.active = S.id;
+  saveIdx(idx);
+}
+// Lightweight list for the picker (id, name, age) read from snapshots.
+function profileList() {
+  const idx = loadIdx(); if (!idx) return [];
+  return idx.ids.map(id => {
+    const s = readProfile(id);
+    return s ? { id, name: s.name, age: s.age } : null;
+  }).filter(Boolean);
+}
+// Create a profile (or switch to an existing one with the same name).
+function createProfile(name, age, lang) {
+  const existing = profileList().find(p => p.name.toLowerCase() === name.toLowerCase());
+  if (existing) { switchProfile(existing.id); return; }
+  const fresh = defaultState();
+  fresh.id = genId(); fresh.name = name; fresh.age = age;
+  fresh.onboarded = true; fresh.lang = lang || S.lang || "nl";
+  S = fresh; save();
+}
+function switchProfile(id) {
+  const s = readProfile(id); if (!s) return;
+  S = s;
+  const idx = loadIdx(); idx.active = id; saveIdx(idx);
+  applyFlags(); go("home");
+}
+async function deleteProfile(id) {
+  const idx = loadIdx(); if (!idx) return;
+  idx.ids = idx.ids.filter(x => x !== id);
+  localStorage.removeItem(pKey(id));
+  // Remove that child's gallery art too.
+  try { (await galleryAll(id)).forEach(r => galleryDel(r.id)); } catch {}
+  if (idx.active === id) idx.active = idx.ids[0] || null;
+  saveIdx(idx);
+  if (idx.active) { S = readProfile(idx.active) || defaultState(); applyFlags(); go("home"); }
+  else { S = defaultState(); Splash(); }
+}
 function touchStreak() {
   const today = new Date().toDateString();
   if (S.lastPlay === today) return;
@@ -227,12 +306,29 @@ const db = () => _db || (_db = new Promise((res, rej) => {
   r.onupgradeneeded = () => r.result.createObjectStore("art", { keyPath: "id" });
   r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
 }));
-async function galleryAdd(rec) { const d = await db();
+async function galleryAdd(rec) {
+  if (!rec.pid) rec.pid = S.id;          // stamp the owning profile
+  const d = await db();
   return new Promise(r => { d.transaction("art", "readwrite").objectStore("art").put(rec).onsuccess = r; }); }
-async function galleryAll() { const d = await db();
-  return new Promise(res => { const o = [];
+// All art for a profile (defaults to the active one). Orphan records from
+// before multi-profile are adopted by the migrated/first profile so the
+// child's old drawings are never lost.
+async function galleryAll(forId) {
+  const pid = forId || S.id;
+  const idx = loadIdx() || {};
+  const adopt = idx.legacyPid || (idx.ids && idx.ids[0]) || pid;
+  const d = await db();
+  const all = await new Promise(res => { const o = [];
     d.transaction("art").objectStore("art").openCursor().onsuccess = e => {
-      const c = e.target.result; c ? (o.push(c.value), c.continue()) : res(o.sort((a, b) => b.id - a.id)); }; }); }
+      const c = e.target.result; c ? (o.push(c.value), c.continue()) : res(o); }; });
+  const fixed = [];
+  for (const r of all) {
+    if (!r.pid) { r.pid = adopt;
+      try { await new Promise(rs => { d.transaction("art", "readwrite").objectStore("art").put(r).onsuccess = rs; }); } catch {} }
+    if (r.pid === pid) fixed.push(r);
+  }
+  return fixed.sort((a, b) => b.id - a.id);
+}
 async function galleryDel(id) { const d = await db();
   return new Promise(r => { d.transaction("art", "readwrite").objectStore("art").delete(id).onsuccess = r; }); }
 
@@ -765,6 +861,9 @@ const I18N_X = {
     numWholeTip:"Het hele getal", numWholeSay:n=>`Nu het hele getal ${n}.`,
     shapeSay:s=>`Laten we de ${s} natekenen. Rustig aan.`,
     shp_circle:"cirkel", shp_square:"vierkant", shp_triangle:"driehoek", shp_heart:"hart", shp_star:"ster",
+    profiles:"Profielen", switchProfile:"Wisselen", addChild:"Kind toevoegen", ageWord:"Leeftijd",
+    delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
+    resetConfirm:"Alle gegevens van dit kind wissen?",
   },
   en: {
     pgTitle:"Just for grown-ups", pgQ:(a,b)=>`What is ${a} + ${b}?`,
@@ -777,6 +876,9 @@ const I18N_X = {
     numWholeTip:"The whole number", numWholeSay:n=>`Now the whole number ${n}.`,
     shapeSay:s=>`Let's trace the ${s}. Nice and slow.`,
     shp_circle:"circle", shp_square:"square", shp_triangle:"triangle", shp_heart:"heart", shp_star:"star",
+    profiles:"Profiles", switchProfile:"Switch", addChild:"Add a child", ageWord:"Age",
+    delConfirm:n=>`Delete ${n}'s profile and all their work?`,
+    resetConfirm:"Erase this child's data?",
   },
   es: {
     pgTitle:"Solo para adultos", pgQ:(a,b)=>`¿Cuánto es ${a} + ${b}?`,
@@ -789,6 +891,9 @@ const I18N_X = {
     numWholeTip:"El número entero", numWholeSay:n=>`Ahora el número entero ${n}.`,
     shapeSay:s=>`Vamos a trazar el ${s}. Despacito.`,
     shp_circle:"círculo", shp_square:"cuadrado", shp_triangle:"triángulo", shp_heart:"corazón", shp_star:"estrella",
+    profiles:"Perfiles", switchProfile:"Cambiar", addChild:"Añadir un niño", ageWord:"Edad",
+    delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
+    resetConfirm:"¿Borrar los datos de este niño?",
   },
 };
 for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
@@ -818,6 +923,39 @@ function parentGate(onPass) {
   card.append(opts, cancel);
   ov.append(card); document.body.append(ov);
 }
+
+// Profile picker: children tap their own name to switch (no data lost);
+// adding / deleting a child is parent-gated.
+function ProfilePicker() {
+  const list = profileList();
+  const ov = el("div", { css: "position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
+  const card = el("div", { cls: "card", css: "background:var(--surface);padding:22px;width:min(460px,92vw);display:flex;flex-direction:column;gap:12px;max-height:86vh;overflow:auto" });
+  card.append(el("div", { cls: "t-title", css: "text-align:center", textContent: t("whoPlaying") }));
+  list.forEach(p => {
+    const active = p.id === S.id;
+    const row = el("div", { css: `display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;border:2px solid ${active ? "var(--clay)" : "var(--line)"};background:var(--surface-2)` });
+    const pick = el("button", { css: "flex:1;display:flex;align-items:center;gap:12px;text-align:left;background:none",
+      html: `<span style="background:var(--surface);border-radius:14px;padding:4px">${Buddy("warm", 44)}</span>
+             <span><span class="t-head">${p.name}</span><br><span class="t-body muted">${t("ageWord") || "Age"} ${p.age}</span></span>` });
+    pick.onclick = () => { Sound.fx.tap(); buzz(12); ov.remove(); if (p.id !== S.id) switchProfile(p.id); };
+    row.append(pick);
+    if (list.length > 1) {
+      const del = el("button", { cls: "btn btn-quiet btn-icon", html: ic("eraser", 18) });
+      del.onclick = () => parentGate(() => {
+        if (confirm(t("delConfirm")(p.name))) { ov.remove(); deleteProfile(p.id); }
+      });
+      row.append(del);
+    }
+    card.append(row);
+  });
+  const add = el("button", { cls: "btn btn-go t-head", html: ic("next", 20, "#fff") + `<span>${t("addChild")}</span>` });
+  add.onclick = () => parentGate(() => { ov.remove(); _adding = true; Splash(); });
+  const close = el("button", { cls: "btn", css: "background:var(--surface-2)", textContent: t("cancel") });
+  close.onclick = () => ov.remove();
+  card.append(add, close);
+  ov.append(card); document.body.append(ov);
+}
+let _adding = false;
 
 // Screen-time governor. Soft = dismissible nudge; lock = parent gate to
 // continue; off = disabled. Default soft (set in defaultState).
@@ -1188,8 +1326,8 @@ function Splash() {
   const start = el("button", { cls: "btn btn-go t-head", css: "margin-top:2px",
     html: `${t("start")} ${ic("next", 22, "#fff")}` });
   start.onclick = () => {
-    S.name = (input.value || "friend").trim().slice(0, 14);
-    S.age = age; S.onboarded = true; save();
+    const nm = (input.value || "friend").trim().slice(0, 14);
+    createProfile(nm, age, S.lang);   // new profile (or switch if name exists)
     Sound.fx.win(); buzz([18, 30]); maybeInstall(); go("home");
   };
   card.append(
@@ -1214,12 +1352,13 @@ function Home() {
   touchStreak();
   const s = el("div", { cls: "screen" });
   const top = el("div", { css: "display:flex;align-items:center;gap:14px;padding:20px 22px 8px" });
-  top.append(
-    el("div", { id: "buddy", "data-size": 76, html: Buddy("warm", 76) }),
-    el("div", { css: "flex:1", html:
-      `<div class="t-title">${t("hello")(S.name)}</div>
-       <div class="t-body muted">${t("whatDraw")}</div>` }),
-  );
+  // Tapping the name/Buddy opens the profile picker (switch child).
+  const who = el("button", { css: "flex:1;display:flex;align-items:center;gap:14px;text-align:left;background:none",
+    html: `<span id="buddy" data-size="76">${Buddy("warm", 76)}</span>
+      <span><span class="t-title">${t("hello")(S.name)}</span><br>
+      <span class="t-body muted">${t("whatDraw")}</span></span>` });
+  who.onclick = () => { Sound.fx.tap(); buzz(12); ProfilePicker(); };
+  top.append(who);
   const stat = el("div", { cls: "card", css: "display:flex;gap:18px;padding:12px 18px;align-items:center;font-weight:800" });
   const pill = (icon, n, c) => `<span style="display:inline-flex;align-items:center;gap:7px;color:var(--ink)">${ic(icon, 20, c)} ${n}</span>`;
   stat.innerHTML = pill("flame", S.streak, "var(--clay)") + pill("star", S.stars, "var(--ochre)") + pill("sticker", S.stickers.length, "var(--sage)");
@@ -1756,6 +1895,14 @@ function Settings() {
   limCard.append(limSeg);
   wrap.append(limCard);
 
+  // Profiles
+  const profCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
+  profCard.append(el("div", { html: ic("home", 22, "var(--ink-soft)") }),
+    el("div", { cls: "t-head", css: "flex:1", textContent: t("profiles") }),
+    el("button", { cls: "btn btn-quiet", css: "padding:10px 16px", textContent: t("switchProfile") }));
+  profCard.onclick = () => ProfilePicker();
+  wrap.append(profCard);
+
   [["muted", "mute", t("setMuted")],
    ["voice", "sound", t("setVoice")],
    ["slowVoice", "slow", t("setSlow")],
@@ -1791,9 +1938,9 @@ function Settings() {
     html: ic("eraser", 18, "#fff") + `<span>${t("reset")}</span>` });
   reset.onclick = async () => {
     if (confirm(t("resetConfirm"))) {
-      localStorage.removeItem(SAVE_KEY);
-      (await galleryAll()).forEach(r => galleryDel(r.id));
-      S = defaultState(); save(); Splash();
+      // Removes only THIS child's profile + gallery; other children are safe.
+      if (S.id) await deleteProfile(S.id);
+      else { S = defaultState(); Splash(); }
     }
   };
   prof.append(reset);
