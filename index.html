@@ -225,7 +225,7 @@ const pKey = id => SAVE_KEY + "::" + id;
 const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
-  caseMode: "upper", review: {}, diff: 1,
+  caseMode: "upper", review: {}, diff: 1, sayName: "",
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
     sound: true, haptics: true, contrast: false, calm: false, limit: "soft",
@@ -472,7 +472,7 @@ async function realisticSpeak(text) {
   try {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v1");
+    _ttsCache = _ttsCache || await caches.open("tts-v2");
     let res = await _ttsCache.match(key);
     if (!res) {
       res = await fetch(key, { mode: "cors" });
@@ -505,6 +505,10 @@ function deviceSpeak(text) {
 }
 function speak(text) {
   if (S.settings.muted || !S.settings.voice) return;
+  // Spoken-name override: the display name stays (e.g. "Lucy") but the
+  // voice says the parent's phonetic spelling (e.g. "Loesie") so names
+  // are pronounced correctly in the chosen language.
+  if (S.sayName && S.name) text = text.split(S.name).join(S.sayName);
   try { speechSynthesis.cancel(); } catch {}
   if (_ttsEl) try { _ttsEl.pause(); } catch {}
   // Try the realistic voice first; gracefully fall back to the device voice.
@@ -889,6 +893,9 @@ const I18N_X = {
     profiles:"Profielen", switchProfile:"Wisselen", addChild:"Kind toevoegen", ageWord:"Leeftijd",
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
+    sayNameLabel:"Hoe spreek je de naam uit?",
+    sayNameHint:"Schrijf het zoals het klinkt, bijvoorbeeld \"Loesie\" voor Lucy. Op het scherm blijft de echte naam staan.",
+    sayNameTry:"Probeer",
     worldTitle:"De wereld van Buddy groeit met je mee",
     modeDraw:"Tekenen", modeStamp:"Stempel", modeFill:"Vullen", modeMirror:"Spiegel",
     shareApp:"App delen", shareText:"Een rustige, reclamevrije teken-app voor kleintjes.",
@@ -914,6 +921,9 @@ const I18N_X = {
     profiles:"Profiles", switchProfile:"Switch", addChild:"Add a child", ageWord:"Age",
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
+    sayNameLabel:"How is the name pronounced?",
+    sayNameHint:"Write it the way it sounds, e.g. \"Loosie\" for Lucy. The real name still shows on screen.",
+    sayNameTry:"Try it",
     worldTitle:"Buddy's world grows as you play",
     modeDraw:"Draw", modeStamp:"Stamp", modeFill:"Fill", modeMirror:"Mirror",
     shareApp:"Share app", shareText:"A calm, ad-free drawing app for little ones.",
@@ -939,6 +949,9 @@ const I18N_X = {
     profiles:"Perfiles", switchProfile:"Cambiar", addChild:"Añadir un niño", ageWord:"Edad",
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
+    sayNameLabel:"¿Cómo se pronuncia el nombre?",
+    sayNameHint:"Escríbelo como suena, p. ej. \"Lusi\" para Lucy. El nombre real sigue en pantalla.",
+    sayNameTry:"Probar",
     worldTitle:"El mundo de Buddy crece al jugar",
     modeDraw:"Dibujar", modeStamp:"Sello", modeFill:"Rellenar", modeMirror:"Espejo",
     shareApp:"Compartir app", shareText:"Una app de dibujo tranquila y sin anuncios para los peques.",
@@ -2181,6 +2194,17 @@ function Settings() {
     seg.append(b);
   });
   prof.append(seg);
+  // Spoken-name override (fixes e.g. English-sounding "Lucy" -> "Loesie").
+  prof.append(el("div", { cls: "t-label", textContent: t("sayNameLabel") }));
+  const sayIn = el("input", { id: "sayNm", value: S.sayName || "", placeholder: S.name, maxLength: 20,
+    css: "font:inherit;font-size:18px;font-weight:800;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
+  const commit = () => { S.sayName = sayIn.value.trim(); save(); };
+  sayIn.addEventListener("change", commit);
+  sayIn.addEventListener("blur", commit);
+  const tryBtn = el("button", { cls: "btn btn-quiet", css: "align-self:flex-start;padding:10px 16px",
+    html: ic("sound", 18) + `<span>${t("sayNameTry")}</span>` });
+  tryBtn.onclick = () => { commit(); speak(t("hello")(S.name)); };
+  prof.append(sayIn, el("div", { cls: "t-body muted", textContent: t("sayNameHint") }), tryBtn);
   const reset = el("button", { cls: "btn", css: "background:var(--clay);color:#fff;border-color:transparent;margin-top:4px",
     html: ic("eraser", 18, "#fff") + `<span>${t("reset")}</span>` });
   reset.onclick = async () => {

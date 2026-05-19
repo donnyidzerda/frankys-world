@@ -34,7 +34,11 @@ export default {
     }
 
     const instructions =
-      `Language: speak in ${lang} with a natural native ${lang} accent. ` +
+      `Language: speak entirely in ${lang} with a natural native ${lang} ` +
+      `accent. Pronounce EVERY word and EVERY name using ${lang} ` +
+      `pronunciation rules, including names that look English (for ` +
+      `example, in Dutch say the name with Dutch vowel sounds, not ` +
+      `English ones). ` +
       "Voice: a warm, kind, calm preschool teacher speaking to a small " +
       "child aged one to five. Tone: gentle, encouraging, unhurried, and " +
       "loving. " + (slow
