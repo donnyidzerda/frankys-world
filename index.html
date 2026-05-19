@@ -240,7 +240,7 @@ const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
   caseMode: "upper", review: {}, diff: 1, sayName: "", worldSeenStars: 0,
-  phonics: true,
+  phonics: true, readBox: {}, readIntro: 1,
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
     sound: true, haptics: true, contrast: false, calm: false, limit: "soft",
@@ -627,6 +627,7 @@ const C = (cx, cy, r) =>
   `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
 
 const CATEGORIES = [
+  { id:"reading" },
   { id:"writing"  }, { id:"alphabet" }, { id:"numbers" }, { id:"shapes" },
   { id:"animals" }, { id:"vehicles" }, { id:"food" },
   { id:"faces" }, { id:"nature" }, { id:"space" }, { id:"monsters" },
@@ -828,15 +829,15 @@ const STEP_T = {
   },
 };
 const CAT_NAMES = {
-  nl:{ alphabet:"Het hele alfabet", numbers:"Cijfers", shapes:"Vormen",
+  nl:{ reading:"Lezen met Buddy", alphabet:"Het hele alfabet", numbers:"Cijfers", shapes:"Vormen",
        writing:"Letters met Buddy", animals:"Dieren", vehicles:"Voertuigen",
        food:"Lekker eten", faces:"Gezichten", nature:"Buiten", space:"De ruimte",
        monsters:"Lieve monsters" },
-  en:{ alphabet:"The whole alphabet", numbers:"Numbers", shapes:"Shapes",
+  en:{ reading:"Reading with Buddy", alphabet:"The whole alphabet", numbers:"Numbers", shapes:"Shapes",
        writing:"Letters with Buddy", animals:"Animals", vehicles:"Things That Go",
        food:"Good Food", faces:"Faces & Feelings", nature:"Outside", space:"Up in Space",
        monsters:"Friendly Monsters" },
-  es:{ alphabet:"Todo el alfabeto", numbers:"Números", shapes:"Formas",
+  es:{ reading:"Leer con Buddy", alphabet:"Todo el alfabeto", numbers:"Números", shapes:"Formas",
        writing:"Letras con Buddy", animals:"Animales", vehicles:"Vehículos",
        food:"Comida rica", faces:"Caras", nature:"Naturaleza", space:"El espacio",
        monsters:"Monstruos amables" },
@@ -941,6 +942,9 @@ const I18N_X = {
     sheetLessons:"oefeningen af", sheetActsTitle:"Doe dit samen, weg van het scherm:",
     sheetActs:["Schrijf mama, papa, oma, opa voor en laat het natekenen op papier.","Teken samen vormen in de lucht met je vinger.","Tel hardop tot tien met blokjes of traptreden.","Praat over kleuren tijdens een wandeling.","Laat je kind een tekening aan jou uitleggen."],
     sheetFooter:"Houd sessies kort. Ga ernaast zitten en benoem wat je ziet. Geen advertenties, geen account, werkt offline.",
+    readTitle:"Lezen met Buddy", readSub:n=>`Je kent al ${n} klanken. Tik om te oefenen!`,
+    readListen:"Luister naar Buddy", readWhichLetter:"Welke letter zegt dit?",
+    readWhichWord:"Welk woord zei Buddy?", readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
     phLabel:"Letters leren via", phSound:"Klank (Montessori)", phName:"Letternaam",
     phHint:"Klank: Buddy zegt de klank, zoals mmm voor maan (Montessori). Letternaam: Buddy zegt em, es, enzovoort.",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
@@ -973,6 +977,9 @@ const I18N_X = {
     sheetLessons:"lessons done", sheetActsTitle:"Do these together, away from the screen:",
     sheetActs:["Write mama, papa, oma, opa and let them copy it on paper.","Draw shapes in the air together with a finger.","Count to ten out loud using blocks or stairs.","Talk about colours on a walk.","Have your child explain a drawing to you."],
     sheetFooter:"Keep sessions short. Sit alongside and describe what you see. No ads, no account, works offline.",
+    readTitle:"Reading with Buddy", readSub:n=>`You know ${n} sounds. Tap to practise!`,
+    readListen:"Listen to Buddy", readWhichLetter:"Which letter says this?",
+    readWhichWord:"Which word did Buddy say?", readAgain:"Again", readNext:"Next", readMore:"Read more",
     phLabel:"Learn letters by", phSound:"Sound (Montessori)", phName:"Letter name",
     phHint:"Sound: Buddy says the sound, like mmm for moon (Montessori). Letter name: Buddy says em, es, and so on.",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
@@ -1005,6 +1012,9 @@ const I18N_X = {
     sheetLessons:"lecciones hechas", sheetActsTitle:"Haced esto juntos, sin pantalla:",
     sheetActs:["Escribe mama, papa, oma, opa y que lo copie en papel.","Dibujad formas en el aire con el dedo.","Contad hasta diez en voz alta con bloques o escalones.","Hablad de los colores en un paseo.","Que tu hijo te explique un dibujo."],
     sheetFooter:"Sesiones cortas. Siéntate al lado y describe lo que ves. Sin anuncios, sin cuenta, funciona sin conexión.",
+    readTitle:"Leer con Buddy", readSub:n=>`Ya conoces ${n} sonidos. ¡Toca para practicar!`,
+    readListen:"Escucha a Buddy", readWhichLetter:"¿Qué letra dice esto?",
+    readWhichWord:"¿Qué palabra dijo Buddy?", readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
     phLabel:"Aprender letras por", phSound:"Sonido (Montessori)", phName:"Nombre de letra",
     phHint:"Sonido: Buddy dice el sonido, como mmm de mano (Montessori). Nombre: Buddy dice eme, ese, etc.",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
@@ -1476,6 +1486,157 @@ Object.keys(SHAPES).forEach(k => DRAWINGS.push({
   steps: shapeSteps(k),
 }));
 
+/* ----- 8g. "Lezen met Buddy" - Mentava-style reading engine ----------
+   Decoupled from the pen (tap only). Explicit sound teaching, mastery
+   gate (Leitner boxes), spaced retrieval, blending into decodable mkm
+   words, high-utility introduction order. Per-language regular words. */
+const READING = {
+  nl:{ sounds:["s","a","m","n","t","i","p","o","k","e","r","d","l","u"],
+       words:["sap","mat","man","tas","pan","nat","tak","pet","pit","kip","pot","tor","rok","dak","lat","pen","kar","mes","sok","map","lip","net","tor","sik"] },
+  en:{ sounds:["s","a","t","p","i","n","m","d","g","o","c","k","e","u","r","h","b","f","l"],
+       words:["sat","pat","tap","pin","nip","pan","nap","sit","tin","pit","tip","mad","dad","dig","dog","got","cot","cap","cat","pen","ten","net","bed","red","run","fun","sun","hop","big","bag","leg"] },
+  es:{ sounds:["a","m","s","l","p","t","o","n","d","i","r","u","e"],
+       words:["sol","sal","mar","pan","mes","dos","los","las","mil","sur","red","tos","luna","mapa"] },
+};
+const RD = () => READING[LC()] || READING.en;
+const rdBox = k => S.readBox[k] || 0;
+const rdBump = (k, ok) => { S.readBox[k] = ok ? Math.min(5, rdBox(k) + 1) : Math.max(1, rdBox(k)); };
+const rdIntro = () => RD().sounds.slice(0, S.readIntro);
+const rdWords = () => RD().words.filter(wd => [...wd].every(c => rdIntro().includes(c)));
+const readMasteredCount = () => rdIntro().filter(c => rdBox("s:" + c) >= 3).length;
+function buildReadSession() {
+  const intro = rdIntro(), top = RD().sounds[S.readIntro - 1], items = [];
+  if (rdBox("s:" + top) === 0) items.push({ t: "teach", s: top });
+  const bySound = [...intro].sort((a, b) => rdBox("s:" + a) - rdBox("s:" + b) || Math.random() - .5);
+  for (let i = 0; i < 5; i++) items.push({ t: "pick", s: bySound[i % bySound.length] });
+  const masteredS = intro.filter(c => rdBox("s:" + c) >= 2).length;
+  const words = rdWords();
+  if (masteredS >= 3 && words.length) {
+    const byWord = [...words].sort((a, b) => rdBox("w:" + a) - rdBox("w:" + b) || Math.random() - .5);
+    for (let i = 0; i < 3; i++) items.push({ t: "read", w: byWord[i % byWord.length] });
+  }
+  return items.slice(0, 9);
+}
+function rdAdvance() {
+  // Introduce the next sound once every introduced sound is solid
+  // (box >= 2). Words become decodable automatically as sounds add up.
+  const allOk = rdIntro().every(c => rdBox("s:" + c) >= 2);
+  if (allOk && S.readIntro < RD().sounds.length) S.readIntro++;
+}
+// Render letters/words in the lowercase letterforms (reading is lowercase).
+function lowerArt(str, size) {
+  const chars = [...str].filter(c => LOWER[c]); const gap = 6;
+  const wl = chars.reduce((a, c) => a + (LOWER[c].b[2] - LOWER[c].b[0]), 0) + gap * (chars.length - 1);
+  const s = Math.min(0.9, 86 / wl);
+  const y0 = Math.min(...chars.map(c => LOWER[c].b[1])), y1 = Math.max(...chars.map(c => LOWER[c].b[3]));
+  const oy = 50 - ((y0 + y1) / 2) * s; let x = 50 - (wl * s) / 2; const paths = [];
+  chars.forEach(c => { const g = LOWER[c], ox = x - g.b[0] * s;
+    paths.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s })); x += (g.b[2] - g.b[0] + gap) * s; });
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${
+    paths.map(d => `<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}</svg>`;
+}
+// Blend model: stretched sound of each letter, then the word.
+const blendSay = w => [...w].map(c => {
+  const kw = (SOUND[LC()] || SOUND.en)[c.toUpperCase()] || c; return kw[0] + kw[0] + kw[0];
+}).join(" ") + ". " + w + ".";
+
+function ReadScreen() {
+  const session = buildReadSession();
+  let i = 0, hits = 0;
+  const s = el("div", { cls: "screen" });
+  const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:14px 18px 6px" });
+  const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
+  back.onclick = () => { Sound.fx.tap(); go("home"); };
+  head.append(back, el("div", { css: "flex:1", html: `<div class="t-title">${t("readTitle")}</div>` }),
+    muteBtn(), el("div", { id: "buddy", "data-size": 52, html: Buddy("happy", 52) }));
+  s.append(head);
+  const prog = el("div", { cls: "prog", css: "margin:2px 20px 8px", html: "<i style='width:0'></i>" });
+  s.append(prog);
+  const stage = el("div", { css: "flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:10px 18px;text-align:center" });
+  s.append(stage);
+  const promptEl = el("div", { cls: "t-title" });
+  const showEl = el("div", { css: "min-height:120px;display:flex;align-items:center;justify-content:center" });
+  const choices = el("div", { css: "display:flex;gap:14px;flex-wrap:wrap;justify-content:center" });
+  const replay = el("button", { cls: "btn btn-quiet", html: ic("sound", 20) + `<span>${t("readAgain")}</span>` });
+  stage.append(promptEl, showEl, choices, replay);
+  APP.append(s);
+
+  const distract = (arr, not, n) => {
+    const pool = arr.filter(x => x !== not); const out = [];
+    while (out.length < n && pool.length) out.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]);
+    return out;
+  };
+  function resolve(ok, key) {
+    if (ok) { hits++; Sound.fx.step(); buzz(20); if (key) rdBump(key, true); }
+    else { Sound.fx.soft(); buzz(12); if (key) rdBump(key, false); }
+    i++; prog.firstChild.style.width = (i / session.length) * 100 + "%";
+    setTimeout(() => i >= session.length ? finish() : showItem(), ok ? 700 : 1500);
+  }
+  function tile(inner, on) {
+    const b = el("button", { cls: "card", css: "padding:16px 20px;min-width:96px;background:var(--surface)" });
+    b.innerHTML = inner; b.onclick = on; return b;
+  }
+  function showItem() {
+    const it = session[i];
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    if (it.t === "teach") {
+      const L = it.s.toUpperCase();
+      promptEl.textContent = t("readListen");
+      showEl.innerHTML = lowerArt(it.s, 120);
+      const say = () => speak(phonics(L).say);
+      replay.onclick = () => { Sound.fx.tap(); say(); };
+      const go2 = el("button", { cls: "btn btn-go", css: "min-width:120px", html: ic("next", 20, "#fff") + `<span>${t("readNext")}</span>` });
+      go2.onclick = () => { Sound.fx.tap(); buzz(12); rdBump("s:" + it.s, true); i++;
+        prog.firstChild.style.width = (i / session.length) * 100 + "%";
+        i >= session.length ? finish() : showItem(); };
+      choices.append(go2);
+      buddySay("happy", phonics(L).say);
+    } else if (it.t === "pick") {
+      const L = it.s.toUpperCase();
+      promptEl.textContent = t("readWhichLetter");
+      showEl.innerHTML = "";
+      const say = () => speak(phonics(L).say);
+      replay.onclick = () => { Sound.fx.tap(); say(); };
+      const opts = [it.s, ...distract(RD().sounds, it.s, 2)].sort(() => Math.random() - .5);
+      opts.forEach(o => choices.append(tile(lowerArt(o, 70), () => {
+        if (o === it.s) { resolve(true, "s:" + it.s); }
+        else { choices.style.pointerEvents = "none"; buddySay("warm", phonics(L).say);
+          resolve(false, "s:" + it.s); }
+      })));
+      setTimeout(say, 250);
+      buddySay("happy", "");
+    } else { // read a word
+      const w = it.w;
+      promptEl.textContent = t("readWhichWord");
+      showEl.innerHTML = "";
+      const say = () => speak(w);
+      replay.onclick = () => { Sound.fx.tap(); speak(blendSay(w)); };
+      const opts = [w, ...distract(rdWords().length >= 3 ? rdWords() : RD().words, w, 2)].sort(() => Math.random() - .5);
+      opts.forEach(o => choices.append(tile(lowerArt(o, 80), () => {
+        if (o === w) resolve(true, "w:" + w);
+        else { choices.style.pointerEvents = "none"; speak(blendSay(w)); resolve(false, "w:" + w); }
+      })));
+      setTimeout(say, 250);
+    }
+  }
+  function finish() {
+    rdAdvance();
+    S.stars += 1; if (S.stars > S.buddyLevel * 8) S.buddyLevel++;
+    save();
+    stage.innerHTML = "";
+    stage.append(el("div", { cls: "t-display", textContent: t("winTitle")(S.name) }));
+    const again = el("button", { cls: "btn btn-go t-head", html: ic("next", 22, "#fff") + `<span>${t("readMore")}</span>` });
+    again.onclick = () => { Sound.fx.tap(); go("read"); };
+    const home = el("button", { cls: "btn btn-quiet t-head", html: ic("home", 20) + `<span>${t("home")}</span>` });
+    home.onclick = () => { Sound.fx.tap(); go("home"); };
+    const row = el("div", { css: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px" });
+    row.append(again, home); stage.append(row);
+    Sound.fx.win(); buzz([20, 40, 20]); burst(.8);
+    speak(rnd("praiseOk"));
+  }
+  showItem();
+}
+
 /* ----- 9. Router ------------------------------------------------------- */
 const APP = $("#app");
 function applyFlags() {
@@ -1486,7 +1647,7 @@ function go(screen, data) {
   applyFlags(); APP.innerHTML = "";
   ({ splash:Splash, home:Home, draw:DrawScreen, win:WinScreen,
      gallery:GalleryScreen, stickers:StickerScreen, free:FreeDraw,
-     settings:Settings }[screen] || Home)(data);
+     read:ReadScreen, settings:Settings }[screen] || Home)(data);
 }
 window.addEventListener("DOMContentLoaded", () => {
   applyFlags();
@@ -1608,6 +1769,19 @@ function Home() {
 
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
   CATEGORIES.forEach(cat => {
+    if (cat.id === "reading") {            // single big card -> reading engine
+      wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: catName("reading") }));
+      const rc = el("button", { cls: "card pop",
+        css: "padding:20px;display:flex;align-items:center;gap:16px;background:var(--sky);color:#fff;width:100%" });
+      const done = readMasteredCount();
+      rc.innerHTML =
+        `<div style="background:rgba(255,255,255,.22);border-radius:18px;padding:12px">${ic("play", 30, "#fff")}</div>
+         <div style="text-align:left;flex:1"><div class="t-title">${t("readTitle")}</div>
+         <div class="t-body" style="opacity:.9">${t("readSub")(done)}</div></div>`;
+      rc.onclick = () => { Sound.fx.tap(); buzz(14); go("read"); };
+      const g = el("div", { cls: "grid" }); g.append(rc); wrap.append(g);
+      return;
+    }
     const items = DRAWINGS.filter(d => d.category === cat.id);
     if (!items.length) return;
     wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: catName(cat.id) }));
