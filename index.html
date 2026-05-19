@@ -208,9 +208,11 @@ const pKey = id => SAVE_KEY + "::" + id;
 const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
+  caseMode: "upper", review: {},
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
-    sound: true, haptics: true, contrast: false, calm: false, limit: "soft" },
+    sound: true, haptics: true, contrast: false, calm: false, limit: "soft",
+    foundations: false },
 });
 function loadIdx() {
   try { const i = JSON.parse(localStorage.getItem(IDX_KEY)); if (i && i.ids) return i; } catch {}
@@ -536,6 +538,8 @@ function buddySay(mood, text) {
    One small SVG per drawing. Used on home cards, stickers, completion.
    Keeps everything cohesive with the studio aesthetic. */
 function ART(id, size = 72) {
+  if (id === "review")
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="var(--clay)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON_PATHS.write}"/><path d="M4 21h16"/></svg>`;
   if (id && id.startsWith("word_")) return wordArt(id.slice(5), size);
   if (id && id.startsWith("num_")) return wordArt(id.slice(4), size);
   if (id && id.startsWith("shape_")) return shapeArt(id.slice(6), size);
@@ -816,7 +820,10 @@ function t(k) { const o = I18N[LC()]; return (o && o[k] !== undefined) ? o[k] : 
 // Display name for a drawing (writing words stay as-is, e.g. "MAMA").
 const drawName = d => {
   if (!d.id) return d.name;
-  if (d.id.startsWith("word_") || d.id.startsWith("num_")) return d.name;
+  if (d.id === "review") return t("dailyName");
+  if (d.id.startsWith("word_")) { const w = d.id.slice(5);
+    return S.caseMode === "lower" ? w.toLowerCase() : w.toUpperCase(); }
+  if (d.id.startsWith("num_")) return d.name;
   if (d.id.startsWith("shape_")) return t("shp_" + d.id.slice(6)) || d.name;
   return (DRAW_NAMES[LC()] || DRAW_NAMES.en)[d.id] || d.name;
 };
@@ -825,13 +832,14 @@ const rnd = (k, n) => rand(t(k)).replace(/\{n\}/g, n || S.name);
 const catName = id => (CAT_NAMES[LC()] || CAT_NAMES.en)[id] || id;
 // Localized {tip, say} for any step. Writing builds from templates; other
 // drawings use the per-language STEP_T table, English from the data.
-function stepText(D, i) {
-  const st = D.steps[i];
-  if (D.id && D.id.startsWith("word_")) {
-    return st._w
-      ? { tip: t("wholeWordTip"), say: t("wholeWordSay")(st._w) }
-      : { tip: t("letterTip")(st._c), say: t("letterSay")(st._c) };
+function stepText(D, i, stp) {
+  const st = stp || D.steps[i];
+  // Letter / whole-word steps (writing words AND daily practice).
+  if (st._c) {
+    const L = String(st._c).toUpperCase();
+    return { tip: t("letterTip")(L), say: t("letterSay")(L) };
   }
+  if (st._w) return { tip: t("wholeWordTip"), say: t("wholeWordSay")(st._w) };
   if (D.id && D.id.startsWith("num_")) {
     return st._numw
       ? { tip: t("numWholeTip"), say: t("numWholeSay")(st._numw) }
@@ -864,6 +872,8 @@ const I18N_X = {
     profiles:"Profielen", switchProfile:"Wisselen", addChild:"Kind toevoegen", ageWord:"Leeftijd",
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
+    caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
+    found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
   en: {
     pgTitle:"Just for grown-ups", pgQ:(a,b)=>`What is ${a} + ${b}?`,
@@ -879,6 +889,8 @@ const I18N_X = {
     profiles:"Profiles", switchProfile:"Switch", addChild:"Add a child", ageWord:"Age",
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
+    caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
+    found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
   es: {
     pgTitle:"Solo para adultos", pgQ:(a,b)=>`¿Cuánto es ${a} + ${b}?`,
@@ -894,6 +906,8 @@ const I18N_X = {
     profiles:"Perfiles", switchProfile:"Cambiar", addChild:"Añadir un niño", ageWord:"Edad",
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
+    caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
+    found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
 };
 for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
@@ -1140,6 +1154,27 @@ const SHAPES = {
   star:    { b:[2,8,78,80],  d:P=>[ `M ${P.x(40)} ${P.y(8)} L ${P.x(50)} ${P.y(34)} L ${P.x(78)} ${P.y(34)} L ${P.x(55)} ${P.y(52)} L ${P.x(64)} ${P.y(78)} L ${P.x(40)} ${P.y(62)} L ${P.x(16)} ${P.y(78)} L ${P.x(25)} ${P.y(52)} L ${P.x(2)} ${P.y(34)} L ${P.x(30)} ${P.y(34)} Z` ] },
 };
 
+// Lowercase letterforms (ball & stick) for the letters our words need.
+// x-height top y40, baseline y78, ascenders to y10, descenders to y96.
+const LOWER = {
+  a:{ adv:56, b:[12,40,46,78], d:P=>[ _ell(P,29,58,17,19), _ln(P,46,40,46,78) ] },
+  c:{ adv:52, b:[14,40,44,78], d:P=>[ `M ${P.x(44)} ${P.y(46)} Q ${P.x(16)} ${P.y(40)} ${P.x(16)} ${P.y(58)} Q ${P.x(16)} ${P.y(78)} ${P.x(44)} ${P.y(72)}` ] },
+  h:{ adv:54, b:[14,10,42,78], d:P=>[ _ln(P,14,10,14,78), `M ${P.x(14)} ${P.y(54)} Q ${P.x(26)} ${P.y(40)} ${P.x(40)} ${P.y(54)} L ${P.x(40)} ${P.y(78)}` ] },
+  j:{ adv:40, b:[14,18,34,98], d:P=>[ _ell(P,29,24,4,4), `M ${P.x(30)} ${P.y(40)} L ${P.x(30)} ${P.y(88)} Q ${P.x(30)} ${P.y(98)} ${P.x(16)} ${P.y(94)}` ] },
+  l:{ adv:38, b:[16,10,28,78], d:P=>[ `M ${P.x(20)} ${P.y(10)} L ${P.x(20)} ${P.y(72)} Q ${P.x(20)} ${P.y(78)} ${P.x(28)} ${P.y(78)}` ] },
+  m:{ adv:66, b:[14,40,54,78], d:P=>[ _ln(P,14,40,14,78),
+        `M ${P.x(14)} ${P.y(52)} Q ${P.x(24)} ${P.y(40)} ${P.x(34)} ${P.y(52)} L ${P.x(34)} ${P.y(78)}`,
+        `M ${P.x(34)} ${P.y(52)} Q ${P.x(44)} ${P.y(40)} ${P.x(54)} ${P.y(52)} L ${P.x(54)} ${P.y(78)}` ] },
+  o:{ adv:56, b:[9,39,51,77], d:P=>[ _ell(P,30,58,19,19) ] },
+  p:{ adv:56, b:[12,40,50,96], d:P=>[ _ln(P,14,40,14,96), _ell(P,31,58,18,18) ] },
+  s:{ adv:50, b:[16,40,46,78], d:P=>[ `M ${P.x(42)} ${P.y(46)} Q ${P.x(22)} ${P.y(40)} ${P.x(22)} ${P.y(52)} Q ${P.x(22)} ${P.y(60)} ${P.x(36)} ${P.y(62)} Q ${P.x(48)} ${P.y(64)} ${P.x(44)} ${P.y(74)} Q ${P.x(36)} ${P.y(80)} ${P.x(18)} ${P.y(74)}` ] },
+  u:{ adv:52, b:[14,40,42,78], d:P=>[ `M ${P.x(14)} ${P.y(40)} L ${P.x(14)} ${P.y(68)} Q ${P.x(14)} ${P.y(78)} ${P.x(28)} ${P.y(78)} Q ${P.x(40)} ${P.y(78)} ${P.x(40)} ${P.y(68)} L ${P.x(40)} ${P.y(40)}`, _ln(P,40,40,40,78) ] },
+  y:{ adv:52, b:[14,40,40,98], d:P=>[ `M ${P.x(14)} ${P.y(40)} L ${P.x(14)} ${P.y(64)} Q ${P.x(14)} ${P.y(74)} ${P.x(28)} ${P.y(74)}`, `M ${P.x(40)} ${P.y(40)} L ${P.x(40)} ${P.y(88)} Q ${P.x(40)} ${P.y(98)} ${P.x(26)} ${P.y(94)}` ] },
+};
+// Active glyph table + word casing follow the per-profile setting.
+const glyphSet = () => S.caseMode === "lower" ? LOWER : GLYPH;
+const wordChars = w => [...(S.caseMode === "lower" ? w.toLowerCase() : w.toUpperCase())];
+
 // The words Lucy already practises with Papa, plus the children's names.
 const WORDS = ["mama", "papa", "oma", "opa", "Lucy", "Josh"];
 
@@ -1152,51 +1187,62 @@ const placeGlyph = (g, s, baseY, cx) => {
   return { s, x: lx => ox + lx * s, y: ly => oy + ly * s };
 };
 
+// One big centred trace step for a single glyph char.
+function glyphStep(ch) {
+  const G = glyphSet(), g = G[ch];
+  return { _c: ch, icon: "write", tip: `Letter ${ch}`,
+    say: `Trace ${ch}.`, d: g.d(placeGlyph(g, 7.2, 720, 500)) };
+}
+// Built fresh each open so it follows the caps/abc setting.
 function letterSteps(word) {
-  const chars = [...word.toUpperCase()];
-  // One big letter per step - large, centred, on a steady baseline.
-  const steps = chars.map(ch => {
-    const g = GLYPH[ch];
-    const P = placeGlyph(g, 7.2, 720, 500);
-    // _c carries the letter so text can be localized at render time.
-    return { _c: ch, icon: "write", tip: `The letter "${ch}"`,
-      say: `Let's trace the letter ${ch}. Go nice and slow, just like Papa shows you.`,
-      d: g.d(P) };
-  });
-  // Final step: the whole word together, scaled to fit the width.
+  const G = glyphSet(), chars = wordChars(word);
+  const steps = chars.map(glyphStep);
   const gap = 10;
-  const wl = chars.reduce((a, c) => a + (GLYPH[c].b[2] - GLYPH[c].b[0]), 0) + gap * (chars.length - 1);
+  const wl = chars.reduce((a, c) => a + (G[c].b[2] - G[c].b[0]), 0) + gap * (chars.length - 1);
   const s = Math.min(7.2, 860 / wl);
   let x = 500 - (wl * s) / 2; const all = [];
   chars.forEach(c => {
-    const g = GLYPH[c], oy = 560 - 78 * s, ox = x - g.b[0] * s;
+    const g = G[c], oy = 560 - 78 * s, ox = x - g.b[0] * s;
     all.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s }));
     x += (g.b[2] - g.b[0] + gap) * s;
   });
   steps.push({ _w: word, icon: "write", tip: "The whole word",
-    say: `Now the whole word. You are writing ${word}. You can do it!`, d: all });
+    say: `Now the whole word: ${word}.`, d: all });
   return steps;
 }
+// Spaced "Daily practice": the least-recently-traced letters come back.
+function reviewSteps() {
+  const pool = [...new Set(WORDS.flatMap(w => wordChars(w)))].filter(c => glyphSet()[c]);
+  const seen = c => S.review[String(c).toUpperCase()] || 0;
+  pool.sort((a, b) => seen(a) - seen(b));
+  return pool.slice(0, Math.min(4, pool.length)).map(glyphStep);
+}
+DRAWINGS.push({
+  id: "review", name: "Daily practice", category: "writing",
+  accent: "var(--clay)", finale: "bounce",
+  pen: true, clearEachStep: true,
+  build: reviewSteps, steps: [],
+});
 WORDS.forEach(wd => DRAWINGS.push({
-  id: "word_" + wd, name: wd.toUpperCase(), category: "writing",
+  id: "word_" + wd, name: wd, category: "writing",
   accent: "var(--sky)", finale: "bounce",
-  pen: true,            // fine line + no brush-type chooser
-  clearEachStep: true,  // wipe the canvas between letters
-  steps: letterSteps(wd),
+  pen: true, clearEachStep: true,
+  build: () => letterSteps(wd), steps: [],
 }));
 
 // Small preview of a word in the same letterforms (cards, stickers, win).
 function wordArt(word, size) {
-  const chars = [...word.toUpperCase()].filter(c => GLYPH[c]);
+  const G = glyphSet();
+  const chars = wordChars(word).filter(c => G[c]);
   const gap = 6;
-  const wl = chars.reduce((a, c) => a + (GLYPH[c].b[2] - GLYPH[c].b[0]), 0) + gap * (chars.length - 1);
+  const wl = chars.reduce((a, c) => a + (G[c].b[2] - G[c].b[0]), 0) + gap * (chars.length - 1);
   const s = Math.min(0.92, 86 / wl);
-  const y0 = Math.min(...chars.map(c => GLYPH[c].b[1]));
-  const y1 = Math.max(...chars.map(c => GLYPH[c].b[3]));
+  const y0 = Math.min(...chars.map(c => G[c].b[1]));
+  const y1 = Math.max(...chars.map(c => G[c].b[3]));
   const oy = 50 - ((y0 + y1) / 2) * s;
   let x = 50 - (wl * s) / 2; const paths = [];
   chars.forEach(c => {
-    const g = GLYPH[c], ox = x - g.b[0] * s;
+    const g = G[c], ox = x - g.b[0] * s;
     paths.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s }));
     x += (g.b[2] - g.b[0] + gap) * s;
   });
@@ -1388,6 +1434,9 @@ function Home() {
   s.append(wrap, nav("home"));
   APP.append(s);
   buddySay("warm", t("buddyHome")(S.name));
+  // Optional Foundations: a gentle character line, parent-enabled.
+  if (S.settings.foundations && Math.random() < .6)
+    setTimeout(() => speak(rnd("found")), 4000);
 }
 
 function nav(active) {
@@ -1599,7 +1648,9 @@ function toolbar(engine, opts = {}) {
 /* ----- 13. Guided drawing ---------------------------------------------- */
 function DrawScreen(id) {
   const D = DRAWINGS.find(d => d.id === id) || DRAWINGS[0];
-  const steps = (AGE[S.age].oneStep) ? D.steps.slice(0, Math.min(2, D.steps.length)) : D.steps;
+  const built = D.build ? D.build() : D.steps;
+  const steps = (AGE[S.age].oneStep && !D.pen)
+    ? built.slice(0, Math.min(2, built.length)) : built;
   let i = 0;
   const s = el("div", { cls: "screen" });
 
@@ -1659,7 +1710,7 @@ function DrawScreen(id) {
   APP.append(s);
 
   function show() {
-    const stp = steps[i], L = stepText(D, i);
+    const stp = steps[i], L = stepText(D, i, stp);
     prog.firstChild.style.width = (i / steps.length) * 100 + "%";
     pNum.textContent = t("stepOf")(i + 1, steps.length);
     $("#sIcon").innerHTML = ic(stp.icon, 26, D.accent);
@@ -1693,8 +1744,11 @@ function DrawScreen(id) {
     const blob = await engine.toPNG();
     S.completed[D.id] = Math.max(S.completed[D.id] || 0, stars);
     S.stars += stars;
-    if (!S.stickers.includes(D.id)) S.stickers.push(D.id);
+    if (D.id !== "review" && !S.stickers.includes(D.id)) S.stickers.push(D.id);
     if (S.stars > S.buddyLevel * 8) S.buddyLevel++;
+    // Spaced repetition: remember when each traced letter was practised.
+    S.review = S.review || {};
+    steps.forEach(p => { if (p._c) S.review[String(p._c).toUpperCase()] = Date.now(); });
     save();
     await galleryAdd({ id: Date.now(), name: drawName(D), art: D.id, blob });
     go("win", { D, stars, blob });
@@ -1751,6 +1805,7 @@ function WinScreen({ D, stars, blob }) {
   setTimeout(() => Sound.fx.sticker(), 1300);
   setTimeout(() => speak(rnd("winPraise")), 700);
   setTimeout(() => speak(t("bridge")), 5200); // gentle nudge back to paper
+  if (S.settings.foundations) setTimeout(() => speak(rnd("found")), 9000);
 }
 function finale(node, kind) {
   if (!node || S.settings.calm) return;
@@ -1903,11 +1958,26 @@ function Settings() {
   profCard.onclick = () => ProfilePicker();
   wrap.append(profCard);
 
+  // Letter case (caps recommended first; lowercase when ready)
+  const caseCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
+  caseCard.append(el("div", { cls: "t-label", textContent: t("caseLabel") }));
+  const caseSeg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
+  [["upper", "ABC"], ["lower", "abc"]].forEach(([v, label]) => {
+    const on = (S.caseMode || "upper") === v;
+    const b = el("button", { textContent: label,
+      css: `flex:1;padding:12px 6px;border-radius:10px;font-weight:800;border:none;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--cream)" : "var(--ink-soft)"}` });
+    b.onclick = () => { S.caseMode = v; save(); Sound.fx.tap(); buzz(12); Settings(); };
+    caseSeg.append(b);
+  });
+  caseCard.append(caseSeg);
+  wrap.append(caseCard);
+
   [["muted", "mute", t("setMuted")],
    ["voice", "sound", t("setVoice")],
    ["slowVoice", "slow", t("setSlow")],
    ["sound", "sound", t("setSound")],
    ["haptics", "buzz", t("setHaptics")],
+   ["foundations", "calm", t("setFoundations")],
    ["contrast", "contrast", t("setContrast")],
    ["calm", "calm", t("setCalm")]].forEach(([k, icon, label]) => {
     const row = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
