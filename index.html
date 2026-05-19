@@ -441,6 +441,8 @@ function buddySay(mood, text) {
    Keeps everything cohesive with the studio aesthetic. */
 function ART(id, size = 72) {
   if (id && id.startsWith("word_")) return wordArt(id.slice(5), size);
+  if (id && id.startsWith("num_")) return wordArt(id.slice(4), size);
+  if (id && id.startsWith("shape_")) return shapeArt(id.slice(6), size);
   const w = `width="${size}" height="${size}" viewBox="0 0 100 100"`;
   const A = {
     sun:`<svg ${w}><g stroke="var(--ochre)" stroke-width="5" stroke-linecap="round">
@@ -488,7 +490,8 @@ const C = (cx, cy, r) =>
   `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
 
 const CATEGORIES = [
-  { id:"writing"  }, { id:"animals" }, { id:"vehicles" }, { id:"food" },
+  { id:"writing"  }, { id:"numbers" }, { id:"shapes" },
+  { id:"animals" }, { id:"vehicles" }, { id:"food" },
   { id:"faces" }, { id:"nature" }, { id:"space" }, { id:"monsters" },
 ];
 
@@ -688,13 +691,16 @@ const STEP_T = {
   },
 };
 const CAT_NAMES = {
-  nl:{ writing:"Letters met Buddy", animals:"Dieren", vehicles:"Voertuigen",
+  nl:{ numbers:"Cijfers", shapes:"Vormen",
+       writing:"Letters met Buddy", animals:"Dieren", vehicles:"Voertuigen",
        food:"Lekker eten", faces:"Gezichten", nature:"Buiten", space:"De ruimte",
        monsters:"Lieve monsters" },
-  en:{ writing:"Letters with Buddy", animals:"Animals", vehicles:"Things That Go",
+  en:{ numbers:"Numbers", shapes:"Shapes",
+       writing:"Letters with Buddy", animals:"Animals", vehicles:"Things That Go",
        food:"Good Food", faces:"Faces & Feelings", nature:"Outside", space:"Up in Space",
        monsters:"Friendly Monsters" },
-  es:{ writing:"Letras con Buddy", animals:"Animales", vehicles:"Vehículos",
+  es:{ numbers:"Números", shapes:"Formas",
+       writing:"Letras con Buddy", animals:"Animales", vehicles:"Vehículos",
        food:"Comida rica", faces:"Caras", nature:"Naturaleza", space:"El espacio",
        monsters:"Monstruos amables" },
 };
@@ -712,8 +718,12 @@ const DRAW_NAMES = {
 const LC = () => I18N[S.lang] ? S.lang : "en";
 function t(k) { const o = I18N[LC()]; return (o && o[k] !== undefined) ? o[k] : I18N.en[k]; }
 // Display name for a drawing (writing words stay as-is, e.g. "MAMA").
-const drawName = d => (d.id && d.id.startsWith("word_")) ? d.name
-  : ((DRAW_NAMES[LC()] || DRAW_NAMES.en)[d.id] || d.name);
+const drawName = d => {
+  if (!d.id) return d.name;
+  if (d.id.startsWith("word_") || d.id.startsWith("num_")) return d.name;
+  if (d.id.startsWith("shape_")) return t("shp_" + d.id.slice(6)) || d.name;
+  return (DRAW_NAMES[LC()] || DRAW_NAMES.en)[d.id] || d.name;
+};
 // random localized line, {n} -> child name
 const rnd = (k, n) => rand(t(k)).replace(/\{n\}/g, n || S.name);
 const catName = id => (CAT_NAMES[LC()] || CAT_NAMES.en)[id] || id;
@@ -725,6 +735,15 @@ function stepText(D, i) {
     return st._w
       ? { tip: t("wholeWordTip"), say: t("wholeWordSay")(st._w) }
       : { tip: t("letterTip")(st._c), say: t("letterSay")(st._c) };
+  }
+  if (D.id && D.id.startsWith("num_")) {
+    return st._numw
+      ? { tip: t("numWholeTip"), say: t("numWholeSay")(st._numw) }
+      : { tip: t("numTip")(st._num), say: t("numSay")(st._num) };
+  }
+  if (D.id && D.id.startsWith("shape_")) {
+    const nm = t("shp_" + st._shape) || st._shape;
+    return { tip: nm, say: t("shapeSay")(nm) };
   }
   const tbl = STEP_T[LC()];
   if (tbl && tbl[D.id] && tbl[D.id][i]) return { tip: tbl[D.id][i][0], say: tbl[D.id][i][1] };
@@ -742,6 +761,10 @@ const I18N_X = {
     restMore:"Nog 5 minuten", restDone:"Klaar voor nu", restSay:"Wat heb jij goed je best gedaan. Leg de tablet maar weg en pak een echt krijtje en papier.",
     bridge:"Pak nu een echt krijtje en papier en maak het zelf na. Dat is het allerbelangrijkste.",
     setLimit:"Schermtijd", limOff:"Uit", limSoft:"Zachte herinnering", limLock:"Pauze afdwingen",
+    numTip:n=>`Het cijfer "${n}"`, numSay:n=>`Trek het cijfer ${n} na. Rustig aan.`,
+    numWholeTip:"Het hele getal", numWholeSay:n=>`Nu het hele getal ${n}.`,
+    shapeSay:s=>`Laten we de ${s} natekenen. Rustig aan.`,
+    shp_circle:"cirkel", shp_square:"vierkant", shp_triangle:"driehoek", shp_heart:"hart", shp_star:"ster",
   },
   en: {
     pgTitle:"Just for grown-ups", pgQ:(a,b)=>`What is ${a} + ${b}?`,
@@ -750,6 +773,10 @@ const I18N_X = {
     restMore:"5 more minutes", restDone:"Done for now", restSay:"You worked so hard. Put the tablet away now, and pick up a real crayon and some paper.",
     bridge:"Now pick up a real crayon and paper and make it yourself. That is the most important part.",
     setLimit:"Screen time", limOff:"Off", limSoft:"Gentle reminder", limLock:"Enforce a break",
+    numTip:n=>`The number "${n}"`, numSay:n=>`Trace the number ${n}. Nice and slow.`,
+    numWholeTip:"The whole number", numWholeSay:n=>`Now the whole number ${n}.`,
+    shapeSay:s=>`Let's trace the ${s}. Nice and slow.`,
+    shp_circle:"circle", shp_square:"square", shp_triangle:"triangle", shp_heart:"heart", shp_star:"star",
   },
   es: {
     pgTitle:"Solo para adultos", pgQ:(a,b)=>`¿Cuánto es ${a} + ${b}?`,
@@ -758,6 +785,10 @@ const I18N_X = {
     restMore:"5 minutos más", restDone:"Listo por ahora", restSay:"Trabajaste muchísimo. Deja la tablet y toma una crayola de verdad y papel.",
     bridge:"Ahora toma una crayola de verdad y papel y hazlo tú. Eso es lo más importante.",
     setLimit:"Tiempo de pantalla", limOff:"Apagado", limSoft:"Recordatorio suave", limLock:"Forzar un descanso",
+    numTip:n=>`El número "${n}"`, numSay:n=>`Traza el número ${n}. Despacito.`,
+    numWholeTip:"El número entero", numWholeSay:n=>`Ahora el número entero ${n}.`,
+    shapeSay:s=>`Vamos a trazar el ${s}. Despacito.`,
+    shp_circle:"círculo", shp_square:"cuadrado", shp_triangle:"triángulo", shp_heart:"corazón", shp_star:"estrella",
   },
 };
 for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
@@ -950,6 +981,25 @@ const GLYPH = {
   S:{ adv:56, b:[8,8,48,78], d:P=>[ `M ${P.x(46)} ${P.y(20)} Q ${P.x(30)} ${P.y(6)} ${P.x(18)} ${P.y(20)} Q ${P.x(8)} ${P.y(34)} ${P.x(28)} ${P.y(42)} Q ${P.x(48)} ${P.y(50)} ${P.x(46)} ${P.y(64)} Q ${P.x(40)} ${P.y(80)} ${P.x(16)} ${P.y(70)}` ] },
   U:{ adv:60, b:[12,8,48,78], d:P=>[ `M ${P.x(12)} ${P.y(8)} L ${P.x(12)} ${P.y(56)} Q ${P.x(12)} ${P.y(78)} ${P.x(30)} ${P.y(78)} Q ${P.x(48)} ${P.y(78)} ${P.x(48)} ${P.y(56)} L ${P.x(48)} ${P.y(8)}` ] },
   Y:{ adv:60, b:[8,8,52,78], d:P=>[ `M ${P.x(10)} ${P.y(8)} L ${P.x(30)} ${P.y(42)} L ${P.x(50)} ${P.y(8)}`, _ln(P,30,42,30,78) ] },
+  // Digits 0-9, same metric box (cap y8, baseline y78).
+  "0":{ adv:60, b:[4,6,56,80], d:P=>[ _ell(P,30,43,26,37) ] },
+  "1":{ adv:48, b:[16,8,40,78], d:P=>[ `M ${P.x(16)} ${P.y(22)} L ${P.x(32)} ${P.y(8)} L ${P.x(32)} ${P.y(78)}`, _ln(P,18,78,46,78) ] },
+  "2":{ adv:58, b:[12,6,52,78], d:P=>[ `M ${P.x(14)} ${P.y(24)} Q ${P.x(30)} ${P.y(4)} ${P.x(46)} ${P.y(22)} Q ${P.x(54)} ${P.y(38)} ${P.x(18)} ${P.y(60)} L ${P.x(12)} ${P.y(78)} L ${P.x(52)} ${P.y(78)}` ] },
+  "3":{ adv:58, b:[12,4,54,80], d:P=>[ `M ${P.x(16)} ${P.y(18)} Q ${P.x(34)} ${P.y(2)} ${P.x(48)} ${P.y(22)} Q ${P.x(54)} ${P.y(38)} ${P.x(30)} ${P.y(44)} Q ${P.x(56)} ${P.y(50)} ${P.x(48)} ${P.y(66)} Q ${P.x(34)} ${P.y(84)} ${P.x(14)} ${P.y(66)}` ] },
+  "4":{ adv:60, b:[8,8,54,78], d:P=>[ `M ${P.x(42)} ${P.y(78)} L ${P.x(42)} ${P.y(8)} L ${P.x(8)} ${P.y(56)} L ${P.x(54)} ${P.y(56)}` ] },
+  "5":{ adv:56, b:[12,8,52,80], d:P=>[ `M ${P.x(46)} ${P.y(10)} L ${P.x(20)} ${P.y(10)} L ${P.x(18)} ${P.y(40)} Q ${P.x(40)} ${P.y(30)} ${P.x(48)} ${P.y(52)} Q ${P.x(50)} ${P.y(74)} ${P.x(26)} ${P.y(78)} Q ${P.x(14)} ${P.y(76)} ${P.x(12)} ${P.y(64)}` ] },
+  "6":{ adv:58, b:[10,4,54,80], d:P=>[ `M ${P.x(46)} ${P.y(14)} Q ${P.x(28)} ${P.y(4)} ${P.x(18)} ${P.y(30)} Q ${P.x(10)} ${P.y(50)} ${P.x(18)} ${P.y(66)} Q ${P.x(28)} ${P.y(82)} ${P.x(42)} ${P.y(72)} Q ${P.x(54)} ${P.y(60)} ${P.x(44)} ${P.y(48)} Q ${P.x(32)} ${P.y(40)} ${P.x(20)} ${P.y(50)}` ] },
+  "7":{ adv:56, b:[12,8,52,78], d:P=>[ `M ${P.x(12)} ${P.y(10)} L ${P.x(52)} ${P.y(10)} L ${P.x(26)} ${P.y(78)}` ] },
+  "8":{ adv:58, b:[12,4,52,80], d:P=>[ `M ${P.x(31)} ${P.y(43)} Q ${P.x(12)} ${P.y(34)} ${P.x(20)} ${P.y(18)} Q ${P.x(31)} ${P.y(4)} ${P.x(42)} ${P.y(18)} Q ${P.x(50)} ${P.y(34)} ${P.x(31)} ${P.y(43)} Q ${P.x(10)} ${P.y(54)} ${P.x(19)} ${P.y(70)} Q ${P.x(31)} ${P.y(84)} ${P.x(43)} ${P.y(70)} Q ${P.x(52)} ${P.y(54)} ${P.x(31)} ${P.y(43)}` ] },
+  "9":{ adv:58, b:[10,6,54,80], d:P=>[ `M ${P.x(20)} ${P.y(74)} Q ${P.x(40)} ${P.y(82)} ${P.x(46)} ${P.y(56)} Q ${P.x(54)} ${P.y(32)} ${P.x(40)} ${P.y(16)} Q ${P.x(26)} ${P.y(6)} ${P.x(16)} ${P.y(22)} Q ${P.x(10)} ${P.y(38)} ${P.x(22)} ${P.y(46)} Q ${P.x(38)} ${P.y(52)} ${P.x(46)} ${P.y(40)}` ] },
+};
+// Shapes - traced like letters (single fine pen, fresh canvas each time).
+const SHAPES = {
+  circle:  { b:[4,8,76,80],  d:P=>[ _ell(P,40,44,34,34) ] },
+  square:  { b:[12,12,72,72],d:P=>[ `M ${P.x(12)} ${P.y(12)} L ${P.x(72)} ${P.y(12)} L ${P.x(72)} ${P.y(72)} L ${P.x(12)} ${P.y(72)} Z` ] },
+  triangle:{ b:[6,10,74,76], d:P=>[ `M ${P.x(40)} ${P.y(10)} L ${P.x(74)} ${P.y(76)} L ${P.x(6)} ${P.y(76)} Z` ] },
+  heart:   { b:[6,12,74,78], d:P=>[ `M ${P.x(40)} ${P.y(74)} Q ${P.x(6)} ${P.y(48)} ${P.x(20)} ${P.y(24)} Q ${P.x(33)} ${P.y(12)} ${P.x(40)} ${P.y(30)} Q ${P.x(47)} ${P.y(12)} ${P.x(60)} ${P.y(24)} Q ${P.x(74)} ${P.y(48)} ${P.x(40)} ${P.y(74)}` ] },
+  star:    { b:[2,8,78,80],  d:P=>[ `M ${P.x(40)} ${P.y(8)} L ${P.x(50)} ${P.y(34)} L ${P.x(78)} ${P.y(34)} L ${P.x(55)} ${P.y(52)} L ${P.x(64)} ${P.y(78)} L ${P.x(40)} ${P.y(62)} L ${P.x(16)} ${P.y(78)} L ${P.x(25)} ${P.y(52)} L ${P.x(2)} ${P.y(34)} L ${P.x(30)} ${P.y(34)} Z` ] },
 };
 
 // The words Lucy already practises with Papa, plus the children's names.
@@ -1016,6 +1066,52 @@ function wordArt(word, size) {
     paths.map(d => `<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")
   }</svg>`;
 }
+// Small preview for a single shape (cards/stickers/win).
+function shapeArt(key, size) {
+  const g = SHAPES[key]; const s = Math.min(0.9, 84 / (g.b[2] - g.b[0]));
+  const ox = 50 - ((g.b[0] + g.b[2]) / 2) * s, oy = 50 - ((g.b[1] + g.b[3]) / 2) * s;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${
+    g.d({ s, x: v => ox + v * s, y: v => oy + v * s }).map(d =>
+      `<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")
+  }</svg>`;
+}
+
+/* ----- 8e. P1: Numbers 1-10 and Shapes (same trace engine) ------------- */
+function numberSteps(n) {
+  const ds = String(n).split("");
+  const steps = ds.map(d => {
+    const P = placeGlyph(GLYPH[d], 7.2, 720, 500);
+    return { _num: d, icon: "write", tip: `The number "${d}"`,
+      say: `Trace the number ${d}.`, d: GLYPH[d].d(P) };
+  });
+  if (ds.length > 1) { // e.g. 10 -> trace the whole number too
+    const gap = 12;
+    const wl = ds.reduce((a, c) => a + (GLYPH[c].b[2] - GLYPH[c].b[0]), 0) + gap * (ds.length - 1);
+    const s = Math.min(7.2, 700 / wl); let x = 500 - (wl * s) / 2; const all = [];
+    ds.forEach(c => { const g = GLYPH[c], oy = 560 - 78 * s, ox = x - g.b[0] * s;
+      all.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s }));
+      x += (g.b[2] - g.b[0] + gap) * s; });
+    steps.push({ _numw: String(n), icon: "write", tip: "The whole number",
+      say: `Now the whole number ${n}.`, d: all });
+  }
+  return steps;
+}
+function shapeSteps(key) {
+  const g = SHAPES[key], s = 8.4;
+  const ox = 500 - ((g.b[0] + g.b[2]) / 2) * s, oy = 500 - ((g.b[1] + g.b[3]) / 2) * s;
+  return [{ _shape: key, icon: "write", tip: key, say: `Let's trace the ${key}.`,
+    d: g.d({ s, x: v => ox + v * s, y: v => oy + v * s }) }];
+}
+for (let n = 1; n <= 10; n++) DRAWINGS.push({
+  id: "num_" + n, name: String(n), category: "numbers",
+  accent: "var(--sage)", finale: "bounce", pen: true, clearEachStep: true,
+  steps: numberSteps(n),
+});
+Object.keys(SHAPES).forEach(k => DRAWINGS.push({
+  id: "shape_" + k, name: k, category: "shapes",
+  accent: "var(--plum)", finale: "spin", pen: true, clearEachStep: true,
+  steps: shapeSteps(k),
+}));
 
 /* ----- 9. Router ------------------------------------------------------- */
 const APP = $("#app");
