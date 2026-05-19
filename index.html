@@ -198,7 +198,7 @@ const ageOf = (y, m, d) => {
 /* ----- 1. Persistent state --------------------------------------------- */
 const SAVE_KEY = "scribble-heroes-v2";
 const defaultState = () => ({
-  name: "", age: 2, onboarded: false,
+  name: "", age: 2, onboarded: false, lang: "nl",
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
     sound: true, haptics: true, contrast: false, calm: false },
@@ -307,19 +307,24 @@ const Sound = (() => {
 })();
 
 /* ----- 4. Voice - calm, warm, natural; descriptive not manic ----------- */
-let _voice = null;
-function pickVoice() {
-  if (!("speechSynthesis" in window)) return;
-  const v = speechSynthesis.getVoices();
-  // Prefer high-quality natural voices over the robotic defaults.
-  _voice =
-    v.find(x => /samantha|allison|ava|serena|moira|karen|catherine/i.test(x.name)) ||
-    v.find(x => /google (us|uk) english/i.test(x.name)) ||
-    v.find(x => /aria|jenny|libby|natasha/i.test(x.name)) ||
-    v.find(x => x.lang === "en-US" && /female/i.test(x.name)) ||
-    v.find(x => x.lang && x.lang.startsWith("en")) || v[0] || null;
+// BCP-47 tag for the current language (used by both voices).
+const LANG_TAG = { nl: "nl-NL", en: "en-US", es: "es-ES" };
+const langTag = () => LANG_TAG[LC()] || "en-US";
+// Pick the best device voice for the CURRENT language (fallback when the
+// realistic OpenAI voice is unavailable). Recomputed per utterance so it
+// follows a language change immediately.
+function deviceVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const v = speechSynthesis.getVoices(), pre = LC();
+  const byLang = v.filter(x => x.lang && x.lang.toLowerCase().startsWith(pre));
+  return (
+    byLang.find(x => /natural|enhanced|premium|google|siri/i.test(x.name)) ||
+    byLang.find(x => /female|vrouw|mujer/i.test(x.name)) ||
+    byLang[0] ||
+    v.find(x => x.lang && x.lang.startsWith("en")) || v[0] || null
+  );
 }
-if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = pickVoice; pickVoice(); }
+if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = () => {}; }
 // Subtitles removed - the children can't read yet, so Buddy only speaks.
 // ---- Realistic neural voice (OpenAI gpt-4o-mini-tts) -------------------
 // The key NEVER lives here. Requests go to a tiny serverless proxy that
@@ -351,7 +356,7 @@ async function realisticSpeak(text) {
   if (!base || !navigator.onLine || !("caches" in window)) return false;
   try {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
-      "&t=" + encodeURIComponent(text);
+      "&l=" + LC() + "&t=" + encodeURIComponent(text);
     _ttsCache = _ttsCache || await caches.open("tts-v1");
     let res = await _ttsCache.match(key);
     if (!res) {
@@ -378,7 +383,8 @@ function deviceSpeak(text) {
     u.rate = S.settings.slowVoice ? .74 : .9;
     u.pitch = 1.06;
     u.volume = .95;
-    if (_voice) u.voice = _voice;
+    u.lang = langTag();
+    const dv = deviceVoice(); if (dv) u.voice = dv;
     speechSynthesis.speak(u);
   } catch {}
 }
@@ -482,15 +488,248 @@ const C = (cx, cy, r) =>
   `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
 
 const CATEGORIES = [
-  { id:"writing",  name:"Letters with Buddy" },
-  { id:"animals",  name:"Animals" },
-  { id:"vehicles", name:"Things That Go" },
-  { id:"food",     name:"Good Food" },
-  { id:"faces",    name:"Faces & Feelings" },
-  { id:"nature",   name:"Outside" },
-  { id:"space",    name:"Up in Space" },
-  { id:"monsters", name:"Friendly Monsters" },
+  { id:"writing"  }, { id:"animals" }, { id:"vehicles" }, { id:"food" },
+  { id:"faces" }, { id:"nature" }, { id:"space" }, { id:"monsters" },
 ];
+
+/* ----- 8c. Languages: Dutch (default), English, Spanish ----------------
+   Every spoken + visible string lives here. t(key) returns the current
+   language (falling back to English). Parametrised strings are functions;
+   "rnd" picks a random localized line and fills {n} with the child name.
+   Drawing step text is under steps[drawingId] = [[tip,say], ...].
+   To add a language: add a block with the same keys. */
+const LANGS = [["nl","Nederlands"],["en","English"],["es","Español"]];
+const I18N = {
+  nl: {
+    madeBy:"Gemaakt door papa, voor Lucy & Josh",
+    whoPlaying:"Wie speelt er?", orType:"of typ een naam", typeName:"Typ een naam",
+    howOld:"Hoe oud ben je?", start:"Start", language:"Taal",
+    splashIntro:"Hallo, ik ben Buddy. Ben jij Lucy of Josh? Tik op je naam om te beginnen.",
+    hello:n=>`Hallo, ${n}`, whatDraw:"Wat wil je tekenen?",
+    buddyHome:n=>`Hallo ${n}. Kies iets om te tekenen.`,
+    nDraw:"Tekenen", nGallery:"Mijn werk", nStickers:"Stickers", nGrown:"Ouders",
+    grownHint:"Volwassenen: houd deze knop ingedrukt om de instellingen te openen.",
+    stepOf:(i,m)=>`Stap ${i} van ${m}`,
+    showMe:"Doe voor", undo:"Terug", clear:"Wissen", next:"Verder", allDone:"Klaar!",
+    showMeSay:"Kijk naar de stip en doe het dan na. Rustig aan.",
+    galleryTitle:"Mijn werk", galleryEmpty:"Nog niks hier. Maak een tekening af, dan komt die hier.",
+    stickersTitle:"Stickers", stickersCount:(h,m)=>`${h} van ${m} verzameld`,
+    stickerLocked:x=>`Teken ${x} om deze sticker te verdienen.`,
+    stickerEarned:x=>`Dit is je sticker van ${x}. Goed gedaan!`,
+    freeTitle:"Vrij tekenen", save:"Bewaren",
+    freeIntro:n=>`Dit is jouw plek, ${n}. Teken wat je wilt.`,
+    freeSave:n=>`Ik heb het bewaard, ${n}. Goed gedaan!`,
+    settingsTitle:"Voor volwassenen",
+    setMuted:"Alles uit (geluid)", setVoice:"Stem van Buddy",
+    setSlow:"Langzamer en duidelijker praten", setSound:"Geluidseffecten",
+    setHaptics:"Lichte trilling", setContrast:"Hoog contrast",
+    setCalm:"Rustige modus (minder beweging en geluid)",
+    artist:"Kunstenaar", ageSetting:"Leeftijd", reset:"Alles wissen",
+    resetConfirm:"De naam, sterren, stickers en alle bewaarde tekeningen wissen?",
+    winTitle:n=>`Je hebt het gedaan, ${n}!`, winSticker:x=>`Je hebt de sticker ${x} verdiend.`,
+    drawAgain:"Opnieuw", nextDrawing:"Volgende", home:"Home", share:"Delen",
+    letterTip:c=>`De letter "${c}"`, wholeWordTip:"Het hele woord",
+    letterSay:c=>`Laten we de letter ${c} natekenen. Rustig aan, net zoals papa het voordoet.`,
+    wholeWordSay:w=>`Nu het hele woord. Je schrijft ${w}. Het lukt jou!`,
+    praiseOk:["Wat mooi, {n}!","Kijk eens, helemaal zelf gedaan. Knap hoor!","Mooie lijnen, {n}. Goed bezig!"],
+    praiseSoft:["Elke streep is goed, {n}. We gaan verder.","Er is geen verkeerde manier om te tekenen. Door!","Mooi gedaan. We gaan verder."],
+    winPraise:["Heel knap, {n}. Je hebt goed doorgezet en iets van jezelf gemaakt.","Kijk wat je gemaakt hebt, {n}. Met je eigen handen en je eigen ideeën. Trots op je!","Goed gedaan, {n}. Tekenen kost geduld, en dat had jij vandaag."],
+    encourage:["Goed zo. Ga door.","Ik zie je lijn groeien.","Rustig aan. Mooi.","Je werkt echt hard.","Goed. Neem de tijd."],
+    freeEncourage:["Mooie kleuren kies je.","Je kunt hier alles maken wat je bedenkt.","Wat mooi. Ga door.","Het is helemaal van jou. Niks is fout."],
+    note:`<div class="t-title" style="margin-bottom:10px">Waarom dit werkt</div>
+      <p class="t-body">Scribble Heroes draait om het <b>proces, niet het resultaat</b>.
+      De app verbetert of beoordeelt de tekening nooit. Buddy reageert warm op
+      <i>elke</i> streep, want op deze leeftijd zit de waarde in het <i>doen</i>.</p>
+      <p class="t-body" style="margin-top:8px">Spelend oefent je kind:</p>
+      <ul class="t-body" style="margin:8px 0 8px 20px">
+        <li><b>Fijne motoriek</b> - greep, druk, oog-handcoördinatie.</li>
+        <li><b>Volgorde</b> - korte stapjes na elkaar.</li>
+        <li><b>Vorm en ruimte</b> - cirkels, lijnen, driehoeken.</li>
+        <li><b>Zelfvertrouwen</b> - aanmoediging gericht op moeite.</li>
+        <li><b>Taal</b> - Buddy benoemt rustig alles, langzamer als je wilt.</li>
+      </ul>
+      <p class="t-body"><b>Tip:</b> ga ernaast zitten en benoem wat je ziet
+      ("wat een lange kronkellijn") in plaats van te vragen "wat is het?".
+      Geen advertenties, geen account, geen tracking - werkt volledig offline.</p>
+      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Met liefde gemaakt door papa, voor Lucy &amp; Josh. Bij "Letters met Buddy" oefent Lucy mama, papa, oma, opa en haar eigen naam, net als jouw schrift natekenen op papier.</p>`,
+  },
+  en: {
+    madeBy:"Made by Papa, for Lucy & Josh",
+    whoPlaying:"Who is playing?", orType:"or type a name", typeName:"Type a name",
+    howOld:"How old are you?", start:"Start", language:"Language",
+    splashIntro:"Hello, I'm Buddy. Are you Lucy, or Josh? Tap your name to begin.",
+    hello:n=>`Hello, ${n}`, whatDraw:"What would you like to draw?",
+    buddyHome:n=>`Hello ${n}. Pick something you'd like to draw.`,
+    nDraw:"Draw", nGallery:"Gallery", nStickers:"Stickers", nGrown:"Grown-ups",
+    grownHint:"Grown-ups, press and hold this to open settings.",
+    stepOf:(i,m)=>`Step ${i} of ${m}`,
+    showMe:"Show me", undo:"Undo", clear:"Clear", next:"Next", allDone:"All done",
+    showMeSay:"Watch the dot, then you try. There's no rush.",
+    galleryTitle:"Gallery", galleryEmpty:"Nothing here yet. Finish a drawing and it will be saved here.",
+    stickersTitle:"Stickers", stickersCount:(h,m)=>`${h} of ${m} collected`,
+    stickerLocked:x=>`Draw the ${x} to earn this sticker.`,
+    stickerEarned:x=>`This is your ${x} sticker. You earned it.`,
+    freeTitle:"Free Draw", save:"Save",
+    freeIntro:n=>`This is your space, ${n}. Draw whatever you like.`,
+    freeSave:n=>`I saved that to your gallery, ${n}. Good work.`,
+    settingsTitle:"For Grown-ups",
+    setMuted:"Mute all sound", setVoice:"Buddy's voice",
+    setSlow:"Slower, clearer speech", setSound:"Sound effects",
+    setHaptics:"Gentle vibration", setContrast:"High-contrast mode",
+    setCalm:"Calm mode (less motion and sound)",
+    artist:"Artist", ageSetting:"Age setting", reset:"Reset everything",
+    resetConfirm:"Erase the name, stars, stickers and all saved drawings?",
+    winTitle:n=>`You did it, ${n}`, winSticker:x=>`You earned the ${x} sticker.`,
+    drawAgain:"Draw again", nextDrawing:"Next drawing", home:"Home", share:"Share",
+    letterTip:c=>`The letter "${c}"`, wholeWordTip:"The whole word",
+    letterSay:c=>`Let's trace the letter ${c}. Go nice and slow, just like Papa shows you.`,
+    wholeWordSay:w=>`Now the whole word. You are writing ${w}. You can do it!`,
+    praiseOk:["That looks wonderful, {n}.","You drew that all by yourself. Well done.","Look at the marks you made, {n}. Really good work."],
+    praiseSoft:["Every mark you make is good, {n}. Let's keep going.","There's no wrong way to draw. On to the next part.","I like how you did that. Let's carry on."],
+    winPraise:["That's really good work, {n}. You stayed with it the whole way, and you made something all your own.","Look what you made, {n}. You used your own hands and your own ideas. I'm proud of you.","Well done, {n}. Drawing takes patience, and you had plenty of it today."],
+    encourage:["That's it. Keep going.","I see your line growing.","Nice and slow. Lovely.","You're really working hard.","Good. Take all the time you need."],
+    freeEncourage:["I like the colours you're choosing.","You can draw anything you imagine here.","That's lovely. Keep going.","It's all yours. There's no wrong way."],
+    note:`<div class="t-title" style="margin-bottom:10px">Why this works</div>
+      <p class="t-body">Scribble Heroes follows a <b>process-over-product</b> approach.
+      The app never corrects or scores the drawing. Buddy responds warmly to
+      <i>every</i> mark, because at this age the value is in the <i>doing</i>.</p>
+      <p class="t-body" style="margin-top:8px">Through play, your child practises:</p>
+      <ul class="t-body" style="margin:8px 0 8px 20px">
+        <li><b>Fine motor control</b> - grip, pressure, hand-eye coordination.</li>
+        <li><b>Sequencing</b> - following short, ordered steps.</li>
+        <li><b>Shape and space</b> - circles, lines, and triangles.</li>
+        <li><b>Confidence</b> - effort-based, descriptive encouragement.</li>
+        <li><b>Language</b> - Buddy names everything calmly, slowly if you choose.</li>
+      </ul>
+      <p class="t-body"><b>Tip:</b> sit alongside and describe what you see
+      ("you made a long curvy line") rather than asking "what is it?".
+      No ads, no accounts, no tracking - it works fully offline.</p>
+      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Made with love by Papa, for Lucy &amp; Josh. In "Letters with Buddy" Lucy traces mama, papa, oma, opa and her own name, just like copying your writing on paper.</p>`,
+  },
+  es: {
+    madeBy:"Hecho por papá, para Lucy & Josh",
+    whoPlaying:"¿Quién juega?", orType:"o escribe un nombre", typeName:"Escribe un nombre",
+    howOld:"¿Cuántos años tienes?", start:"Empezar", language:"Idioma",
+    splashIntro:"Hola, soy Buddy. ¿Eres Lucy o Josh? Toca tu nombre para empezar.",
+    hello:n=>`Hola, ${n}`, whatDraw:"¿Qué quieres dibujar?",
+    buddyHome:n=>`Hola ${n}. Elige algo para dibujar.`,
+    nDraw:"Dibujar", nGallery:"Galería", nStickers:"Pegatinas", nGrown:"Adultos",
+    grownHint:"Adultos: mantén pulsado este botón para abrir los ajustes.",
+    stepOf:(i,m)=>`Paso ${i} de ${m}`,
+    showMe:"Muéstrame", undo:"Deshacer", clear:"Borrar", next:"Siguiente", allDone:"¡Listo!",
+    showMeSay:"Mira el punto y luego inténtalo. Sin prisa.",
+    galleryTitle:"Galería", galleryEmpty:"Nada aquí todavía. Termina un dibujo y se guardará aquí.",
+    stickersTitle:"Pegatinas", stickersCount:(h,m)=>`${h} de ${m} conseguidas`,
+    stickerLocked:x=>`Dibuja ${x} para ganar esta pegatina.`,
+    stickerEarned:x=>`Esta es tu pegatina de ${x}. ¡Lo lograste!`,
+    freeTitle:"Dibujo libre", save:"Guardar",
+    freeIntro:n=>`Este es tu espacio, ${n}. Dibuja lo que quieras.`,
+    freeSave:n=>`Lo guardé en tu galería, ${n}. ¡Buen trabajo!`,
+    settingsTitle:"Para adultos",
+    setMuted:"Silenciar todo", setVoice:"La voz de Buddy",
+    setSlow:"Hablar más despacio y claro", setSound:"Efectos de sonido",
+    setHaptics:"Vibración suave", setContrast:"Alto contraste",
+    setCalm:"Modo tranquilo (menos movimiento y sonido)",
+    artist:"Artista", ageSetting:"Edad", reset:"Borrar todo",
+    resetConfirm:"¿Borrar el nombre, las estrellas, las pegatinas y todos los dibujos?",
+    winTitle:n=>`¡Lo lograste, ${n}!`, winSticker:x=>`Ganaste la pegatina ${x}.`,
+    drawAgain:"Otra vez", nextDrawing:"Siguiente dibujo", home:"Inicio", share:"Compartir",
+    letterTip:c=>`La letra "${c}"`, wholeWordTip:"La palabra entera",
+    letterSay:c=>`Vamos a trazar la letra ${c}. Despacito, como te enseña papá.`,
+    wholeWordSay:w=>`Ahora la palabra entera. Estás escribiendo ${w}. ¡Tú puedes!`,
+    praiseOk:["¡Qué bonito, {n}!","Lo hiciste tú solito. ¡Muy bien!","Mira esas líneas, {n}. ¡Buen trabajo!"],
+    praiseSoft:["Cada trazo está bien, {n}. Seguimos.","No hay una forma incorrecta de dibujar. ¡Adelante!","Me gusta cómo lo hiciste. Seguimos."],
+    winPraise:["Muy buen trabajo, {n}. No te rendiste y creaste algo tuyo.","Mira lo que hiciste, {n}. Con tus manos y tus ideas. ¡Estoy orgulloso!","Bien hecho, {n}. Dibujar requiere paciencia, y hoy tú la tuviste."],
+    encourage:["Eso es. Sigue así.","Veo tu línea crecer.","Despacito. Qué bien.","Estás trabajando mucho.","Bien. Tómate tu tiempo."],
+    freeEncourage:["Me gustan los colores que eliges.","Aquí puedes dibujar lo que imagines.","Qué bonito. Sigue así.","Es todo tuyo. No hay forma incorrecta."],
+    note:`<div class="t-title" style="margin-bottom:10px">Por qué funciona</div>
+      <p class="t-body">Scribble Heroes sigue un enfoque de <b>proceso, no resultado</b>.
+      La app nunca corrige ni califica el dibujo. Buddy responde con cariño a
+      <i>cada</i> trazo, porque a esta edad lo valioso es <i>hacerlo</i>.</p>
+      <p class="t-body" style="margin-top:8px">Jugando, tu hijo practica:</p>
+      <ul class="t-body" style="margin:8px 0 8px 20px">
+        <li><b>Motricidad fina</b> - agarre, presión, coordinación ojo-mano.</li>
+        <li><b>Secuencia</b> - seguir pasos cortos y ordenados.</li>
+        <li><b>Forma y espacio</b> - círculos, líneas y triángulos.</li>
+        <li><b>Confianza</b> - ánimo basado en el esfuerzo.</li>
+        <li><b>Lenguaje</b> - Buddy nombra todo con calma, más despacio si quieres.</li>
+      </ul>
+      <p class="t-body"><b>Consejo:</b> siéntate al lado y describe lo que ves
+      ("hiciste una línea larga y curva") en vez de preguntar "¿qué es?".
+      Sin anuncios, sin cuentas, sin rastreo - funciona sin conexión.</p>
+      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Hecho con amor por papá, para Lucy &amp; Josh. En "Letras con Buddy" Lucy traza mama, papa, oma, opa y su propio nombre, como copiar tu letra en papel.</p>`,
+  },
+};
+// Per-drawing step text. English is read from the DRAWINGS data itself.
+const STEP_T = {
+  nl: {
+    sun:[["Een grote ronde cirkel","We beginnen met een grote ronde cirkel. Rustig aan."],["Lijntjes naar buiten","Teken nu lijntjes naar buiten, zoals zonnestralen."],["Een vriendelijke glimlach","En een zachte glimlach onderaan."]],
+    cat:[["Een rond hoofd","Maak een rond hoofd voor de kat. Rustig en stevig."],["Twee puntige oren","Twee puntige oren, boven op het hoofd."],["Twee kleine oogjes","Nu twee kleine oogjes zodat de kat je kan zien."],["Lange snorharen","En een paar lange, zachte snorharen."]],
+    fish:[["Een rond lijfje","Teken een rond visje-lijfje."],["Een zwierige staart","Doe er een zwierige staart aan zodat hij kan zwemmen."],["Een blij oog","En één blij, helder oog."]],
+    flower:[["Een klein hartje","Begin met een klein cirkeltje in het midden."],["Zachte ronde blaadjes","Nu zachte ronde blaadjes, helemaal rondom."],["Een lange steel","Een lange groene steel naar beneden."],["Eén blad","En één blij blaadje."]],
+    car:[["De auto","Teken het lange lijf van de auto."],["Een klein dak","Doe er een klein dakje bovenop."],["Twee ronde wielen","Twee ronde wielen, zodat hij kan rijden."]],
+    rocket:[["Een hoge raket","Teken een hoge raket, helemaal omhoog."],["Twee vinnen","Twee vinnen aan de zijkanten, voor de stabiliteit."],["Een rond raampje","Een rond raampje om de sterren te zien."],["Een klein vlammetje","En een klein vlammetje, klaar om te gaan."]],
+    apple:[["Een ronde appel","Teken een mooie ronde appel."],["Een klein steeltje","Een klein steeltje bovenop."],["Eén groen blad","En één groen blaadje ernaast."]],
+    happy:[["Een groot rond gezicht","Maak een groot rond gezicht."],["Twee ogen","Twee ogen, die recht naar je kijken."],["Een brede glimlach","En een brede, warme glimlach."]],
+    star:[["Trek de ster na","Volg de ster, punt voor punt."],["Een paar fonkels","Doe er een paar kleine fonkels omheen."]],
+    monster:[["Een zacht rond lijf","Teken een zacht, rond, mollig lijf."],["Eén groot oog","Geef hem één groot, vriendelijk oog."],["Twee zwaaiende armen","Twee golvende armen, om hallo te zwaaien."],["Een beetje haar","En een beetje haar bovenop."]],
+  },
+  es: {
+    sun:[["Un círculo grande","Empezamos con un círculo grande y redondo. Sin prisa."],["Rayos hacia afuera","Ahora dibuja rayos hacia afuera, como el sol."],["Una sonrisa suave","Y una sonrisa suave abajo."]],
+    cat:[["Una cabeza redonda","Haz una cabeza redonda para el gato. Despacio y firme."],["Dos orejas puntiagudas","Dos orejas puntiagudas, justo arriba."],["Dos ojitos","Ahora dos ojitos para que el gato te vea."],["Bigotes largos","Y unos bigotes largos y suaves."]],
+    fish:[["Un cuerpo redondo","Dibuja un cuerpo redondo de pez."],["Una cola ondulada","Añade una cola ondulada para que nade."],["Un ojo brillante","Y un ojo brillante y feliz."]],
+    flower:[["Un centro pequeño","Empieza con un círculo pequeño en el centro."],["Pétalos redondos","Ahora pétalos suaves y redondos, alrededor."],["Un tallo alto","Un tallo verde y alto, hacia abajo."],["Una hoja","Y una hoja feliz."]],
+    car:[["El coche","Dibuja el cuerpo largo del coche."],["Un techo","Pon un techito encima."],["Dos ruedas redondas","Dos ruedas redondas para que ruede."]],
+    rocket:[["Un cohete alto","Dibuja un cohete alto, hasta arriba."],["Dos aletas","Dos aletas a los lados para mantenerlo firme."],["Una ventana redonda","Una ventana redonda para ver las estrellas."],["Una llamita","Y una llamita, lista para despegar."]],
+    apple:[["Una manzana redonda","Dibuja una manzana bien redonda."],["Un tallito","Un tallito arriba."],["Una hoja verde","Y una hoja verde al lado."]],
+    happy:[["Una cara redonda","Haz una cara grande y redonda."],["Dos ojos","Dos ojos, que te miran a ti."],["Una gran sonrisa","Y una sonrisa amplia y cálida."]],
+    star:[["Traza la estrella","Sigue la estrella, punta por punta."],["Unos destellos","Añade unos destellos pequeños alrededor."]],
+    monster:[["Un cuerpo blandito","Dibuja un cuerpo blandito y redondo."],["Un ojo grande","Dale un ojo grande y amable."],["Dos brazos ondulados","Dos brazos ondulados, para saludar."],["Un poco de pelo","Y un poco de pelo arriba."]],
+  },
+};
+const CAT_NAMES = {
+  nl:{ writing:"Letters met Buddy", animals:"Dieren", vehicles:"Voertuigen",
+       food:"Lekker eten", faces:"Gezichten", nature:"Buiten", space:"De ruimte",
+       monsters:"Lieve monsters" },
+  en:{ writing:"Letters with Buddy", animals:"Animals", vehicles:"Things That Go",
+       food:"Good Food", faces:"Faces & Feelings", nature:"Outside", space:"Up in Space",
+       monsters:"Friendly Monsters" },
+  es:{ writing:"Letras con Buddy", animals:"Animales", vehicles:"Vehículos",
+       food:"Comida rica", faces:"Caras", nature:"Naturaleza", space:"El espacio",
+       monsters:"Monstruos amables" },
+};
+const DRAW_NAMES = {
+  nl:{ sun:"De zon", cat:"Een kat", fish:"Een vis", flower:"Een bloem", car:"Een auto",
+       rocket:"Een raket", apple:"Een appel", happy:"Een blij gezicht", star:"Een ster",
+       monster:"Een lief monster" },
+  en:{ sun:"The Sun", cat:"A Cat", fish:"A Fish", flower:"A Flower", car:"A Car",
+       rocket:"A Rocket", apple:"An Apple", happy:"A Happy Face", star:"A Star",
+       monster:"A Friendly Monster" },
+  es:{ sun:"El sol", cat:"Un gato", fish:"Un pez", flower:"Una flor", car:"Un coche",
+       rocket:"Un cohete", apple:"Una manzana", happy:"Una cara feliz", star:"Una estrella",
+       monster:"Un monstruo amable" },
+};
+const LC = () => I18N[S.lang] ? S.lang : "en";
+function t(k) { const o = I18N[LC()]; return (o && o[k] !== undefined) ? o[k] : I18N.en[k]; }
+// Display name for a drawing (writing words stay as-is, e.g. "MAMA").
+const drawName = d => (d.id && d.id.startsWith("word_")) ? d.name
+  : ((DRAW_NAMES[LC()] || DRAW_NAMES.en)[d.id] || d.name);
+// random localized line, {n} -> child name
+const rnd = (k, n) => rand(t(k)).replace(/\{n\}/g, n || S.name);
+const catName = id => (CAT_NAMES[LC()] || CAT_NAMES.en)[id] || id;
+// Localized {tip, say} for any step. Writing builds from templates; other
+// drawings use the per-language STEP_T table, English from the data.
+function stepText(D, i) {
+  const st = D.steps[i];
+  if (D.id && D.id.startsWith("word_")) {
+    return st._w
+      ? { tip: t("wholeWordTip"), say: t("wholeWordSay")(st._w) }
+      : { tip: t("letterTip")(st._c), say: t("letterSay")(st._c) };
+  }
+  const tbl = STEP_T[LC()];
+  if (tbl && tbl[D.id] && tbl[D.id][i]) return { tip: tbl[D.id][i][0], say: tbl[D.id][i][1] };
+  return { tip: st.tip, say: st.say };
+}
 
 const DRAWINGS = [
   { id:"sun", name:"The Sun", category:"nature", accent:"var(--ochre)", finale:"spin", steps:[
@@ -632,11 +871,10 @@ function letterSteps(word) {
   const steps = chars.map(ch => {
     const g = GLYPH[ch];
     const P = placeGlyph(g, 7.2, 720, 500);
-    return {
-      tip: `The letter “${ch}”`, icon: "write",
-      say: `Let's trace the letter ${ch.toUpperCase()}. Go nice and slow, just like Papa shows you.`,
-      d: g.d(P),
-    };
+    // _c carries the letter so text can be localized at render time.
+    return { _c: ch, icon: "write", tip: `The letter "${ch}"`,
+      say: `Let's trace the letter ${ch}. Go nice and slow, just like Papa shows you.`,
+      d: g.d(P) };
   });
   // Final step: the whole word together, scaled to fit the width.
   const gap = 10;
@@ -648,7 +886,7 @@ function letterSteps(word) {
     all.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s }));
     x += (g.b[2] - g.b[0] + gap) * s;
   });
-  steps.push({ tip: "The whole word", icon: "write",
+  steps.push({ _w: word, icon: "write", tip: "The whole word",
     say: `Now the whole word. You are writing ${word}. You can do it!`, d: all });
   return steps;
 }
@@ -707,15 +945,25 @@ window.addEventListener("pointerdown", function once() {
 
 /* ----- 10. Splash / onboarding ----------------------------------------- */
 function Splash() {
-  const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:28px;gap:18px" });
+  const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:24px;gap:14px" });
   s.append(
-    el("div", { cls: "float", html: Buddy("happy", 168) }),
+    el("div", { cls: "float", html: Buddy("happy", 150) }),
     el("div", { cls: "t-display", textContent: "Scribble Heroes" }),
-    el("div", { cls: "t-body muted", textContent: "Made by Papa - for Lucy & Josh" }),
+    el("div", { cls: "t-body muted", textContent: t("madeBy") }),
   );
-  const card = el("div", { cls: "card", css: "padding:24px;width:min(540px,92vw);display:flex;flex-direction:column;gap:14px;margin-top:6px;text-align:left" });
+  // Language picker (Dutch / English / Spanish) - re-renders the splash.
+  const langRow = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px;border:1px solid var(--line)" });
+  LANGS.forEach(([code, label]) => {
+    const on = S.lang === code;
+    const b = el("button", { textContent: label,
+      css: `flex:1;padding:11px 8px;border-radius:9px;font-weight:800;border:none;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--cream)" : "var(--ink-soft)"}` });
+    b.onclick = () => { S.lang = code; save(); Sound.fx.tap(); buzz(12); Splash(); };
+    langRow.append(b);
+  });
+  s.append(langRow);
+  const card = el("div", { cls: "card", css: "padding:22px;width:min(540px,92vw);display:flex;flex-direction:column;gap:14px;margin-top:2px;text-align:left" });
 
-  const input = el("input", { id: "nm", placeholder: "Type a name", maxLength: 14,
+  const input = el("input", { id: "nm", placeholder: t("typeName"), maxLength: 14,
     css: "font:inherit;font-size:22px;font-weight:800;padding:15px 18px;border-radius:16px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
 
   let age = 2;
@@ -743,24 +991,24 @@ function Splash() {
   profRow.append(prof("Lucy", 2022, 11, 30), prof("Josh", 2024, 12, 16));
 
   const start = el("button", { cls: "btn btn-go t-head", css: "margin-top:2px",
-    html: `Start ${ic("next", 22, "#fff")}` });
+    html: `${t("start")} ${ic("next", 22, "#fff")}` });
   start.onclick = () => {
     S.name = (input.value || "friend").trim().slice(0, 14);
     S.age = age; S.onboarded = true; save();
     Sound.fx.win(); buzz([18, 30]); maybeInstall(); go("home");
   };
   card.append(
-    el("div", { cls: "t-label", textContent: "Who is playing?" }),
+    el("div", { cls: "t-label", textContent: t("whoPlaying") }),
     profRow,
-    el("div", { cls: "t-label", textContent: "or type a name" }),
+    el("div", { cls: "t-label", textContent: t("orType") }),
     input,
-    el("div", { cls: "t-label", textContent: "How old are you?" }),
+    el("div", { cls: "t-label", textContent: t("howOld") }),
     seg,
     start,
   );
   s.append(card);
   APP.append(s);
-  setTimeout(() => speak("Hello, I'm Buddy. Are you Lucy, or Josh? Tap your name to begin."), 600);
+  setTimeout(() => speak(t("splashIntro")), 600);
 }
 let _install;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); _install = e; });
@@ -774,8 +1022,8 @@ function Home() {
   top.append(
     el("div", { id: "buddy", "data-size": 76, html: Buddy("warm", 76) }),
     el("div", { css: "flex:1", html:
-      `<div class="t-title">Hello, ${S.name}</div>
-       <div class="t-body muted">What would you like to draw?</div>` }),
+      `<div class="t-title">${t("hello")(S.name)}</div>
+       <div class="t-body muted">${t("whatDraw")}</div>` }),
   );
   const stat = el("div", { cls: "card", css: "display:flex;gap:18px;padding:12px 18px;align-items:center;font-weight:800" });
   const pill = (icon, n, c) => `<span style="display:inline-flex;align-items:center;gap:7px;color:var(--ink)">${ic(icon, 20, c)} ${n}</span>`;
@@ -787,7 +1035,7 @@ function Home() {
   CATEGORIES.forEach(cat => {
     const items = DRAWINGS.filter(d => d.category === cat.id);
     if (!items.length) return;
-    wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: cat.name }));
+    wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: catName(cat.id) }));
     const grid = el("div", { cls: "grid" });
     items.forEach(d => {
       const stars = S.completed[d.id];
@@ -795,7 +1043,7 @@ function Home() {
         css: "padding:18px 16px;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;background:var(--surface)" });
       c.innerHTML =
         `<div style="background:var(--surface-2);border-radius:20px;padding:14px">${ART(d.id, 76)}</div>
-         <div class="t-head">${d.name}</div>` +
+         <div class="t-head">${drawName(d)}</div>` +
         (stars ? `<div style="position:absolute;top:12px;right:12px;display:flex;gap:2px">${
           Array.from({ length: stars }, () => ic("star", 16, "var(--ochre)")).join("")}</div>` : "");
       c.onclick = () => { Sound.fx.tap(); buzz(14); go("draw", d.id); };
@@ -805,7 +1053,7 @@ function Home() {
   });
   s.append(wrap, nav("home"));
   APP.append(s);
-  buddySay("warm", `Hello ${S.name}. Pick something you'd like to draw.`);
+  buddySay("warm", t("buddyHome")(S.name));
 }
 
 function nav(active) {
@@ -818,18 +1066,18 @@ function nav(active) {
     return b;
   };
   bar.append(
-    mk("Draw", "brush", () => go("free"), "free"),
-    mk("Gallery", "gallery", () => go("gallery"), "gallery"),
-    mk("Stickers", "sticker", () => go("stickers"), "stickers"),
+    mk(t("nDraw"), "brush", () => go("free"), "free"),
+    mk(t("nGallery"), "gallery", () => go("gallery"), "gallery"),
+    mk(t("nStickers"), "sticker", () => go("stickers"), "stickers"),
   );
   // Parent-only: hold 800ms (toddlers tap, adults hold).
   const g = el("button", { css: "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-radius:16px;font-weight:800;font-size:12px;color:var(--ink-soft)" });
-  g.innerHTML = ic("gear", 23, "var(--ink-soft)") + "<span>Grown-ups</span>";
+  g.innerHTML = ic("gear", 23, "var(--ink-soft)") + `<span>${t("nGrown")}</span>`;
   let hold;
   g.addEventListener("pointerdown", () => hold = setTimeout(() => { Sound.fx.soft(); buzz(30); go("settings"); }, 800));
   const cancel = () => clearTimeout(hold);
   g.addEventListener("pointerup", cancel); g.addEventListener("pointerleave", cancel);
-  g.addEventListener("click", () => speak("Grown-ups, press and hold this to open settings."));
+  g.addEventListener("click", () => speak(t("grownHint")));
   bar.append(g);
   return bar;
 }
@@ -1025,7 +1273,7 @@ function DrawScreen(id) {
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
   back.onclick = () => { Sound.fx.tap(); go("home"); };
   head.append(back,
-    el("div", { css: "flex:1", html: `<div class="t-title">${D.name}</div>` }),
+    el("div", { css: "flex:1", html: `<div class="t-title">${drawName(D)}</div>` }),
     muteBtn(),
     el("div", { id: "buddy", "data-size": 44, html: Buddy("happy", 44) }));
   s.append(head);
@@ -1045,11 +1293,7 @@ function DrawScreen(id) {
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(86vw,560px);margin:auto" });
   sw.append(stage); s.append(sw);
   const engine = makeEngine(stage, { onStroke: () => {
-    if (Math.random() < .4) buddySay("happy", rand([
-      "That's it. Keep going.", "I see your line growing.",
-      "Nice and slow. Lovely.", "You're really working hard.",
-      "Good. Take all the time you need.",
-    ]));
+    if (Math.random() < .4) buddySay("happy", rnd("encourage"));
   }});
   // Writing lessons: fine pen, no brush chooser, thinner ghost guide.
   if (D.pen) {
@@ -1070,27 +1314,27 @@ function DrawScreen(id) {
   };
   const helpers = el("div", { css: "display:flex;gap:8px;padding:4px 16px 0" });
   helpers.append(
-    mk("help", "Show me", () => { engine.helpMe(); speak("Watch the dot, then you try. There's no rush."); }),
-    mk("undo", "Undo", () => engine.undo()),
-    mk("eraser", "Clear", () => { engine.clear(); engine.setGhost(steps[i].d); }),
+    mk("help", t("showMe"), () => { engine.helpMe(); speak(t("showMeSay")); }),
+    mk("undo", t("undo"), () => engine.undo()),
+    mk("eraser", t("clear"), () => { engine.clear(); engine.setGhost(steps[i].d); }),
   );
-  const next = mk("next", "Next", () => advance(), { primary: true });
+  const next = mk("next", t("next"), () => advance(), { primary: true });
   const nextWrap = el("div", { css: "padding:6px 16px calc(10px + env(safe-area-inset-bottom))" });
   nextWrap.append(next);
   s.append(helpers, nextWrap);
   APP.append(s);
 
   function show() {
-    const stp = steps[i];
+    const stp = steps[i], L = stepText(D, i);
     prog.firstChild.style.width = (i / steps.length) * 100 + "%";
-    pNum.textContent = `Step ${i + 1} of ${steps.length}`;
+    pNum.textContent = t("stepOf")(i + 1, steps.length);
     $("#sIcon").innerHTML = ic(stp.icon, 26, D.accent);
-    const tip = $("#sTip"); tip.textContent = stp.tip;
+    const tip = $("#sTip"); tip.textContent = L.tip;
     tip.classList.remove("pop"); void tip.offsetWidth; tip.classList.add("pop");
     if (D.clearEachStep) engine.clear(); // each letter starts on a fresh sheet
     engine.setGhost(stp.d);
-    next.querySelector("span").textContent = (i === steps.length - 1) ? "All done" : "Next";
-    buddySay("happy", stp.say);
+    next.querySelector("span").textContent = (i === steps.length - 1) ? t("allDone") : t("next");
+    buddySay("happy", L.say);
     setTimeout(() => engine.playDemo(), 800);
   }
   const scores = [];
@@ -1099,18 +1343,10 @@ function DrawScreen(id) {
     const ok = scores[i] >= engine.cfg.pass;
     if (ok) {
       Sound.fx.step(); burst(.3);
-      buddySay("happy", rand([
-        `That looks wonderful, ${S.name}.`,
-        `You drew that all by yourself. Well done.`,
-        `Look at the marks you made. Really good work.`,
-      ]));
+      buddySay("happy", rnd("praiseOk"));
     } else {
       Sound.fx.soft();
-      buddySay("warm", rand([
-        `Every mark you make is good, ${S.name}. Let's keep going.`,
-        `There's no wrong way to draw. On to the next part.`,
-        `I like how you did that. Let's carry on.`,
-      ]));
+      buddySay("warm", rnd("praiseSoft"));
     }
     prog.firstChild.style.width = ((i + 1) / steps.length) * 100 + "%";
     i++;
@@ -1126,7 +1362,7 @@ function DrawScreen(id) {
     if (!S.stickers.includes(D.id)) S.stickers.push(D.id);
     if (S.stars > S.buddyLevel * 8) S.buddyLevel++;
     save();
-    await galleryAdd({ id: Date.now(), name: D.name, art: D.id, blob });
+    await galleryAdd({ id: Date.now(), name: drawName(D), art: D.id, blob });
     go("win", { D, stars, blob });
   }
   show();
@@ -1136,7 +1372,7 @@ function DrawScreen(id) {
 function WinScreen({ D, stars, blob }) {
   const s = el("div", { cls: "screen", css: "align-items:center;justify-content:flex-start;text-align:center;padding:24px;gap:14px;overflow-y:auto" });
   const url = URL.createObjectURL(blob);
-  s.append(el("div", { cls: "t-display", textContent: `You did it, ${S.name}` }));
+  s.append(el("div", { cls: "t-display", textContent: t("winTitle")(S.name) }));
   const starsRow = el("div", { css: "display:flex;gap:6px",
     html: Array.from({ length: 3 }, (_, k) =>
       ic("star", 30, k < stars ? "var(--ochre)" : "rgba(52,48,42,.18)")).join("") });
@@ -1147,7 +1383,7 @@ function WinScreen({ D, stars, blob }) {
     css: "width:min(62vw,280px);border-radius:14px;display:block" }));
   s.append(fin, frame);
   s.append(el("div", { cls: "bubble t-body", css: "margin-top:14px",
-    textContent: `You earned the ${D.name} sticker.` }));
+    textContent: t("winSticker")(drawName(D)) }));
 
   const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px" });
   const mk = (icon, label, fn, kind) => {
@@ -1157,17 +1393,18 @@ function WinScreen({ D, stars, blob }) {
     return b;
   };
   const list = DRAWINGS, nxt = list[(list.findIndex(x => x.id === D.id) + 1) % list.length];
+  const fname = drawName(D).replace(/[^\w]+/g, "_");
   row.append(
-    mk("undo", "Draw again", () => go("draw", D.id)),
-    mk("next", "Next drawing", () => go("draw", nxt.id), "btn-go"),
-    mk("gallery", "Gallery", () => go("gallery")),
-    mk("share", "Share", async () => {
-      const f = new File([blob], `${D.name}.png`, { type: "image/png" });
+    mk("undo", t("drawAgain"), () => go("draw", D.id)),
+    mk("next", t("nextDrawing"), () => go("draw", nxt.id), "btn-go"),
+    mk("gallery", t("nGallery"), () => go("gallery")),
+    mk("share", t("share"), async () => {
+      const f = new File([blob], `${fname}.png`, { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [f] }))
-        navigator.share({ files: [f], title: "My drawing" }).catch(() => {});
-      else el("a", { href: url, download: `${D.name}.png` }).click();
+        navigator.share({ files: [f], title: "Scribble Heroes" }).catch(() => {});
+      else el("a", { href: url, download: `${fname}.png` }).click();
     }),
-    mk("home", "Home", () => go("home")),
+    mk("home", t("home"), () => go("home")),
   );
   s.append(row);
   APP.append(s);
@@ -1175,11 +1412,7 @@ function WinScreen({ D, stars, blob }) {
   Sound.fx.win(); buzz([20, 40, 20]); burst(1);
   finale($("#fin"), D.finale);
   setTimeout(() => Sound.fx.sticker(), 1300);
-  setTimeout(() => speak(rand([
-    `That's really good work, ${S.name}. You stayed with it the whole way, and you made something all your own.`,
-    `Look what you made, ${S.name}. You used your own hands and your own ideas. I'm proud of you.`,
-    `Well done, ${S.name}. Drawing takes patience, and you had plenty of it today.`,
-  ])), 700);
+  setTimeout(() => speak(rnd("winPraise")), 700);
 }
 function finale(node, kind) {
   if (!node || S.settings.calm) return;
@@ -1203,12 +1436,12 @@ function burst(scale = 1) {
 /* ----- 15. Gallery ----------------------------------------------------- */
 async function GalleryScreen() {
   const s = el("div", { cls: "screen" });
-  s.append(header("Gallery"));
+  s.append(header(t("galleryTitle")));
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
   const items = await galleryAll();
   if (!items.length) {
     wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-top:48px",
-      textContent: "Nothing here yet. Finish a drawing and it will be saved here." }));
+      textContent: t("galleryEmpty") }));
   } else {
     const grid = el("div", { cls: "grid" });
     items.forEach(rec => {
@@ -1235,10 +1468,10 @@ async function GalleryScreen() {
 /* ----- 16. Sticker book ------------------------------------------------ */
 function StickerScreen() {
   const s = el("div", { cls: "screen" });
-  s.append(header("Stickers"));
+  s.append(header(t("stickersTitle")));
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
   wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-bottom:12px",
-    textContent: `${S.stickers.length} of ${DRAWINGS.length} collected` }));
+    textContent: t("stickersCount")(S.stickers.length, DRAWINGS.length) }));
   const grid = el("div", { cls: "grid" });
   DRAWINGS.forEach(d => {
     const have = S.stickers.includes(d.id);
@@ -1246,10 +1479,10 @@ function StickerScreen() {
     c.innerHTML = have ? ART(d.id, 78)
       : `<div style="filter:grayscale(1) opacity(.5)">${ART(d.id, 78)}</div>`;
     c.onclick = () => {
-      if (!have) { speak(`Draw the ${d.name.toLowerCase()} to earn this sticker.`); return; }
+      if (!have) { speak(t("stickerLocked")(drawName(d))); return; }
       Sound.fx.sticker(); buzz(26);
       c.classList.remove("nudge"); void c.offsetWidth; c.classList.add("nudge");
-      speak(`This is your ${d.name} sticker. You earned it.`);
+      speak(t("stickerEarned")(drawName(d)));
     };
     grid.append(c);
   });
@@ -1261,18 +1494,13 @@ function StickerScreen() {
 /* ----- 17. Free draw --------------------------------------------------- */
 function FreeDraw() {
   const s = el("div", { cls: "screen" });
-  s.append(header("Free Draw"));
+  s.append(header(t("freeTitle")));
   const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(90vw,620px);margin:auto" });
   sw.append(stage); s.append(sw);
   let n = 0;
   const engine = makeEngine(stage, { onStroke: () => {
-    if (++n % 5 === 0) speak(rand([
-      "I like the colours you're choosing.",
-      "You can draw anything you imagine here.",
-      "That's lovely. Keep going.",
-      "It's all yours. There's no wrong way.",
-    ])); }});
+    if (++n % 5 === 0) speak(rnd("freeEncourage")); }});
   s.append(toolbar(engine));
   const row = el("div", { css: "display:flex;gap:10px;padding:6px 18px calc(14px + env(safe-area-inset-bottom))" });
   const mk = (icon, label, fn, kind) => {
@@ -1281,33 +1509,47 @@ function FreeDraw() {
     b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); }; return b;
   };
   row.append(
-    mk("undo", "Undo", () => engine.undo()),
-    mk("eraser", "Clear", () => engine.clear()),
-    mk("save", "Save", async () => {
+    mk("undo", t("undo"), () => engine.undo()),
+    mk("eraser", t("clear"), () => engine.clear()),
+    mk("save", t("save"), async () => {
       const blob = await engine.toPNG();
-      await galleryAdd({ id: Date.now(), name: "Free Draw", art: "star", blob });
+      await galleryAdd({ id: Date.now(), name: t("freeTitle"), art: "star", blob });
       Sound.fx.win(); burst(.5);
-      speak(`I saved that to your gallery, ${S.name}. Good work.`);
+      speak(t("freeSave")(S.name));
     }, "btn-go"),
   );
   s.append(row, nav("free"));
   APP.append(s);
-  buddySay("warm", `This is your space, ${S.name}. Draw whatever you like.`);
+  buddySay("warm", t("freeIntro")(S.name));
 }
 
 /* ----- 18. Settings (parent) ------------------------------------------- */
 function Settings() {
   const s = el("div", { cls: "screen" });
-  s.append(header("For Grown-ups"));
+  s.append(header(t("settingsTitle")));
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
 
-  [["muted", "mute", "Mute all sound"],
-   ["voice", "sound", "Buddy's voice"],
-   ["slowVoice", "slow", "Slower, clearer speech"],
-   ["sound", "sound", "Sound effects"],
-   ["haptics", "buzz", "Gentle vibration"],
-   ["contrast", "contrast", "High-contrast mode"],
-   ["calm", "calm", "Calm mode - less motion & sound"]].forEach(([k, icon, label]) => {
+  // Language selector
+  const langCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
+  langCard.append(el("div", { cls: "t-label", textContent: t("language") }));
+  const lseg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
+  LANGS.forEach(([code, label]) => {
+    const on = S.lang === code;
+    const b = el("button", { textContent: label,
+      css: `flex:1;padding:12px 6px;border-radius:10px;font-weight:800;border:none;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--cream)" : "var(--ink-soft)"}` });
+    b.onclick = () => { S.lang = code; save(); Sound.fx.tap(); buzz(12); Settings(); };
+    lseg.append(b);
+  });
+  langCard.append(lseg);
+  wrap.append(langCard);
+
+  [["muted", "mute", t("setMuted")],
+   ["voice", "sound", t("setVoice")],
+   ["slowVoice", "slow", t("setSlow")],
+   ["sound", "sound", t("setSound")],
+   ["haptics", "buzz", t("setHaptics")],
+   ["contrast", "contrast", t("setContrast")],
+   ["calm", "calm", t("setCalm")]].forEach(([k, icon, label]) => {
     const row = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
     const swh = el("div", { cls: "sw" + (S.settings[k] ? " on" : ""), html: "<i></i>" });
     row.append(el("div", { html: ic(icon, 22, "var(--ink-soft)") }),
@@ -1322,8 +1564,8 @@ function Settings() {
   });
 
   const prof = el("div", { cls: "card", css: "padding:18px;display:flex;flex-direction:column;gap:12px" });
-  prof.append(el("div", { cls: "t-head", html: `Artist: <b>${S.name}</b>` }),
-    el("div", { cls: "t-label", textContent: "Age setting" }));
+  prof.append(el("div", { cls: "t-head", html: `${t("artist")}: <b>${S.name}</b>` }),
+    el("div", { cls: "t-label", textContent: t("ageSetting") }));
   const seg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
   [1, 2, 3, 4, 5].forEach(a => {
     const b = el("button", { textContent: `${a}`,
@@ -1333,9 +1575,9 @@ function Settings() {
   });
   prof.append(seg);
   const reset = el("button", { cls: "btn", css: "background:var(--clay);color:#fff;border-color:transparent;margin-top:4px",
-    html: ic("eraser", 18, "#fff") + "<span>Reset everything</span>" });
+    html: ic("eraser", 18, "#fff") + `<span>${t("reset")}</span>` });
   reset.onclick = async () => {
-    if (confirm("Erase the name, stars, stickers and all saved drawings?")) {
+    if (confirm(t("resetConfirm"))) {
       localStorage.removeItem(SAVE_KEY);
       (await galleryAll()).forEach(r => galleryDel(r.id));
       S = defaultState(); save(); Splash();
@@ -1344,24 +1586,7 @@ function Settings() {
   prof.append(reset);
   wrap.append(prof);
 
-  const note = el("div", { cls: "card", css: "padding:20px;line-height:1.6", html:
-    `<div class="t-title" style="margin-bottom:10px">Why this works</div>
-     <p class="t-body">Scribble Heroes follows a <b>process-over-product</b> approach.
-     The app never corrects or scores your child's drawing. Buddy responds warmly to
-     <i>every</i> mark, because at this age the value is in the <i>doing</i> - the
-     grip, the movement, the choice - not in how the picture turns out.</p>
-     <p class="t-body" style="margin-top:10px">Through play, your child practises:</p>
-     <ul class="t-body" style="margin:8px 0 8px 20px">
-       <li><b>Fine motor control</b> - grip, pressure, hand-eye coordination.</li>
-       <li><b>Sequencing</b> - following short, ordered steps.</li>
-       <li><b>Shape &amp; space</b> - circles, lines, and triangles.</li>
-       <li><b>Confidence</b> - effort-based, descriptive encouragement.</li>
-       <li><b>Language</b> - Buddy names and narrates calmly, slowly if you choose.</li>
-     </ul>
-     <p class="t-body"><b>Tip:</b> sit alongside and describe what you see
-     ("you made a long curvy line") rather than asking "what is it?". Keep sessions
-     short. There are no ads, no accounts, and no tracking - it works fully offline.</p>
-     <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Made with love by Papa, for Lucy &amp; Josh. The “Letters with Buddy” section lets Lucy trace mama, papa, oma, opa and her own name - just like copying your writing on paper.</p>` });
+  const note = el("div", { cls: "card", css: "padding:20px;line-height:1.6", html: t("note") });
   wrap.append(note);
   s.append(wrap);
   APP.append(s);

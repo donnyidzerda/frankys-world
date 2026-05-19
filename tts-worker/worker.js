@@ -26,14 +26,17 @@ export default {
     const text = (searchParams.get("t") || "").slice(0, 300).trim();
     if (!text) return new Response("missing text", { status: 400, headers: CORS });
     const slow = searchParams.get("s") === "1";
+    const LANGS = { nl: "Dutch", en: "English", es: "Spanish" };
+    const lang = LANGS[(searchParams.get("l") || "en").slice(0, 2)] || "English";
 
     if (!env.OPENAI_API_KEY) {
       return new Response("server not configured", { status: 500, headers: CORS });
     }
 
     const instructions =
+      `Language: speak in ${lang} with a natural native ${lang} accent. ` +
       "Voice: a warm, kind, calm preschool teacher speaking to a small " +
-      "child aged one to three. Tone: gentle, encouraging, unhurried, and " +
+      "child aged one to five. Tone: gentle, encouraging, unhurried, and " +
       "loving. " + (slow
         ? "Pace: very slow and clear, with soft pauses between phrases."
         : "Pace: slow and clear, never rushed.");
