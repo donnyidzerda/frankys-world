@@ -201,7 +201,7 @@ const defaultState = () => ({
   name: "", age: 2, onboarded: false, lang: "nl",
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
-    sound: true, haptics: true, contrast: false, calm: false },
+    sound: true, haptics: true, contrast: false, calm: false, limit: "soft" },
 });
 let S = load();
 function load() {
@@ -731,6 +731,100 @@ function stepText(D, i) {
   return { tip: st.tip, say: st.say };
 }
 
+/* ----- 8d. P0: parent gate + screen-time governor + extra strings ------ */
+// Supplemental localized strings merged into I18N (kept here so the big
+// language blocks above stay readable).
+const I18N_X = {
+  nl: {
+    pgTitle:"Even voor de ouders", pgQ:(a,b)=>`Hoeveel is ${a} + ${b}?`,
+    pgWrong:"Niet helemaal. Probeer nog eens.", cancel:"Terug",
+    restTitle:"Tijd voor een pauze", restBody:"Goed gespeeld! Leg de tablet weg en ga lekker op papier tekenen met een echt krijtje.",
+    restMore:"Nog 5 minuten", restDone:"Klaar voor nu", restSay:"Wat heb jij goed je best gedaan. Leg de tablet maar weg en pak een echt krijtje en papier.",
+    bridge:"Pak nu een echt krijtje en papier en maak het zelf na. Dat is het allerbelangrijkste.",
+    setLimit:"Schermtijd", limOff:"Uit", limSoft:"Zachte herinnering", limLock:"Pauze afdwingen",
+  },
+  en: {
+    pgTitle:"Just for grown-ups", pgQ:(a,b)=>`What is ${a} + ${b}?`,
+    pgWrong:"Not quite. Try again.", cancel:"Back",
+    restTitle:"Time for a break", restBody:"Great playing! Put the tablet down and go draw on paper with a real crayon.",
+    restMore:"5 more minutes", restDone:"Done for now", restSay:"You worked so hard. Put the tablet away now, and pick up a real crayon and some paper.",
+    bridge:"Now pick up a real crayon and paper and make it yourself. That is the most important part.",
+    setLimit:"Screen time", limOff:"Off", limSoft:"Gentle reminder", limLock:"Enforce a break",
+  },
+  es: {
+    pgTitle:"Solo para adultos", pgQ:(a,b)=>`¿Cuánto es ${a} + ${b}?`,
+    pgWrong:"Casi. Inténtalo otra vez.", cancel:"Volver",
+    restTitle:"Hora de un descanso", restBody:"¡Bien jugado! Deja la tablet y ve a dibujar en papel con una crayola de verdad.",
+    restMore:"5 minutos más", restDone:"Listo por ahora", restSay:"Trabajaste muchísimo. Deja la tablet y toma una crayola de verdad y papel.",
+    bridge:"Ahora toma una crayola de verdad y papel y hazlo tú. Eso es lo más importante.",
+    setLimit:"Tiempo de pantalla", limOff:"Apagado", limSoft:"Recordatorio suave", limLock:"Forzar un descanso",
+  },
+};
+for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
+
+// Real parent gate: a tiny sum a toddler cannot answer. Resolves cb() on
+// success; used for Settings, "5 more minutes", and reset.
+function parentGate(onPass) {
+  const a = 2 + ((Math.random() * 7) | 0), b = 3 + ((Math.random() * 6) | 0);
+  const ov = el("div", { css: "position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
+  const card = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:14px;text-align:center" });
+  card.append(
+    el("div", { cls: "t-title", textContent: t("pgTitle") }),
+    el("div", { cls: "t-head", textContent: t("pgQ")(a, b) }));
+  const opts = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center" });
+  const answers = new Set([a + b]);
+  while (answers.size < 4) answers.add(a + b + (((Math.random() * 9) | 0) - 4) || 1);
+  [...answers].sort(() => Math.random() - .5).forEach(n => {
+    const x = el("button", { cls: "btn btn-quiet t-head", css: "min-width:64px", textContent: n });
+    x.onclick = () => {
+      if (n === a + b) { ov.remove(); onPass(); }
+      else { Sound.fx.soft(); x.style.background = "var(--clay)"; x.style.color = "#fff"; }
+    };
+    opts.append(x);
+  });
+  const cancel = el("button", { cls: "btn", css: "background:var(--surface-2)", textContent: t("cancel") });
+  cancel.onclick = () => ov.remove();
+  card.append(opts, cancel);
+  ov.append(card); document.body.append(ov);
+}
+
+// Screen-time governor. Soft = dismissible nudge; lock = parent gate to
+// continue; off = disabled. Default soft (set in defaultState).
+let _sessionStart = Date.now(), _resting = false;
+const SESSION_MIN = 12;
+function resetSession() { _sessionStart = Date.now(); _resting = false; }
+function checkSession() {
+  const mode = S.settings.limit || "soft";
+  if (mode === "off" || _resting) return;
+  if (Date.now() - _sessionStart < SESSION_MIN * 60000) return;
+  _resting = true;
+  RestScreen(mode);
+}
+setInterval(checkSession, 20000);
+
+function RestScreen(mode) {
+  try { if (_ttsEl) _ttsEl.pause(); speechSynthesis && speechSynthesis.cancel(); } catch {}
+  APP.innerHTML = "";
+  const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:28px;gap:16px" });
+  s.append(
+    el("div", { cls: "float", html: Buddy("calm", 150) }),
+    el("div", { cls: "t-display", textContent: t("restTitle") }),
+    el("div", { cls: "t-body muted", css: "max-width:440px", textContent: t("restBody") }));
+  const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px" });
+  const more = el("button", { cls: "btn btn-quiet t-head", textContent: t("restMore") });
+  more.onclick = () => parentGate(() => { resetSession(); go("home"); });
+  const done = el("button", { cls: "btn btn-go t-head", textContent: t("restDone") });
+  done.onclick = () => {
+    if (mode === "lock") parentGate(() => { resetSession(); go("home"); });
+    else { resetSession(); go("home"); }
+  };
+  // Soft mode: a single calm dismissal is allowed (it is a nudge, not a wall).
+  row.append(done, more);
+  s.append(row);
+  APP.append(s);
+  buddySay("calm", t("restSay"));
+}
+
 const DRAWINGS = [
   { id:"sun", name:"The Sun", category:"nature", accent:"var(--ochre)", finale:"spin", steps:[
     { tip:"A big round circle", icon:"star", say:"Let's start with a big round circle. Take your time.",
@@ -830,6 +924,11 @@ const DRAWINGS = [
    To add a word: add the letters it needs to GLYPH, then push it to WORDS. */
 const _ln = (P, x1, y1, x2, y2) => `M ${P.x(x1)} ${P.y(y1)} L ${P.x(x2)} ${P.y(y2)}`;
 const _cir = (P, cx, cy, r) => C(P.x(cx), P.y(cy), r * P.s);
+// Ellipse as a path (for round caps that need optical overshoot).
+const _ell = (P, cx, cy, rx, ry) => {
+  const X = P.x(cx), Y = P.y(cy), a = rx * P.s, b = ry * P.s;
+  return `M ${X - a} ${Y} a ${a} ${b} 0 1 0 ${2 * a} 0 a ${a} ${b} 0 1 0 ${-2 * a} 0`;
+};
 
 // Each glyph: adv = advance width, b = used [x0,y0,x1,y1] bounds (for
 // centring + metric scaling), d = strokes drawn through mapper P.
@@ -845,7 +944,7 @@ const GLYPH = {
   J:{ adv:52, b:[10,8,42,78], d:P=>[ `M ${P.x(40)} ${P.y(8)} L ${P.x(40)} ${P.y(58)} Q ${P.x(40)} ${P.y(80)} ${P.x(24)} ${P.y(78)} Q ${P.x(12)} ${P.y(76)} ${P.x(12)} ${P.y(60)}` ] },
   L:{ adv:54, b:[15,8,50,78], d:P=>[ `M ${P.x(15)} ${P.y(8)} L ${P.x(15)} ${P.y(78)} L ${P.x(50)} ${P.y(78)}` ] },
   M:{ adv:68, b:[10,8,58,78], d:P=>[ `M ${P.x(10)} ${P.y(78)} L ${P.x(10)} ${P.y(8)} L ${P.x(34)} ${P.y(56)} L ${P.x(58)} ${P.y(8)} L ${P.x(58)} ${P.y(78)}` ] },
-  O:{ adv:64, b:[4,12,60,74], d:P=>[ _cir(P,32,43,28) ] },
+  O:{ adv:64, b:[2,6,62,80], d:P=>[ _ell(P,32,43,30,37) ] },
   P:{ adv:56, b:[14,8,54,78], d:P=>[ _ln(P,14,78,14,8),
         `M ${P.x(14)} ${P.y(8)} L ${P.x(38)} ${P.y(8)} Q ${P.x(54)} ${P.y(8)} ${P.x(54)} ${P.y(26)} Q ${P.x(54)} ${P.y(44)} ${P.x(38)} ${P.y(44)} L ${P.x(14)} ${P.y(44)}` ] },
   S:{ adv:56, b:[8,8,48,78], d:P=>[ `M ${P.x(46)} ${P.y(20)} Q ${P.x(30)} ${P.y(6)} ${P.x(18)} ${P.y(20)} Q ${P.x(8)} ${P.y(34)} ${P.x(28)} ${P.y(42)} Q ${P.x(48)} ${P.y(50)} ${P.x(46)} ${P.y(64)} Q ${P.x(40)} ${P.y(80)} ${P.x(16)} ${P.y(70)}` ] },
@@ -1074,7 +1173,7 @@ function nav(active) {
   const g = el("button", { css: "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-radius:16px;font-weight:800;font-size:12px;color:var(--ink-soft)" });
   g.innerHTML = ic("gear", 23, "var(--ink-soft)") + `<span>${t("nGrown")}</span>`;
   let hold;
-  g.addEventListener("pointerdown", () => hold = setTimeout(() => { Sound.fx.soft(); buzz(30); go("settings"); }, 800));
+  g.addEventListener("pointerdown", () => hold = setTimeout(() => { Sound.fx.soft(); buzz(30); parentGate(() => go("settings")); }, 1000));
   const cancel = () => clearTimeout(hold);
   g.addEventListener("pointerup", cancel); g.addEventListener("pointerleave", cancel);
   g.addEventListener("click", () => speak(t("grownHint")));
@@ -1384,6 +1483,9 @@ function WinScreen({ D, stars, blob }) {
   s.append(fin, frame);
   s.append(el("div", { cls: "bubble t-body", css: "margin-top:14px",
     textContent: t("winSticker")(drawName(D)) }));
+  // Off-screen bridge: push the child back to real paper (panel P0).
+  s.append(el("div", { cls: "t-body muted", css: "max-width:440px;margin-top:4px",
+    textContent: t("bridge") }));
 
   const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px" });
   const mk = (icon, label, fn, kind) => {
@@ -1413,6 +1515,7 @@ function WinScreen({ D, stars, blob }) {
   finale($("#fin"), D.finale);
   setTimeout(() => Sound.fx.sticker(), 1300);
   setTimeout(() => speak(rnd("winPraise")), 700);
+  setTimeout(() => speak(t("bridge")), 5200); // gentle nudge back to paper
 }
 function finale(node, kind) {
   if (!node || S.settings.calm) return;
@@ -1429,7 +1532,7 @@ function finale(node, kind) {
 function burst(scale = 1) {
   if (S.settings.calm || typeof confetti !== "function") return;
   confetti({ particleCount: Math.round(90 * scale), spread: 78, origin: { y: .62 },
-    colors: ["#C9633F", "#D89A36", "#6E8C5E", "#5E8AA0", "#CF8585", "#7C6C90"],
+    colors: COLORS, // single tokenized palette (matches the crayons)
     scalar: 1.05, disableForReducedMotion: true, ticks: 160 });
 }
 
@@ -1542,6 +1645,20 @@ function Settings() {
   });
   langCard.append(lseg);
   wrap.append(langCard);
+
+  // Screen-time governor
+  const limCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
+  limCard.append(el("div", { cls: "t-label", textContent: t("setLimit") }));
+  const limSeg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
+  [["off", t("limOff")], ["soft", t("limSoft")], ["lock", t("limLock")]].forEach(([v, label]) => {
+    const on = (S.settings.limit || "soft") === v;
+    const b = el("button", { textContent: label,
+      css: `flex:1;padding:12px 6px;border-radius:10px;font-weight:800;border:none;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--cream)" : "var(--ink-soft)"}` });
+    b.onclick = () => { S.settings.limit = v; save(); Sound.fx.tap(); buzz(12); resetSession(); Settings(); };
+    limSeg.append(b);
+  });
+  limCard.append(limSeg);
+  wrap.append(limCard);
 
   [["muted", "mute", t("setMuted")],
    ["voice", "sound", t("setVoice")],
