@@ -1385,6 +1385,9 @@ window.addEventListener("pointerdown", function once() {
 
 /* ----- 10. Splash / onboarding ----------------------------------------- */
 function Splash() {
+  APP.innerHTML = ""; // Splash is called directly (lang switch, add child,
+                      // reset) - clear like go() so screens never stack.
+  applyFlags();
   const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:24px;gap:14px" });
   s.append(
     el("div", { cls: "float", html: Buddy("happy", 150) }),
@@ -1960,6 +1963,7 @@ function burst(scale = 1) {
 
 /* ----- 15. Gallery ----------------------------------------------------- */
 async function GalleryScreen() {
+  APP.innerHTML = ""; applyFlags(); // called directly after delete - clear
   const s = el("div", { cls: "screen" });
   s.append(header(t("galleryTitle")));
   const wrap = el("div", { cls: "scroll fridge", css: "flex:1;padding:18px 20px 116px;container-type:inline-size" });
@@ -1994,13 +1998,16 @@ async function GalleryScreen() {
 
 /* ----- 16. Sticker book ------------------------------------------------ */
 function StickerScreen() {
+  APP.innerHTML = ""; applyFlags();
   const s = el("div", { cls: "screen" });
   s.append(header(t("stickersTitle")));
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
+  // "Oefenen" (daily practice) is not a collectible sticker - exclude it.
+  const collectible = DRAWINGS.filter(d => d.id !== "review");
   wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-bottom:12px",
-    textContent: t("stickersCount")(S.stickers.length, DRAWINGS.length) }));
+    textContent: t("stickersCount")(S.stickers.length, collectible.length) }));
   const grid = el("div", { cls: "grid" });
-  DRAWINGS.forEach(d => {
+  collectible.forEach(d => {
     const have = S.stickers.includes(d.id);
     const c = el("button", { cls: "card", css: `padding:22px;display:flex;align-items:center;justify-content:center;${have ? "" : "opacity:.4"}` });
     c.innerHTML = have ? ART(d.id, 78)
@@ -2087,6 +2094,7 @@ function FreeDraw() {
 
 /* ----- 18. Settings (parent) ------------------------------------------- */
 function Settings() {
+  APP.innerHTML = ""; applyFlags(); // re-called on lang/age change - clear
   const s = el("div", { cls: "screen" });
   s.append(header(t("settingsTitle")));
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
