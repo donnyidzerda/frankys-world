@@ -93,6 +93,20 @@
   .nudge{ animation:nudge .6s ease; }
   @keyframes nudge{ 0%,100%{transform:rotate(0)} 30%{transform:rotate(-5deg)} 70%{transform:rotate(5deg)} }
   body.calm .float,body.calm .nudge{ animation:none !important; }
+  /* Buddy's world: milestones pop in once when unlocked; gentle ambient
+     motion (sun pulse, cloud drift, bird bob) - all off in calm mode. */
+  .we{ transform-box:fill-box; transform-origin:center bottom; }
+  .we.lock{ opacity:0; }
+  body:not(.calm) .we.new{ animation:wpop .6s cubic-bezier(.2,1.6,.4,1) both; }
+  @keyframes wpop{ 0%{opacity:0;transform:scale(.15)} 60%{opacity:1;transform:scale(1.12)} 100%{transform:scale(1)} }
+  .w-sun{ transform-box:fill-box; transform-origin:center; }
+  .w-cloud,.w-bird{ transform-box:fill-box; }
+  body:not(.calm) .w-sun{ animation:wsun 4.5s ease-in-out infinite; }
+  body:not(.calm) .w-cloud{ animation:wcloud 9s ease-in-out infinite alternate; }
+  body:not(.calm) .w-bird{ animation:wbird 1.7s ease-in-out infinite; }
+  @keyframes wsun{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.07)} }
+  @keyframes wcloud{ from{transform:translateX(-7px)} to{transform:translateX(11px)} }
+  @keyframes wbird{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
 
   /* Speech bubble (Buddy) - soft, paper-like, no harsh outline */
   .bubble{ position:relative; background:var(--surface); color:var(--ink);
@@ -225,7 +239,7 @@ const pKey = id => SAVE_KEY + "::" + id;
 const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
-  caseMode: "upper", review: {}, diff: 1, sayName: "",
+  caseMode: "upper", review: {}, diff: 1, sayName: "", worldSeenStars: 0,
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
     sound: true, haptics: true, contrast: false, calm: false, limit: "soft",
@@ -897,6 +911,8 @@ const I18N_X = {
     sayNameHint:"Schrijf het zoals het klinkt, bijvoorbeeld \"Loesie\" voor Lucy. Op het scherm blijft de echte naam staan.",
     sayNameTry:"Probeer",
     worldTitle:"De wereld van Buddy groeit met je mee",
+    worldNext:n=>`Nog ${n} ${n===1?"ster":"sterren"} tot iets nieuws`,
+    worldDone:"Je wereld is helemaal vol. Knap gedaan!",
     modeDraw:"Tekenen", modeStamp:"Stempel", modeFill:"Vullen", modeMirror:"Spiegel",
     shareApp:"App delen", shareText:"Een rustige, reclamevrije teken-app voor kleintjes.",
     parentSheet:"Ouderblad afdrukken", sheetTitle:"Scribble Heroes - voor de ouder",
@@ -925,6 +941,8 @@ const I18N_X = {
     sayNameHint:"Write it the way it sounds, e.g. \"Loosie\" for Lucy. The real name still shows on screen.",
     sayNameTry:"Try it",
     worldTitle:"Buddy's world grows as you play",
+    worldNext:n=>`${n} more ${n===1?"star":"stars"} until something new`,
+    worldDone:"Your world is full. Wonderful!",
     modeDraw:"Draw", modeStamp:"Stamp", modeFill:"Fill", modeMirror:"Mirror",
     shareApp:"Share app", shareText:"A calm, ad-free drawing app for little ones.",
     parentSheet:"Print parent sheet", sheetTitle:"Scribble Heroes - for the parent",
@@ -953,6 +971,8 @@ const I18N_X = {
     sayNameHint:"Escríbelo como suena, p. ej. \"Lusi\" para Lucy. El nombre real sigue en pantalla.",
     sayNameTry:"Probar",
     worldTitle:"El mundo de Buddy crece al jugar",
+    worldNext:n=>`${n} ${n===1?"estrella":"estrellas"} más para algo nuevo`,
+    worldDone:"¡Tu mundo está completo!",
     modeDraw:"Dibujar", modeStamp:"Sello", modeFill:"Rellenar", modeMirror:"Espejo",
     shareApp:"Compartir app", shareText:"Una app de dibujo tranquila y sin anuncios para los peques.",
     parentSheet:"Imprimir hoja", sheetTitle:"Scribble Heroes - para el adulto",
@@ -1317,20 +1337,29 @@ function shapeArt(key, size) {
 /* ----- 8f. P2: Buddy's growing world (progress arc) -------------------
    A calm scene that gains elements at star milestones. It rewards the
    PARENT's sense of progress without pressuring the child. */
-function worldSVG(stars) {
-  const at = n => stars >= n ? "" : 'opacity="0"';
+const WORLD_STEPS = [3, 6, 10, 15, 22, 32, 45];
+function worldSVG(stars, seen) {
+  const seenN = seen || 0;
+  // Each milestone is a <g class="we">; locked = hidden, just-unlocked
+  // (need > previously-seen) gets "new" so it pops in once. Cloud/bird
+  // have an inner ambient layer so the pop and the drift don't clash.
+  const cell = (need, inner, amb) => {
+    const lock = stars < need, isNew = !lock && need > seenN;
+    const body = amb ? `<g class="${amb}">${inner}</g>` : inner;
+    return `<g class="we${lock ? " lock" : ""}${isNew ? " new" : ""}">${body}</g>`;
+  };
   return `<svg viewBox="0 0 320 96" width="100%" height="92" aria-hidden="true">
     <rect x="0" y="0" width="320" height="96" fill="none"/>
-    <circle cx="40" cy="30" r="15" fill="var(--ochre)"/>
+    <g class="w-sun"><circle cx="40" cy="30" r="15" fill="var(--ochre)"/></g>
     <path d="M0 78 H320" stroke="#cdbb98" stroke-width="2"/>
     <rect x="0" y="80" width="320" height="16" fill="#dfead2"/>
-    <g ${at(3)}><path d="M70 80 V58" stroke="#7a5a3a" stroke-width="5"/><circle cx="70" cy="48" r="16" fill="var(--sage)"/></g>
-    <g ${at(6)}><path d="M120 80 V64" stroke="var(--sage)" stroke-width="3"/><circle cx="120" cy="58" r="7" fill="var(--rose)"/><circle cx="120" cy="58" r="3" fill="var(--ochre)"/></g>
-    <g ${at(10)}><rect x="150" y="56" width="40" height="24" fill="var(--clay)"/><path d="M148 56 L170 40 L192 56 Z" fill="#8a4b34"/><rect x="164" y="64" width="12" height="16" fill="#f4e9d8"/></g>
-    <g ${at(15)}><ellipse cx="245" cy="28" rx="22" ry="11" fill="#ffffff"/><ellipse cx="262" cy="24" rx="14" ry="9" fill="#ffffff"/></g>
-    <g ${at(22)}><path d="M210 34 q6 -6 12 0 q6 -6 12 0" stroke="var(--plum)" stroke-width="3" fill="none" stroke-linecap="round"/></g>
-    <g ${at(32)}><path d="M285 80 V52" stroke="#9aa" stroke-width="2"/><path d="M280 56 Q288 36 296 56 L296 70 H280 Z" fill="var(--plum)"/><path d="M286 70 Q288 80 290 70" fill="var(--ochre)"/></g>
-    <g ${at(45)}><path d="M300 18 l3 6 6 1 -4 5 1 6 -6 -3 -6 3 1 -6 -4 -5 6 -1 z" fill="var(--ochre)"/></g>
+    ${cell(3, '<path d="M70 80 V58" stroke="#7a5a3a" stroke-width="5"/><circle cx="70" cy="48" r="16" fill="var(--sage)"/>')}
+    ${cell(6, '<path d="M120 80 V64" stroke="var(--sage)" stroke-width="3"/><circle cx="120" cy="58" r="7" fill="var(--rose)"/><circle cx="120" cy="58" r="3" fill="var(--ochre)"/>')}
+    ${cell(10, '<rect x="150" y="56" width="40" height="24" fill="var(--clay)"/><path d="M148 56 L170 40 L192 56 Z" fill="#8a4b34"/><rect x="164" y="64" width="12" height="16" fill="#f4e9d8"/>')}
+    ${cell(15, '<ellipse cx="245" cy="28" rx="22" ry="11" fill="#ffffff"/><ellipse cx="262" cy="24" rx="14" ry="9" fill="#ffffff"/>', 'w-cloud')}
+    ${cell(22, '<path d="M210 34 q6 -6 12 0 q6 -6 12 0" stroke="var(--plum)" stroke-width="3" fill="none" stroke-linecap="round"/>', 'w-bird')}
+    ${cell(32, '<path d="M285 80 V52" stroke="#9aa" stroke-width="2"/><path d="M280 56 Q288 36 296 56 L296 70 H280 Z" fill="var(--plum)"/><path d="M286 70 Q288 80 290 70" fill="var(--ochre)"/>')}
+    ${cell(45, '<path d="M300 18 l3 6 6 1 -4 5 1 6 -6 -3 -6 3 1 -6 -4 -5 6 -1 z" fill="var(--ochre)"/>')}
   </svg>`;
 }
 
@@ -1488,11 +1517,18 @@ function Home() {
   top.append(stat, muteBtn());
   s.append(top);
 
-  // Buddy's world: a calm scene that grows as stars are earned.
+  // Buddy's world: grows as stars are earned. New elements pop in once
+  // (compared against the stars seen on the last Home visit). A small
+  // hint shows how many stars until the next surprise.
+  const prevSeen = S.worldSeenStars || 0;
+  const nextStep = WORLD_STEPS.find(x => x > S.stars);
+  const hint = nextStep ? t("worldNext")(nextStep - S.stars) : t("worldDone");
   const world = el("div", { cls: "card", css: "margin:6px 20px 0;padding:10px 12px 6px;background:linear-gradient(180deg,#EAF1F4,#F4EFE2)" });
-  world.innerHTML = worldSVG(S.stars) +
-    `<div class="t-label" style="text-align:center;margin-top:2px">${t("worldTitle")}</div>`;
+  world.innerHTML = worldSVG(S.stars, prevSeen) +
+    `<div class="t-label" style="text-align:center;margin-top:2px">${t("worldTitle")}</div>
+     <div class="t-body muted" style="text-align:center;font-size:13px;margin-top:1px">${hint}</div>`;
   s.append(world);
+  if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
   CATEGORIES.forEach(cat => {
