@@ -240,6 +240,7 @@ const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
   caseMode: "upper", review: {}, diff: 1, sayName: "", worldSeenStars: 0,
+  phonics: true,
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
     sound: true, haptics: true, contrast: false, calm: false, limit: "soft",
@@ -870,12 +871,29 @@ const rnd = (k, n) => rand(t(k)).replace(/\{n\}/g, n || S.name);
 const catName = id => (CAT_NAMES[LC()] || CAT_NAMES.en)[id] || id;
 // Localized {tip, say} for any step. Writing builds from templates; other
 // drawings use the per-language STEP_T table, English from the data.
+// Montessori phonics: a child word per letter, per language. Buddy says
+// the SOUND (the first sound stretched) then the word, instead of the
+// letter name - the way sandpaper letters are taught.
+const SOUND = {
+  nl:{ A:"aap",B:"bal",C:"cake",D:"dak",E:"emmer",F:"fiets",G:"geit",H:"huis",I:"inkt",J:"jas",K:"kat",L:"lamp",M:"maan",N:"neus",O:"oog",P:"pen",Q:"quiz",R:"roos",S:"slang",T:"tas",U:"uil",V:"vis",W:"wiel",X:"xylofoon",Y:"yoghurt",Z:"zon" },
+  en:{ A:"apple",B:"ball",C:"cat",D:"dog",E:"egg",F:"fish",G:"goat",H:"house",I:"igloo",J:"jam",K:"kite",L:"lamp",M:"moon",N:"nose",O:"orange",P:"pen",Q:"queen",R:"rose",S:"sun",T:"top",U:"umbrella",V:"van",W:"web",X:"xylophone",Y:"yoyo",Z:"zebra" },
+  es:{ A:"árbol",B:"bola",C:"casa",D:"dado",E:"elefante",F:"foca",G:"gato",H:"hueso",I:"iglú",J:"jirafa",K:"koala",L:"luna",M:"mano",N:"nube",O:"oso",P:"pato",Q:"queso",R:"rosa",S:"sol",T:"taza",U:"uva",V:"vaca",W:"wifi",X:"xilófono",Y:"yoyo",Z:"zapato" },
+};
+function phonics(L) {
+  const w = (SOUND[LC()] || SOUND.en)[L] || L.toLowerCase();
+  const f = w[0];
+  const stretch = f + f + f + w.slice(1);   // e.g. "mmmaan", "aaappel"
+  const dl = S.caseMode === "lower" ? L.toLowerCase() : L;
+  return { tip: `${dl}  -  ${w}`, say: `${stretch}. ${w}.` };
+}
+
 function stepText(D, i, stp) {
   const st = stp || D.steps[i];
   // Letter / whole-word steps (writing words AND daily practice).
   if (st._c) {
     const L = String(st._c).toUpperCase();
-    return { tip: t("letterTip")(L), say: t("letterSay")(L) };
+    return S.phonics ? phonics(L)
+                     : { tip: t("letterTip")(L), say: t("letterSay")(L) };
   }
   if (st._w) return { tip: t("wholeWordTip"), say: t("wholeWordSay")(st._w) };
   if (D.id && D.id.startsWith("num_")) {
@@ -923,6 +941,8 @@ const I18N_X = {
     sheetLessons:"oefeningen af", sheetActsTitle:"Doe dit samen, weg van het scherm:",
     sheetActs:["Schrijf mama, papa, oma, opa voor en laat het natekenen op papier.","Teken samen vormen in de lucht met je vinger.","Tel hardop tot tien met blokjes of traptreden.","Praat over kleuren tijdens een wandeling.","Laat je kind een tekening aan jou uitleggen."],
     sheetFooter:"Houd sessies kort. Ga ernaast zitten en benoem wat je ziet. Geen advertenties, geen account, werkt offline.",
+    phLabel:"Letters leren via", phSound:"Klank (Montessori)", phName:"Letternaam",
+    phHint:"Klank: Buddy zegt de klank, zoals mmm voor maan (Montessori). Letternaam: Buddy zegt em, es, enzovoort.",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
@@ -953,6 +973,8 @@ const I18N_X = {
     sheetLessons:"lessons done", sheetActsTitle:"Do these together, away from the screen:",
     sheetActs:["Write mama, papa, oma, opa and let them copy it on paper.","Draw shapes in the air together with a finger.","Count to ten out loud using blocks or stairs.","Talk about colours on a walk.","Have your child explain a drawing to you."],
     sheetFooter:"Keep sessions short. Sit alongside and describe what you see. No ads, no account, works offline.",
+    phLabel:"Learn letters by", phSound:"Sound (Montessori)", phName:"Letter name",
+    phHint:"Sound: Buddy says the sound, like mmm for moon (Montessori). Letter name: Buddy says em, es, and so on.",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
@@ -983,6 +1005,8 @@ const I18N_X = {
     sheetLessons:"lecciones hechas", sheetActsTitle:"Haced esto juntos, sin pantalla:",
     sheetActs:["Escribe mama, papa, oma, opa y que lo copie en papel.","Dibujad formas en el aire con el dedo.","Contad hasta diez en voz alta con bloques o escalones.","Hablad de los colores en un paseo.","Que tu hijo te explique un dibujo."],
     sheetFooter:"Sesiones cortas. Siéntate al lado y describe lo que ves. Sin anuncios, sin cuenta, funciona sin conexión.",
+    phLabel:"Aprender letras por", phSound:"Sonido (Montessori)", phName:"Nombre de letra",
+    phHint:"Sonido: Buddy dice el sonido, como mmm de mano (Montessori). Nombre: Buddy dice eme, ese, etc.",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
@@ -2249,6 +2273,21 @@ function Settings() {
   });
   caseCard.append(caseSeg);
   wrap.append(caseCard);
+
+  // Phonics vs letter name (Montessori: teach the sound)
+  const phCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
+  phCard.append(el("div", { cls: "t-label", textContent: t("phLabel") }));
+  const phSeg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
+  [[true, t("phSound")], [false, t("phName")]].forEach(([v, label]) => {
+    const on = !!S.phonics === v;
+    const b = el("button", { textContent: label,
+      css: `flex:1;padding:12px 6px;border-radius:10px;font-weight:800;border:none;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--cream)" : "var(--ink-soft)"}` });
+    b.onclick = () => { S.phonics = v; save(); Sound.fx.tap(); buzz(12); Settings(); };
+    phSeg.append(b);
+  });
+  phCard.append(phSeg);
+  phCard.append(el("div", { cls: "t-body muted", css: "font-size:13px", textContent: t("phHint") }));
+  wrap.append(phCard);
 
   [["muted", "mute", t("setMuted")],
    ["voice", "sound", t("setVoice")],
