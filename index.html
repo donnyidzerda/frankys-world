@@ -1770,7 +1770,7 @@ function DrawScreen(id) {
   const steps = (AGE[S.age].oneStep && !D.pen)
     ? built.slice(0, Math.min(2, built.length)) : built;
   let i = 0;
-  const s = el("div", { cls: "screen play" });
+  const s = el("div", { cls: "screen" });
 
   const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:12px 16px 2px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
@@ -1792,7 +1792,7 @@ function DrawScreen(id) {
     <div id="sTip" class="t-head" style="flex:1"></div>`;
   s.append(banner);
 
-  const sw = el("div", { cls: "sw", css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
+  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:4px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(86vw,560px);margin:auto" });
   sw.append(stage); s.append(sw);
   const engine = makeEngine(stage, { onStroke: () => {
@@ -1815,14 +1815,14 @@ function DrawScreen(id) {
     b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); };
     return b;
   };
-  const helpers = el("div", { css: "display:flex;gap:8px;padding:4px 16px 0" });
+  const helpers = el("div", { css: "display:flex;gap:8px;padding:2px 16px 0" });
   helpers.append(
     mk("help", t("showMe"), () => { engine.helpMe(); speak(t("showMeSay")); }),
     mk("undo", t("undo"), () => engine.undo()),
     mk("eraser", t("clear"), () => { engine.clear(); engine.setGhost(steps[i].d); }),
   );
   const next = mk("next", t("next"), () => advance(), { primary: true });
-  const nextWrap = el("div", { css: "padding:6px 16px calc(10px + env(safe-area-inset-bottom))" });
+  const nextWrap = el("div", { css: "padding:4px 16px calc(6px + env(safe-area-inset-bottom))" });
   nextWrap.append(next);
   s.append(helpers, nextWrap);
   APP.append(s);
@@ -2020,9 +2020,9 @@ function StickerScreen() {
 
 /* ----- 17. Free draw --------------------------------------------------- */
 function FreeDraw() {
-  const s = el("div", { cls: "screen play" });
+  const s = el("div", { cls: "screen" });
   s.append(header(t("freeTitle")));
-  const sw = el("div", { cls: "sw", css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
+  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(90vw,620px);margin:auto" });
   sw.append(stage); s.append(sw);
   let n = 0;
