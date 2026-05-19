@@ -876,6 +876,7 @@ const I18N_X = {
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
     worldTitle:"De wereld van Buddy groeit met je mee",
+    modeDraw:"Tekenen", modeStamp:"Stempel", modeFill:"Vullen", modeMirror:"Spiegel",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
@@ -894,6 +895,7 @@ const I18N_X = {
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
     worldTitle:"Buddy's world grows as you play",
+    modeDraw:"Draw", modeStamp:"Stamp", modeFill:"Fill", modeMirror:"Mirror",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
@@ -912,6 +914,7 @@ const I18N_X = {
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
     worldTitle:"El mundo de Buddy crece al jugar",
+    modeDraw:"Dibujar", modeStamp:"Sello", modeFill:"Rellenar", modeMirror:"Espejo",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
@@ -1533,7 +1536,8 @@ function makeEngine(stage, opts = {}) {
   // actual canvas so strokes look right on small phones (not huge).
   const REF = 560;
 
-  const st = { color: COLORS[0], brush: "crayon", down: false, pts: [], strokes: 0 };
+  const st = { color: COLORS[0], brush: "crayon", down: false, pts: [], strokes: 0,
+    mode: "draw", stamp: "star", mirror: false };
   function style() {
     ctx.strokeStyle = st.color;
     const k = size / REF;
@@ -1556,8 +1560,8 @@ function makeEngine(stage, opts = {}) {
       ctx.arc(x + (Math.random() - .5) * 36, y + (Math.random() - .5) * 36, Math.random() * 3.5 + 1, 0, 7);
       ctx.fill(); ctx.restore(); }
   }
-  function smooth() {
-    const p = st.pts; if (p.length < 3) return;
+  const mir = p => ({ x: size - p.x, y: p.y });   // mirror across centre
+  function curve(p) {
     style(); ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
     for (let i = 1; i < p.length - 1; i++) {
       const mx = (p[i].x + p[i + 1].x) / 2, my = (p[i].y + p[i + 1].y) / 2;
@@ -1566,8 +1570,52 @@ function makeEngine(stage, opts = {}) {
     ctx.stroke();
     if (st.brush === "glow") sparkle(p[p.length - 1].x, p[p.length - 1].y);
   }
+  function smooth() {
+    const p = st.pts; if (p.length < 3) return;
+    curve(p);
+    if (st.mirror) curve(p.map(mir));
+  }
+  const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  function placeStamp(pt) {
+    const g = SHAPES[st.stamp] || SHAPES.star;
+    const sc = size * 0.0034, P = { s: sc, x: v => pt.x - 40 * sc + v * sc, y: v => pt.y - 44 * sc + v * sc };
+    ctx.save(); ctx.fillStyle = st.color; ctx.globalAlpha = .95;
+    g.d(P).forEach(d => ctx.fill(new Path2D(d)));
+    ctx.restore();
+    const draw = () => { if (st.mirror) { const m = { s: sc, x: v => (size - pt.x) - 40 * sc + (80 * sc - v * sc), y: P.y };
+      ctx.save(); ctx.fillStyle = st.color; g.d(m).forEach(d => ctx.fill(new Path2D(d))); ctx.restore(); } };
+    draw();
+    Sound.fx.tap(); buzz(14); opts.onStroke && opts.onStroke(++st.strokes);
+  }
+  function floodFill(pt) {
+    const W = cv.width, H = cv.height;
+    const px = Math.round(pt.x * DPR), py = Math.round(pt.y * DPR);
+    if (px < 0 || py < 0 || px >= W || py >= H) return;
+    const img = ctx.getImageData(0, 0, W, H), d = img.data;
+    const at = (x, y) => (y * W + x) * 4;
+    const s0 = at(px, py), tr = d[s0], tg = d[s0 + 1], tb = d[s0 + 2], ta = d[s0 + 3];
+    const [fr, fg, fb] = hexRGB(st.color);
+    if (Math.abs(fr - tr) + Math.abs(fg - tg) + Math.abs(fb - tb) < 24 && ta === 255) return;
+    const tol = 42, st2 = [px, py], seen = new Uint8Array(W * H);
+    while (st2.length) {
+      const y = st2.pop(), x = st2.pop(), id = y * W + x;
+      if (x < 0 || y < 0 || x >= W || y >= H || seen[id]) continue;
+      const o = id * 4;
+      if (Math.abs(d[o] - tr) > tol || Math.abs(d[o + 1] - tg) > tol ||
+          Math.abs(d[o + 2] - tb) > tol || Math.abs(d[o + 3] - ta) > tol) continue;
+      seen[id] = 1; d[o] = fr; d[o + 1] = fg; d[o + 2] = fb; d[o + 3] = 255;
+      st2.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+    }
+    ctx.putImageData(img, 0, 0);
+    Sound.fx.soft(); buzz(18); opts.onStroke && opts.onStroke(++st.strokes);
+  }
   const xy = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); st.down = true; st.pts = [xy(e)]; Sound.fx.stroke(); });
+  cv.addEventListener("pointerdown", e => {
+    const p = xy(e);
+    if (st.mode === "fill") { floodFill(p); return; }
+    if (st.mode === "stamp") { placeStamp(p); return; }
+    cv.setPointerCapture(e.pointerId); st.down = true; st.pts = [p]; Sound.fx.stroke();
+  });
   cv.addEventListener("pointermove", e => {
     if (!st.down) return;
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
@@ -1577,9 +1625,9 @@ function makeEngine(stage, opts = {}) {
   function end() {
     if (!st.down) return;
     if (st.pts.length < 3 && st.pts[0]) { // a tap still leaves a mark
-      style(); ctx.beginPath();
-      ctx.arc(st.pts[0].x, st.pts[0].y, ctx.lineWidth / 2, 0, 7);
-      ctx.fillStyle = st.color; ctx.fill();
+      style();
+      const dot = q => { ctx.beginPath(); ctx.arc(q.x, q.y, ctx.lineWidth / 2, 0, 7); ctx.fillStyle = st.color; ctx.fill(); };
+      dot(st.pts[0]); if (st.mirror) dot(mir(st.pts[0]));
     }
     st.down = false; st.strokes++; st.pts = [];
     buzz(14); opts.onStroke && opts.onStroke(st.strokes);
@@ -1946,6 +1994,41 @@ function FreeDraw() {
   const engine = makeEngine(stage, { onStroke: () => {
     if (++n % 5 === 0) speak(rnd("freeEncourage")); }});
   s.append(toolbar(engine));
+
+  // Free Draw extras: Draw / Stamp / Fill modes, Mirror, stamp tray.
+  const tools = el("div", { css: "display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:0 14px 2px" });
+  const stampTray = el("div", { css: "display:none;gap:8px;justify-content:center;padding:2px 14px 4px;flex-wrap:wrap" });
+  const modeChip = (m, icon, label) => {
+    const b = el("button", { cls: "chip", html: ic(icon, 18, "var(--ink)") + `<span>${label}</span>` });
+    const paint = () => {
+      [...tools.querySelectorAll(".chip")].forEach(c => { if (c.dataset.m) { c.classList.remove("sel");
+        c.querySelector("svg").setAttribute("stroke", "var(--ink)"); } });
+      if (engine.st.mode === m) { b.classList.add("sel"); b.querySelector("svg").setAttribute("stroke", "var(--cream)"); }
+      stampTray.style.display = engine.st.mode === "stamp" ? "flex" : "none";
+    };
+    b.dataset.m = m;
+    b.onclick = () => { engine.st.mode = m; Sound.fx.tap(); buzz(12);
+      tools._repaint(); };
+    b._paint = paint; return b;
+  };
+  const cD = modeChip("draw", "brush", t("modeDraw"));
+  const cS = modeChip("stamp", "sticker", t("modeStamp"));
+  const cF = modeChip("fill", "save", t("modeFill"));
+  const mirror = el("button", { cls: "chip", html: ic("contrast", 18, "var(--ink)") + `<span>${t("modeMirror")}</span>` });
+  mirror.onclick = () => { engine.st.mirror = !engine.st.mirror; Sound.fx.tap(); buzz(12);
+    mirror.classList.toggle("sel", engine.st.mirror);
+    mirror.querySelector("svg").setAttribute("stroke", engine.st.mirror ? "var(--cream)" : "var(--ink)"); };
+  tools._repaint = () => [cD, cS, cF].forEach(c => c._paint());
+  tools.append(cD, cS, cF, mirror);
+  ["star", "heart", "circle", "triangle", "square"].forEach(k => {
+    const b = el("button", { cls: "btn btn-quiet", css: "padding:8px;border-radius:14px",
+      html: shapeArt(k, 34) });
+    b.onclick = () => { engine.st.stamp = k; engine.st.mode = "stamp"; Sound.fx.tap(); buzz(12); tools._repaint(); };
+    stampTray.append(b);
+  });
+  tools._repaint();
+  s.append(tools, stampTray);
+
   const row = el("div", { css: "display:flex;gap:10px;padding:6px 18px calc(14px + env(safe-area-inset-bottom))" });
   const mk = (icon, label, fn, kind) => {
     const b = el("button", { cls: "btn " + (kind || "btn-quiet"), css: "flex:1",
