@@ -576,6 +576,7 @@ function ART(id, size = 72) {
   if (id === "review")
     return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="var(--clay)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON_PATHS.write}"/><path d="M4 21h16"/></svg>`;
   if (id && id.startsWith("word_")) return wordArt(id.slice(5), size);
+  if (id && id.startsWith("abc_")) return wordArt(id.slice(4), size);
   if (id && id.startsWith("num_")) return wordArt(id.slice(4), size);
   if (id && id.startsWith("shape_")) return shapeArt(id.slice(6), size);
   const w = `width="${size}" height="${size}" viewBox="0 0 100 100"`;
@@ -625,7 +626,7 @@ const C = (cx, cy, r) =>
   `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
 
 const CATEGORIES = [
-  { id:"writing"  }, { id:"numbers" }, { id:"shapes" },
+  { id:"writing"  }, { id:"alphabet" }, { id:"numbers" }, { id:"shapes" },
   { id:"animals" }, { id:"vehicles" }, { id:"food" },
   { id:"faces" }, { id:"nature" }, { id:"space" }, { id:"monsters" },
 ];
@@ -826,15 +827,15 @@ const STEP_T = {
   },
 };
 const CAT_NAMES = {
-  nl:{ numbers:"Cijfers", shapes:"Vormen",
+  nl:{ alphabet:"Het hele alfabet", numbers:"Cijfers", shapes:"Vormen",
        writing:"Letters met Buddy", animals:"Dieren", vehicles:"Voertuigen",
        food:"Lekker eten", faces:"Gezichten", nature:"Buiten", space:"De ruimte",
        monsters:"Lieve monsters" },
-  en:{ numbers:"Numbers", shapes:"Shapes",
+  en:{ alphabet:"The whole alphabet", numbers:"Numbers", shapes:"Shapes",
        writing:"Letters with Buddy", animals:"Animals", vehicles:"Things That Go",
        food:"Good Food", faces:"Faces & Feelings", nature:"Outside", space:"Up in Space",
        monsters:"Friendly Monsters" },
-  es:{ numbers:"Números", shapes:"Formas",
+  es:{ alphabet:"Todo el alfabeto", numbers:"Números", shapes:"Formas",
        writing:"Letras con Buddy", animals:"Animales", vehicles:"Vehículos",
        food:"Comida rica", faces:"Caras", nature:"Naturaleza", space:"El espacio",
        monsters:"Monstruos amables" },
@@ -858,6 +859,8 @@ const drawName = d => {
   if (d.id === "review") return t("dailyName");
   if (d.id.startsWith("word_")) { const w = d.id.slice(5);
     return S.caseMode === "lower" ? w.toLowerCase() : w.toUpperCase(); }
+  if (d.id.startsWith("abc_")) { const c = d.id.slice(4);
+    return S.caseMode === "lower" ? c.toLowerCase() : c; }
   if (d.id.startsWith("num_")) return d.name;
   if (d.id.startsWith("shape_")) return t("shp_" + d.id.slice(6)) || d.name;
   return (DRAW_NAMES[LC()] || DRAW_NAMES.en)[d.id] || d.name;
@@ -1207,6 +1210,26 @@ const GLYPH = {
   S:{ adv:56, b:[8,8,48,78], d:P=>[ `M ${P.x(46)} ${P.y(20)} Q ${P.x(30)} ${P.y(6)} ${P.x(18)} ${P.y(20)} Q ${P.x(8)} ${P.y(34)} ${P.x(28)} ${P.y(42)} Q ${P.x(48)} ${P.y(50)} ${P.x(46)} ${P.y(64)} Q ${P.x(40)} ${P.y(80)} ${P.x(16)} ${P.y(70)}` ] },
   U:{ adv:60, b:[12,8,48,78], d:P=>[ `M ${P.x(12)} ${P.y(8)} L ${P.x(12)} ${P.y(56)} Q ${P.x(12)} ${P.y(78)} ${P.x(30)} ${P.y(78)} Q ${P.x(48)} ${P.y(78)} ${P.x(48)} ${P.y(56)} L ${P.x(48)} ${P.y(8)}` ] },
   Y:{ adv:60, b:[8,8,52,78], d:P=>[ `M ${P.x(10)} ${P.y(8)} L ${P.x(30)} ${P.y(42)} L ${P.x(50)} ${P.y(8)}`, _ln(P,30,42,30,78) ] },
+  B:{ adv:58, b:[14,8,54,78], d:P=>[ _ln(P,14,8,14,78),
+        `M ${P.x(14)} ${P.y(8)} L ${P.x(38)} ${P.y(8)} Q ${P.x(54)} ${P.y(8)} ${P.x(54)} ${P.y(25)} Q ${P.x(54)} ${P.y(43)} ${P.x(14)} ${P.y(43)}`,
+        `M ${P.x(14)} ${P.y(43)} L ${P.x(40)} ${P.y(43)} Q ${P.x(56)} ${P.y(43)} ${P.x(56)} ${P.y(61)} Q ${P.x(56)} ${P.y(78)} ${P.x(14)} ${P.y(78)}` ] },
+  D:{ adv:60, b:[14,8,56,78], d:P=>[ _ln(P,14,8,14,78),
+        `M ${P.x(14)} ${P.y(8)} L ${P.x(34)} ${P.y(8)} Q ${P.x(56)} ${P.y(8)} ${P.x(56)} ${P.y(43)} Q ${P.x(56)} ${P.y(78)} ${P.x(34)} ${P.y(78)} L ${P.x(14)} ${P.y(78)}` ] },
+  E:{ adv:54, b:[14,8,50,78], d:P=>[ _ln(P,14,8,14,78), _ln(P,14,8,50,8), _ln(P,14,43,44,43), _ln(P,14,78,50,78) ] },
+  F:{ adv:52, b:[14,8,50,78], d:P=>[ _ln(P,14,8,14,78), _ln(P,14,8,50,8), _ln(P,14,43,44,43) ] },
+  G:{ adv:60, b:[8,8,52,80], d:P=>[ `M ${P.x(50)} ${P.y(20)} Q ${P.x(30)} ${P.y(6)} ${P.x(16)} ${P.y(24)} Q ${P.x(8)} ${P.y(43)} ${P.x(16)} ${P.y(62)} Q ${P.x(30)} ${P.y(80)} ${P.x(50)} ${P.y(66)} L ${P.x(50)} ${P.y(48)} L ${P.x(36)} ${P.y(48)}` ] },
+  I:{ adv:54, b:[14,8,44,78], d:P=>[ _ln(P,16,8,42,8), _ln(P,29,8,29,78), _ln(P,16,78,42,78) ] },
+  K:{ adv:56, b:[14,8,52,78], d:P=>[ _ln(P,14,8,14,78), _ln(P,14,46,48,8), _ln(P,14,46,50,78) ] },
+  N:{ adv:60, b:[14,8,46,78], d:P=>[ _ln(P,14,78,14,8), `M ${P.x(14)} ${P.y(8)} L ${P.x(46)} ${P.y(78)}`, _ln(P,46,78,46,8) ] },
+  Q:{ adv:64, b:[2,6,62,86], d:P=>[ _ell(P,32,43,30,37), _ln(P,40,58,60,84) ] },
+  R:{ adv:58, b:[14,8,54,78], d:P=>[ _ln(P,14,8,14,78),
+        `M ${P.x(14)} ${P.y(8)} L ${P.x(38)} ${P.y(8)} Q ${P.x(54)} ${P.y(8)} ${P.x(54)} ${P.y(25)} Q ${P.x(54)} ${P.y(43)} ${P.x(14)} ${P.y(43)}`,
+        _ln(P,32,43,52,78) ] },
+  T:{ adv:60, b:[8,8,52,78], d:P=>[ _ln(P,8,8,52,8), _ln(P,30,8,30,78) ] },
+  V:{ adv:60, b:[8,8,52,78], d:P=>[ `M ${P.x(8)} ${P.y(8)} L ${P.x(30)} ${P.y(78)} L ${P.x(52)} ${P.y(8)}` ] },
+  W:{ adv:68, b:[6,8,62,78], d:P=>[ `M ${P.x(6)} ${P.y(8)} L ${P.x(20)} ${P.y(78)} L ${P.x(34)} ${P.y(34)} L ${P.x(48)} ${P.y(78)} L ${P.x(62)} ${P.y(8)}` ] },
+  X:{ adv:58, b:[10,8,50,78], d:P=>[ `M ${P.x(10)} ${P.y(8)} L ${P.x(50)} ${P.y(78)}`, `M ${P.x(50)} ${P.y(8)} L ${P.x(10)} ${P.y(78)}` ] },
+  Z:{ adv:58, b:[10,8,50,78], d:P=>[ `M ${P.x(10)} ${P.y(8)} L ${P.x(50)} ${P.y(8)} L ${P.x(10)} ${P.y(78)} L ${P.x(50)} ${P.y(78)}` ] },
   // Digits 0-9, same metric box (cap y8, baseline y78).
   "0":{ adv:60, b:[4,6,56,80], d:P=>[ _ell(P,30,43,26,37) ] },
   "1":{ adv:48, b:[16,8,40,78], d:P=>[ `M ${P.x(16)} ${P.y(22)} L ${P.x(32)} ${P.y(8)} L ${P.x(32)} ${P.y(78)}`, _ln(P,18,78,46,78) ] },
@@ -1244,6 +1267,23 @@ const LOWER = {
   s:{ adv:50, b:[16,40,46,78], d:P=>[ `M ${P.x(42)} ${P.y(46)} Q ${P.x(22)} ${P.y(40)} ${P.x(22)} ${P.y(52)} Q ${P.x(22)} ${P.y(60)} ${P.x(36)} ${P.y(62)} Q ${P.x(48)} ${P.y(64)} ${P.x(44)} ${P.y(74)} Q ${P.x(36)} ${P.y(80)} ${P.x(18)} ${P.y(74)}` ] },
   u:{ adv:52, b:[14,40,42,78], d:P=>[ `M ${P.x(14)} ${P.y(40)} L ${P.x(14)} ${P.y(68)} Q ${P.x(14)} ${P.y(78)} ${P.x(28)} ${P.y(78)} Q ${P.x(40)} ${P.y(78)} ${P.x(40)} ${P.y(68)} L ${P.x(40)} ${P.y(40)}`, _ln(P,40,40,40,78) ] },
   y:{ adv:52, b:[14,40,40,98], d:P=>[ `M ${P.x(14)} ${P.y(40)} L ${P.x(14)} ${P.y(64)} Q ${P.x(14)} ${P.y(74)} ${P.x(28)} ${P.y(74)}`, `M ${P.x(40)} ${P.y(40)} L ${P.x(40)} ${P.y(88)} Q ${P.x(40)} ${P.y(98)} ${P.x(26)} ${P.y(94)}` ] },
+  b:{ adv:54, b:[14,10,48,78], d:P=>[ _ln(P,14,10,14,78), _ell(P,31,58,17,18) ] },
+  d:{ adv:54, b:[12,10,46,78], d:P=>[ _ln(P,46,10,46,78), _ell(P,29,58,17,18) ] },
+  e:{ adv:52, b:[14,40,46,78], d:P=>[ _ln(P,15,57,45,57),
+        `M ${P.x(45)} ${P.y(57)} Q ${P.x(45)} ${P.y(40)} ${P.x(30)} ${P.y(40)} Q ${P.x(15)} ${P.y(40)} ${P.x(15)} ${P.y(58)} Q ${P.x(15)} ${P.y(78)} ${P.x(32)} ${P.y(78)} Q ${P.x(42)} ${P.y(78)} ${P.x(45)} ${P.y(70)}` ] },
+  f:{ adv:42, b:[10,10,38,78], d:P=>[ `M ${P.x(38)} ${P.y(20)} Q ${P.x(36)} ${P.y(10)} ${P.x(26)} ${P.y(12)} Q ${P.x(20)} ${P.y(14)} ${P.x(20)} ${P.y(26)} L ${P.x(20)} ${P.y(78)}`, _ln(P,10,44,34,44) ] },
+  g:{ adv:54, b:[12,40,48,100], d:P=>[ _ell(P,29,58,17,18),
+        `M ${P.x(46)} ${P.y(40)} L ${P.x(46)} ${P.y(90)} Q ${P.x(46)} ${P.y(101)} ${P.x(28)} ${P.y(97)}` ] },
+  i:{ adv:30, b:[14,24,24,78], d:P=>[ _ell(P,19,26,2.5,2.5), _ln(P,19,40,19,78) ] },
+  k:{ adv:50, b:[14,10,44,78], d:P=>[ _ln(P,14,10,14,78), _ln(P,14,60,40,44), _ln(P,14,60,44,78) ] },
+  n:{ adv:52, b:[14,40,40,78], d:P=>[ _ln(P,14,40,14,78), `M ${P.x(14)} ${P.y(52)} Q ${P.x(14)} ${P.y(40)} ${P.x(30)} ${P.y(40)} Q ${P.x(40)} ${P.y(40)} ${P.x(40)} ${P.y(52)} L ${P.x(40)} ${P.y(78)}` ] },
+  q:{ adv:54, b:[12,40,48,96], d:P=>[ _ell(P,29,58,17,18), _ln(P,46,40,46,96) ] },
+  r:{ adv:40, b:[14,40,36,78], d:P=>[ _ln(P,14,40,14,78), `M ${P.x(14)} ${P.y(52)} Q ${P.x(16)} ${P.y(40)} ${P.x(34)} ${P.y(42)}` ] },
+  t:{ adv:40, b:[10,22,36,78], d:P=>[ `M ${P.x(22)} ${P.y(22)} L ${P.x(22)} ${P.y(70)} Q ${P.x(22)} ${P.y(78)} ${P.x(34)} ${P.y(78)}`, _ln(P,10,42,36,42) ] },
+  v:{ adv:48, b:[10,40,40,78], d:P=>[ `M ${P.x(10)} ${P.y(40)} L ${P.x(25)} ${P.y(78)} L ${P.x(40)} ${P.y(40)}` ] },
+  w:{ adv:58, b:[8,40,50,78], d:P=>[ `M ${P.x(8)} ${P.y(40)} L ${P.x(18)} ${P.y(78)} L ${P.x(29)} ${P.y(50)} L ${P.x(40)} ${P.y(78)} L ${P.x(50)} ${P.y(40)}` ] },
+  x:{ adv:48, b:[10,40,40,78], d:P=>[ `M ${P.x(10)} ${P.y(40)} L ${P.x(40)} ${P.y(78)}`, `M ${P.x(40)} ${P.y(40)} L ${P.x(10)} ${P.y(78)}` ] },
+  z:{ adv:48, b:[10,40,40,78], d:P=>[ `M ${P.x(10)} ${P.y(40)} L ${P.x(40)} ${P.y(40)} L ${P.x(10)} ${P.y(78)} L ${P.x(40)} ${P.y(78)}` ] },
 };
 // Active glyph table + word casing follow the per-profile setting.
 const glyphSet = () => S.caseMode === "lower" ? LOWER : GLYPH;
@@ -1285,11 +1325,16 @@ function letterSteps(word) {
   return steps;
 }
 // Spaced "Daily practice": the least-recently-traced letters come back.
+// The whole alphabet, in the current case (caps or lowercase).
+const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const abcCase = L => S.caseMode === "lower" ? L.toLowerCase() : L;
+// Daily practice = spaced repetition across the WHOLE alphabet: the
+// least-recently-traced letters come back first, so she learns them all.
 function reviewSteps() {
-  const pool = [...new Set(WORDS.flatMap(w => wordChars(w)))].filter(c => glyphSet()[c]);
+  const pool = ABC.map(abcCase).filter(c => glyphSet()[c]);
   const seen = c => S.review[String(c).toUpperCase()] || 0;
   pool.sort((a, b) => seen(a) - seen(b));
-  return pool.slice(0, Math.min(4, pool.length)).map(glyphStep);
+  return pool.slice(0, Math.min(5, pool.length)).map(glyphStep);
 }
 DRAWINGS.push({
   id: "review", name: "Daily practice", category: "writing",
@@ -1302,6 +1347,13 @@ WORDS.forEach(wd => DRAWINGS.push({
   accent: "var(--sky)", finale: "bounce",
   pen: true, clearEachStep: true,
   build: () => letterSteps(wd), steps: [],
+}));
+// Alphabet: one traceable lesson per letter, A to Z.
+ABC.forEach(L => DRAWINGS.push({
+  id: "abc_" + L, name: L, category: "alphabet",
+  accent: "var(--sky)", finale: "bounce",
+  pen: true, clearEachStep: true,
+  build: () => [glyphStep(abcCase(L))], steps: [],
 }));
 
 // Small preview of a word in the same letterforms (cards, stickers, win).
