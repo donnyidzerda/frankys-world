@@ -99,11 +99,14 @@
     box-shadow:inset 0 0 0 1px rgba(52,48,42,.05), var(--sh); }
   canvas#pad{ position:absolute; inset:0; width:100%; height:100%; border-radius:var(--r); }
   #ghost,#demo{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-  #ghost path{ fill:none; stroke:var(--ink); stroke-opacity:.16; stroke-width:26;
+  /* --gw is nudged by invisible dynamic difficulty (more help when a
+     child struggles, less when they're cruising). Never punishing. */
+  #ghost path{ fill:none; stroke:var(--ink); stroke-opacity:.16;
+    stroke-width:var(--gw,26);
     stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:1 42;
-    transition:stroke .3s, stroke-opacity .3s, stroke-width .3s; }
+    transition:stroke .3s, stroke-opacity .3s, stroke-width .4s; }
   #ghost.help path{ stroke:var(--clay); stroke-opacity:.55; stroke-width:34; }
-  #ghost.pen path{ stroke-width:15; stroke-dasharray:1 26; stroke-opacity:.22; }
+  #ghost.pen path{ stroke-width:var(--gw,15); stroke-dasharray:1 26; stroke-opacity:.22; }
   #ghost.pen.help path{ stroke-width:20; }
 
   /* Step progress */
@@ -208,7 +211,7 @@ const pKey = id => SAVE_KEY + "::" + id;
 const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
-  caseMode: "upper", review: {},
+  caseMode: "upper", review: {}, diff: 1,
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
     sound: true, haptics: true, contrast: false, calm: false, limit: "soft",
@@ -872,6 +875,7 @@ const I18N_X = {
     profiles:"Profielen", switchProfile:"Wisselen", addChild:"Kind toevoegen", ageWord:"Leeftijd",
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
+    worldTitle:"De wereld van Buddy groeit met je mee",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
@@ -889,6 +893,7 @@ const I18N_X = {
     profiles:"Profiles", switchProfile:"Switch", addChild:"Add a child", ageWord:"Age",
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
+    worldTitle:"Buddy's world grows as you play",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
@@ -906,6 +911,7 @@ const I18N_X = {
     profiles:"Perfiles", switchProfile:"Cambiar", addChild:"Añadir un niño", ageWord:"Edad",
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
+    worldTitle:"El mundo de Buddy crece al jugar",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
@@ -1260,6 +1266,26 @@ function shapeArt(key, size) {
   }</svg>`;
 }
 
+/* ----- 8f. P2: Buddy's growing world (progress arc) -------------------
+   A calm scene that gains elements at star milestones. It rewards the
+   PARENT's sense of progress without pressuring the child. */
+function worldSVG(stars) {
+  const at = n => stars >= n ? "" : 'opacity="0"';
+  return `<svg viewBox="0 0 320 96" width="100%" height="92" aria-hidden="true">
+    <rect x="0" y="0" width="320" height="96" fill="none"/>
+    <circle cx="40" cy="30" r="15" fill="var(--ochre)"/>
+    <path d="M0 78 H320" stroke="#cdbb98" stroke-width="2"/>
+    <rect x="0" y="80" width="320" height="16" fill="#dfead2"/>
+    <g ${at(3)}><path d="M70 80 V58" stroke="#7a5a3a" stroke-width="5"/><circle cx="70" cy="48" r="16" fill="var(--sage)"/></g>
+    <g ${at(6)}><path d="M120 80 V64" stroke="var(--sage)" stroke-width="3"/><circle cx="120" cy="58" r="7" fill="var(--rose)"/><circle cx="120" cy="58" r="3" fill="var(--ochre)"/></g>
+    <g ${at(10)}><rect x="150" y="56" width="40" height="24" fill="var(--clay)"/><path d="M148 56 L170 40 L192 56 Z" fill="#8a4b34"/><rect x="164" y="64" width="12" height="16" fill="#f4e9d8"/></g>
+    <g ${at(15)}><ellipse cx="245" cy="28" rx="22" ry="11" fill="#ffffff"/><ellipse cx="262" cy="24" rx="14" ry="9" fill="#ffffff"/></g>
+    <g ${at(22)}><path d="M210 34 q6 -6 12 0 q6 -6 12 0" stroke="var(--plum)" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+    <g ${at(32)}><path d="M285 80 V52" stroke="#9aa" stroke-width="2"/><path d="M280 56 Q288 36 296 56 L296 70 H280 Z" fill="var(--plum)"/><path d="M286 70 Q288 80 290 70" fill="var(--ochre)"/></g>
+    <g ${at(45)}><path d="M300 18 l3 6 6 1 -4 5 1 6 -6 -3 -6 3 1 -6 -4 -5 6 -1 z" fill="var(--ochre)"/></g>
+  </svg>`;
+}
+
 /* ----- 8e. P1: Numbers 1-10 and Shapes (same trace engine) ------------- */
 function numberSteps(n) {
   const ds = String(n).split("");
@@ -1411,6 +1437,12 @@ function Home() {
   top.append(stat, muteBtn());
   s.append(top);
 
+  // Buddy's world: a calm scene that grows as stars are earned.
+  const world = el("div", { cls: "card", css: "margin:6px 20px 0;padding:10px 12px 6px;background:linear-gradient(180deg,#EAF1F4,#F4EFE2)" });
+  world.innerHTML = worldSVG(S.stars) +
+    `<div class="t-label" style="text-align:center;margin-top:2px">${t("worldTitle")}</div>`;
+  s.append(world);
+
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
   CATEGORIES.forEach(cat => {
     const items = DRAWINGS.filter(d => d.category === cat.id);
@@ -1561,7 +1593,8 @@ function makeEngine(stage, opts = {}) {
     ghost.innerHTML = ""; demo.innerHTML = ""; ghost.classList.remove("help"); gp = arr;
     arr.forEach(d => { const p = document.createElementNS(SVGNS, "path"); p.setAttribute("d", d); ghost.append(p); });
   }
-  let raf;
+  let raf, demoF = 1;
+  const setDemoFactor = f => { demoF = clamp(f, .6, 1.6); };
   function playDemo() {
     cancelAnimationFrame(raf); demo.innerHTML = "";
     const tmp = document.createElementNS(SVGNS, "path");
@@ -1573,9 +1606,13 @@ function makeEngine(stage, opts = {}) {
     const run = () => {
       if (i >= gp.length) { demo.innerHTML = ""; return; }
       tmp.setAttribute("d", gp[i]);
-      const len = tmp.getTotalLength() || 1, dur = clamp(len * 1.7, 800, 2800), t0 = performance.now();
+      const len = tmp.getTotalLength() || 1;
+      const dur = clamp(len * 1.7 * demoF, 800, 3400), t0 = performance.now();
       const fr = now => {
-        const k = clamp((now - t0) / dur, 0, 1), pt = tmp.getPointAtLength(k * len);
+        const k = clamp((now - t0) / dur, 0, 1);
+        // Ease in/out: slow at the start and the corners/end, like a hand.
+        const e = k < .5 ? 2 * k * k : 1 - ((-2 * k + 2) ** 2) / 2;
+        const pt = tmp.getPointAtLength(e * len);
         dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
         if (k < 1) raf = requestAnimationFrame(fr); else { i++; run(); }
       };
@@ -1617,7 +1654,7 @@ function makeEngine(stage, opts = {}) {
     o.width = cv.width; o.height = cv.height; const c = o.getContext("2d");
     c.fillStyle = "#FBF3E7"; c.fillRect(0, 0, o.width, o.height); c.drawImage(cv, 0, 0);
     return new Promise(r => o.toBlob(r, "image/png")); };
-  return { st, setGhost, helpMe, playDemo, score, clear, undo, toPNG, cfg,
+  return { st, setGhost, helpMe, playDemo, setDemoFactor, score, clear, undo, toPNG, cfg,
            get strokes() { return st.strokes; } };
 }
 
@@ -1718,14 +1755,28 @@ function DrawScreen(id) {
     tip.classList.remove("pop"); void tip.offsetWidth; tip.classList.add("pop");
     if (D.clearEachStep) engine.clear(); // each letter starts on a fresh sheet
     engine.setGhost(stp.d);
+    applyDiff();
     next.querySelector("span").textContent = (i === steps.length - 1) ? t("allDone") : t("next");
     buddySay("happy", L.say);
     setTimeout(() => engine.playDemo(), 800);
+  }
+  // Invisible dynamic difficulty: scale the guide thickness + demo speed
+  // by the child's recent success. Never shown, never blocks.
+  function applyDiff() {
+    const d = clamp(S.diff || 1, .7, 1.35);
+    const base = D.pen ? 15 : 26;
+    const gh = stage.querySelector("#ghost");
+    if (gh) gh.style.setProperty("--gw", (base * d).toFixed(1));
+    engine.setDemoFactor(d);
   }
   const scores = [];
   function advance() {
     scores[i] = engine.score();
     const ok = scores[i] >= engine.cfg.pass;
+    // Adapt: cruising -> a little less help next time; struggling -> more.
+    if (scores[i] >= engine.cfg.pass * 1.6) S.diff = clamp((S.diff || 1) - .06, .7, 1.35);
+    else if (scores[i] < engine.cfg.pass) S.diff = clamp((S.diff || 1) + .08, .7, 1.35);
+    save();
     if (ok) {
       Sound.fx.step(); burst(.3);
       buddySay("happy", rnd("praiseOk"));
