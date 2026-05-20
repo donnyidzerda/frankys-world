@@ -961,6 +961,13 @@ const I18N_X = {
     readTitle:"Lezen met Buddy", readSub:n=>`Je kent al ${n} klanken. Tik om te oefenen!`,
     readListen:"Luister naar Buddy", readWhichLetter:"Welke letter hoor je?",
     readWhichWord:"Welk woord hoor je?", readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
+    rdProgressTitle:"Leesvoortgang",
+    rdSummary:(i,T,m,wr,wm)=>`${i} van ${T} klanken in gebruik · ${m} echt beheerst · ${wm} woordjes vast (${wr} al gelezen).`,
+    rdSoundsLabel:"Klanken", rdWords:"Woordjes beheerst", rdWordsRead:"al gelezen",
+    rdSuggestSound:L=>`Doe nu dit: oefen de klank van ${L.toUpperCase()}.`,
+    rdSuggestRead:W=>`Doe nu dit: lees het woord "${W}".`,
+    rdSuggestNext:"Klaar voor de volgende klank!", rdSuggestDone:"Alles beheerst. Knap!",
+    rdStartBtn:"Start oefenen",
     phLabel:"Letters leren via", phSound:"Klank (Montessori)", phName:"Letternaam",
     phHint:"Klank: Buddy zegt de klank, zoals mmm voor maan (Montessori). Letternaam: Buddy zegt em, es, enzovoort.",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
@@ -996,6 +1003,13 @@ const I18N_X = {
     readTitle:"Reading with Buddy", readSub:n=>`You know ${n} sounds. Tap to practise!`,
     readListen:"Listen to Buddy", readWhichLetter:"Which letter do you hear?",
     readWhichWord:"Which word do you hear?", readAgain:"Again", readNext:"Next", readMore:"Read more",
+    rdProgressTitle:"Reading progress",
+    rdSummary:(i,T,m,wr,wm)=>`${i} of ${T} sounds in play · ${m} mastered · ${wm} words solid (${wr} read).`,
+    rdSoundsLabel:"Sounds", rdWords:"Words mastered", rdWordsRead:"already read",
+    rdSuggestSound:L=>`Do this next: practise the sound of ${L.toUpperCase()}.`,
+    rdSuggestRead:W=>`Do this next: read the word "${W}".`,
+    rdSuggestNext:"Ready for the next sound!", rdSuggestDone:"All mastered. Amazing!",
+    rdStartBtn:"Start practising",
     phLabel:"Learn letters by", phSound:"Sound (Montessori)", phName:"Letter name",
     phHint:"Sound: Buddy says the sound, like mmm for moon (Montessori). Letter name: Buddy says em, es, and so on.",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
@@ -1031,6 +1045,13 @@ const I18N_X = {
     readTitle:"Leer con Buddy", readSub:n=>`Ya conoces ${n} sonidos. ¡Toca para practicar!`,
     readListen:"Escucha a Buddy", readWhichLetter:"¿Qué letra escuchas?",
     readWhichWord:"¿Qué palabra escuchas?", readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
+    rdProgressTitle:"Progreso de lectura",
+    rdSummary:(i,T,m,wr,wm)=>`${i} de ${T} sonidos en juego · ${m} dominados · ${wm} palabras firmes (${wr} leídas).`,
+    rdSoundsLabel:"Sonidos", rdWords:"Palabras dominadas", rdWordsRead:"ya leídas",
+    rdSuggestSound:L=>`Haz esto ahora: practica el sonido de ${L.toUpperCase()}.`,
+    rdSuggestRead:W=>`Haz esto ahora: lee la palabra "${W}".`,
+    rdSuggestNext:"¡Listo para el siguiente sonido!", rdSuggestDone:"¡Todo dominado!",
+    rdStartBtn:"Empezar a practicar",
     phLabel:"Aprender letras por", phSound:"Sonido (Montessori)", phName:"Nombre de letra",
     phHint:"Sonido: Buddy dice el sonido, como mmm de mano (Montessori). Nombre: Buddy dice eme, ese, etc.",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
@@ -1651,6 +1672,60 @@ function ReadScreen() {
     speak(rnd("praiseOk"));
   }
   showItem();
+}
+
+// Parent dashboard: visualize per-sound and per-word mastery, suggest a
+// concrete next step. Lives inside Settings (already parent-gated).
+function readingDashboard() {
+  const sounds = RD().sounds, intro = S.readIntro, active = sounds[intro - 1];
+  const card = el("div", { cls: "card", css: "padding:18px;display:flex;flex-direction:column;gap:12px" });
+  card.append(el("div", { cls: "t-head", textContent: t("rdProgressTitle") }));
+
+  // Summary numbers
+  const masteredS = sounds.slice(0, intro).filter(c => rdBox("s:" + c) >= 3).length;
+  const words = RD().words.filter(wd => [...wd].every(c => sounds.slice(0, intro).includes(c)));
+  const wRead = words.filter(wd => rdBox("w:" + wd) >= 1).length;
+  const wMast = words.filter(wd => rdBox("w:" + wd) >= 2).length;
+  const sum = el("div", { cls: "t-body", css: "color:var(--ink-soft);font-size:14px",
+    textContent: t("rdSummary")(intro, sounds.length, masteredS, wRead, wMast) });
+  card.append(sum);
+
+  // Sound grid
+  card.append(el("div", { cls: "t-label", textContent: t("rdSoundsLabel") }));
+  const grid = el("div", { css: "display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:10px" });
+  sounds.forEach((c, i) => {
+    const locked = i >= intro;
+    const box = rdBox("s:" + c);
+    const pct = locked ? 0 : Math.min(5, box) / 5 * 100;
+    const isActive = !locked && c === active;
+    const cell = el("div", { css: `display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:10px;background:${locked ? "var(--surface-2)" : "var(--surface)"};border:2px solid ${isActive ? "var(--clay)" : "var(--line)"};${locked ? "opacity:.45" : ""}` });
+    cell.innerHTML =
+      `<div style="height:36px;display:flex;align-items:center;justify-content:center">${lowerArt(c, 32)}</div>
+       <div style="height:5px;width:100%;background:rgba(52,48,42,.12);border-radius:99px;overflow:hidden">
+         <i style="display:block;height:100%;width:${pct}%;background:${box >= 3 ? "var(--sage)" : "var(--ochre)"}"></i></div>`;
+    grid.append(cell);
+  });
+  card.append(grid);
+
+  // Word counters
+  card.append(el("div", { cls: "t-body", css: "font-size:14px",
+    textContent: `${t("rdWords")}: ${wMast} / ${words.length}  ·  ${t("rdWordsRead")}: ${wRead}` }));
+
+  // Next-step suggestion + CTA
+  let suggest;
+  if (active && rdBox("s:" + active) < 2) suggest = t("rdSuggestSound")(active);
+  else {
+    const wob = words.find(wd => rdBox("w:" + wd) < 1);
+    if (wob) suggest = t("rdSuggestRead")(wob);
+    else suggest = intro < sounds.length ? t("rdSuggestNext") : t("rdSuggestDone");
+  }
+  card.append(el("div", { cls: "t-body", css: "padding:10px 12px;background:var(--surface-2);border-radius:12px",
+    textContent: suggest }));
+  const cta = el("button", { cls: "btn btn-go", css: "align-self:flex-start",
+    html: ic("play", 18, "#fff") + `<span>${t("rdStartBtn")}</span>` });
+  cta.onclick = () => { Sound.fx.tap(); buzz(14); go("read"); };
+  card.append(cta);
+  return card;
 }
 
 /* ----- 9. Router ------------------------------------------------------- */
@@ -2497,6 +2572,9 @@ function Settings() {
   phCard.append(phSeg);
   phCard.append(el("div", { cls: "t-body muted", css: "font-size:13px", textContent: t("phHint") }));
   wrap.append(phCard);
+
+  // Reading progress (parent dashboard, read-only)
+  wrap.append(readingDashboard());
 
   [["muted", "mute", t("setMuted")],
    ["voice", "sound", t("setVoice")],
