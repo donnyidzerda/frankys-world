@@ -488,7 +488,7 @@ async function realisticSpeak(text) {
   try {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v3");
+    _ttsCache = _ttsCache || await caches.open("tts-v4");
     let res = await _ttsCache.match(key);
     if (!res) {
       res = await fetch(key, { mode: "cors" });

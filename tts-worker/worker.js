@@ -34,9 +34,14 @@ export default {
     }
 
     const accentTouch = lang === "Dutch"
-      ? "Accent: a light, warm Amsterdam (Mokums) accent - a slight, " +
-        "friendly Amsterdam vowel colouring, soft and natural, never " +
-        "exaggerated or comedic. Still perfectly clear for a small child. "
+      ? "Accent: a clearly recognisable but warm and friendly Amsterdam " +
+        "(Mokums) accent. Make the typical Amsterdam vowels noticeable: " +
+        "diphthongs (ij, ei, ui) lean toward monophthongs (close to 'aa', " +
+        "'oo'), the 'r' is soft and rolled lightly, 's' is slightly " +
+        "softer (almost sj-like), and 'g' is somewhat softer than the " +
+        "harsh Dutch standard. Not a caricature, not comedic - the " +
+        "natural everyday Amsterdam voice. Still perfectly clear and " +
+        "kind for a small child. "
       : "";
     const instructions =
       `Language: speak entirely in ${lang} with a natural native ${lang} ` +
