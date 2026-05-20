@@ -952,7 +952,7 @@ const I18N_X = {
     worldTitle:"De wereld van Buddy groeit met je mee",
     worldNext:n=>`Nog ${n} ${n===1?"ster":"sterren"} tot iets nieuws`,
     worldDone:"Je wereld is helemaal vol. Knap gedaan!",
-    modeDraw:"Tekenen", modeStamp:"Stempel", modeFill:"Vullen", modeMirror:"Spiegel",
+    modeDraw:"Tekenen", modeErase:"Gum", modeStamp:"Stempel", modeFill:"Vullen", modeMirror:"Spiegel",
     shareApp:"App delen", shareText:"Een rustige, reclamevrije teken-app voor kleintjes.",
     parentSheet:"Ouderblad afdrukken", sheetTitle:"Scribble Heroes - voor de ouder",
     sheetIntro:n=>`Wat ${n} oefent: fijne motoriek, volgorde, vormen, letters en taal.`,
@@ -994,7 +994,7 @@ const I18N_X = {
     worldTitle:"Buddy's world grows as you play",
     worldNext:n=>`${n} more ${n===1?"star":"stars"} until something new`,
     worldDone:"Your world is full. Wonderful!",
-    modeDraw:"Draw", modeStamp:"Stamp", modeFill:"Fill", modeMirror:"Mirror",
+    modeDraw:"Draw", modeErase:"Eraser", modeStamp:"Stamp", modeFill:"Fill", modeMirror:"Mirror",
     shareApp:"Share app", shareText:"A calm, ad-free drawing app for little ones.",
     parentSheet:"Print parent sheet", sheetTitle:"Scribble Heroes - for the parent",
     sheetIntro:n=>`What ${n} is practising: fine motor, sequencing, shapes, letters and language.`,
@@ -1036,7 +1036,7 @@ const I18N_X = {
     worldTitle:"El mundo de Buddy crece al jugar",
     worldNext:n=>`${n} ${n===1?"estrella":"estrellas"} más para algo nuevo`,
     worldDone:"¡Tu mundo está completo!",
-    modeDraw:"Dibujar", modeStamp:"Sello", modeFill:"Rellenar", modeMirror:"Espejo",
+    modeDraw:"Dibujar", modeErase:"Goma", modeStamp:"Sello", modeFill:"Rellenar", modeMirror:"Espejo",
     shareApp:"Compartir app", shareText:"Una app de dibujo tranquila y sin anuncios para los peques.",
     parentSheet:"Imprimir hoja", sheetTitle:"Scribble Heroes - para el adulto",
     sheetIntro:n=>`Lo que practica ${n}: motricidad fina, secuencia, formas, letras y lenguaje.`,
@@ -1987,11 +1987,11 @@ function nav(active) {
 /* ----- 12. Drawing engine (canvas, brushes, ghost, scoring) ------------ */
 const COLORS = ["#CC4B3C", "#E2952F", "#EBC44A", "#6E9E5F", "#5C90A8", "#8A6FA0"];
 const AGE = {
-  1: { brush: 58, tol: 150, pass: .10, oneStep: true },
-  2: { brush: 46, tol: 112, pass: .18, oneStep: false },
-  3: { brush: 34, tol: 80,  pass: .30, oneStep: false },
-  4: { brush: 28, tol: 64,  pass: .38, oneStep: false },
-  5: { brush: 24, tol: 52,  pass: .45, oneStep: false },
+  1: { brush: 44, tol: 150, pass: .10, oneStep: true },
+  2: { brush: 34, tol: 112, pass: .18, oneStep: false },
+  3: { brush: 26, tol: 80,  pass: .30, oneStep: false },
+  4: { brush: 20, tol: 64,  pass: .38, oneStep: false },
+  5: { brush: 16, tol: 52,  pass: .45, oneStep: false },
 };
 function makeEngine(stage, opts = {}) {
   const cfg = AGE[S.age] || AGE[2];
@@ -2025,13 +2025,21 @@ function makeEngine(stage, opts = {}) {
   function style() {
     ctx.strokeStyle = st.color;
     const k = size / REF;
-    if (st.brush === "pen") {
+    // Eraser mode: punch holes in the canvas (destination-out). Otherwise
+    // normal painting. Always reset compositing so a draw after an erase
+    // strokes normally.
+    ctx.globalCompositeOperation = st.mode === "erase" ? "destination-out" : "source-over";
+    if (st.mode === "erase") {
+      ctx.lineWidth = Math.max(8, cfg.brush * k * 1.6);
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    } else if (st.brush === "pen") {
       // Fine, even line for letter tracing (no texture, no glow).
       ctx.lineWidth = Math.max(3, 11 * k);
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
     } else {
-      ctx.lineWidth = Math.max(5, cfg.brush * k * (st.brush === "marker" ? 1.12 : 1));
+      ctx.lineWidth = Math.max(4, cfg.brush * k * (st.brush === "marker" ? 1.08 : 1));
       ctx.globalAlpha = st.brush === "crayon" ? .9 : 1;
       ctx.shadowBlur = st.brush === "glow" ? 16 : 0;
     }
@@ -2504,14 +2512,15 @@ function FreeDraw() {
     b._paint = paint; return b;
   };
   const cD = modeChip("draw", "brush", t("modeDraw"));
+  const cE = modeChip("erase", "eraser", t("modeErase"));
   const cS = modeChip("stamp", "sticker", t("modeStamp"));
   const cF = modeChip("fill", "save", t("modeFill"));
   const mirror = el("button", { cls: "chip", html: ic("contrast", 18, "var(--ink)") + `<span>${t("modeMirror")}</span>` });
   mirror.onclick = () => { engine.st.mirror = !engine.st.mirror; Sound.fx.tap(); buzz(12);
     mirror.classList.toggle("sel", engine.st.mirror);
     mirror.querySelector("svg").setAttribute("stroke", engine.st.mirror ? "var(--cream)" : "var(--ink)"); };
-  tools._repaint = () => [cD, cS, cF].forEach(c => c._paint());
-  tools.append(cD, cS, cF, mirror);
+  tools._repaint = () => [cD, cE, cS, cF].forEach(c => c._paint());
+  tools.append(cD, cE, cS, cF, mirror);
   ["star", "heart", "circle", "triangle", "square"].forEach(k => {
     const b = el("button", { cls: "btn btn-quiet", css: "padding:8px;border-radius:14px",
       html: shapeArt(k, 34) });
