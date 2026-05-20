@@ -312,6 +312,7 @@ function switchProfile(id) {
   const s = readProfile(id); if (!s) return;
   S = s;
   const idx = loadIdx(); idx.active = id; saveIdx(idx);
+  _greeted = false;            // new child gets their own greeting once
   applyFlags(); go("home");
 }
 async function deleteProfile(id) {
@@ -1118,6 +1119,9 @@ function ProfilePicker() {
   ov.append(card); document.body.append(ov);
 }
 let _adding = false;
+// One-shot speech flags: Buddy greets / introduces once per app load
+// instead of every time the screen rebuilds (less chatter).
+let _greeted = false, _splashed = false;
 
 // Screen-time governor. Soft = dismissible nudge; lock = parent gate to
 // continue; off = disabled. Default soft (set in defaultState).
@@ -1821,7 +1825,7 @@ function Splash() {
   );
   s.append(card);
   APP.append(s);
-  setTimeout(() => speak(t("splashIntro")), 600);
+  if (!_splashed) { setTimeout(() => speak(t("splashIntro")), 600); _splashed = true; }
 }
 let _install;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); _install = e; });
@@ -1875,8 +1879,9 @@ function Home(mode) {
     );
     s.append(wrap, nav("home"));
     APP.append(s);
-    buddySay("warm", t("buddyHome")(S.name));
-    if (S.settings.foundations && Math.random() < .6)
+    buddySay("warm", _greeted ? "" : t("buddyHome")(S.name));
+    _greeted = true;
+    if (S.settings.foundations && Math.random() < .25)
       setTimeout(() => speak(rnd("found")), 4000);
     return;
   }
@@ -2243,7 +2248,7 @@ function DrawScreen(id) {
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(86vw,560px);margin:auto" });
   sw.append(stage); s.append(sw);
   const engine = makeEngine(stage, { onStroke: () => {
-    if (Math.random() < .4) buddySay("happy", rnd("encourage"));
+    if (Math.random() < .12) buddySay("happy", rnd("encourage"));
   }});
   // Writing lessons: fine pen, no brush chooser, thinner ghost guide.
   if (D.pen) {
@@ -2308,10 +2313,10 @@ function DrawScreen(id) {
     save();
     if (ok) {
       Sound.fx.step(); burst(.3);
-      buddySay("happy", rnd("praiseOk"));
+      buddySay("happy", Math.random() < .45 ? rnd("praiseOk") : "");
     } else {
       Sound.fx.soft();
-      buddySay("warm", rnd("praiseSoft"));
+      buddySay("warm", Math.random() < .45 ? rnd("praiseSoft") : "");
     }
     prog.firstChild.style.width = ((i + 1) / steps.length) * 100 + "%";
     i++;
@@ -2384,7 +2389,7 @@ function WinScreen({ D, stars, blob }) {
   finale($("#fin"), D.finale);
   setTimeout(() => Sound.fx.sticker(), 1300);
   setTimeout(() => speak(rnd("winPraise")), 700);
-  setTimeout(() => speak(t("bridge")), 5200); // gentle nudge back to paper
+  // (bridge nudge stays as on-screen text only; not spoken every win)
   if (S.settings.foundations) setTimeout(() => speak(rnd("found")), 9000);
 }
 function finale(node, kind) {
@@ -2479,7 +2484,7 @@ function FreeDraw() {
   sw.append(stage); s.append(sw);
   let n = 0;
   const engine = makeEngine(stage, { onStroke: () => {
-    if (++n % 5 === 0) speak(rnd("freeEncourage")); }});
+    if (++n % 12 === 0) speak(rnd("freeEncourage")); }});
   s.append(toolbar(engine));
 
   // Free Draw extras: Draw / Stamp / Fill modes, Mirror, stamp tray.
