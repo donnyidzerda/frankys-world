@@ -488,7 +488,7 @@ async function realisticSpeak(text) {
   try {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v4");
+    _ttsCache = _ttsCache || await caches.open("tts-v5");
     let res = await _ttsCache.match(key);
     if (!res) {
       res = await fetch(key, { mode: "cors" });
@@ -893,7 +893,7 @@ const catName = id => (CAT_NAMES[LC()] || CAT_NAMES.en)[id] || id;
 // the SOUND (the first sound stretched) then the word, instead of the
 // letter name - the way sandpaper letters are taught.
 const SOUND = {
-  nl:{ A:"aap",B:"bal",C:"cake",D:"dak",E:"emmer",F:"fiets",G:"geit",H:"huis",I:"inkt",J:"jas",K:"kat",L:"lamp",M:"maan",N:"neus",O:"oog",P:"pen",Q:"quiz",R:"roos",S:"slang",T:"tas",U:"uil",V:"vis",W:"wiel",X:"xylofoon",Y:"yoghurt",Z:"zon" },
+  nl:{ A:"aap",B:"bal",C:"cactus",D:"dak",E:"emmer",F:"fiets",G:"geit",H:"huis",I:"inkt",J:"jas",K:"kat",L:"lamp",M:"maan",N:"neus",O:"oog",P:"pen",Q:"quiz",R:"roos",S:"slang",T:"tas",U:"uil",V:"vis",W:"wiel",X:"xylofoon",Y:"yoghurt",Z:"zon" },
   en:{ A:"apple",B:"ball",C:"cat",D:"dog",E:"egg",F:"fish",G:"goat",H:"house",I:"igloo",J:"jam",K:"kite",L:"lamp",M:"moon",N:"nose",O:"orange",P:"pen",Q:"queen",R:"rose",S:"sun",T:"top",U:"umbrella",V:"van",W:"web",X:"xylophone",Y:"yoyo",Z:"zebra" },
   es:{ A:"árbol",B:"bola",C:"casa",D:"dado",E:"elefante",F:"foca",G:"gato",H:"hueso",I:"iglú",J:"jirafa",K:"koala",L:"luna",M:"mano",N:"nube",O:"oso",P:"pato",Q:"queso",R:"rosa",S:"sol",T:"taza",U:"uva",V:"vaca",W:"wifi",X:"xilófono",Y:"yoyo",Z:"zapato" },
 };
@@ -1757,6 +1757,16 @@ window.addEventListener("pointerdown", function once() {
   window.removeEventListener("pointerdown", once);
 }, { once: true });
 
+// Prevent pinch / double-tap / iOS gesture zoom anywhere in the app -
+// a toddler hitting an accidental gesture used to leave the screen
+// stuck zoomed in.
+["gesturestart", "gesturechange", "gestureend"].forEach(ev =>
+  document.addEventListener(ev, e => e.preventDefault()));
+document.addEventListener("touchmove", e => {
+  if (e.touches && e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+document.addEventListener("dblclick", e => e.preventDefault());
+
 /* ----- 10. Splash / onboarding ----------------------------------------- */
 function Splash() {
   APP.innerHTML = ""; // Splash is called directly (lang switch, add child,
@@ -2104,8 +2114,9 @@ function makeEngine(stage, opts = {}) {
   const xy = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   cv.addEventListener("pointerdown", e => {
     const p = xy(e);
-    if (st.mode === "fill") { floodFill(p); return; }
-    if (st.mode === "stamp") { placeStamp(p); return; }
+    if (st.mode === "fill") { snap(); floodFill(p); return; }
+    if (st.mode === "stamp") { snap(); placeStamp(p); return; }
+    snap();                              // history point before this stroke
     cv.setPointerCapture(e.pointerId); st.down = true; st.pts = [p]; Sound.fx.stroke();
   });
   cv.addEventListener("pointermove", e => {
@@ -2188,9 +2199,20 @@ function makeEngine(stage, opts = {}) {
     }
     return tot ? hit / tot : 1;
   }
-  const clear = () => ctx.clearRect(0, 0, cv.width, cv.height);
-  const undo = () => { ctx.save(); ctx.globalCompositeOperation = "destination-out";
-    ctx.globalAlpha = .5; ctx.fillRect(0, 0, cv.width, cv.height); ctx.restore(); };
+  // Per-stroke history: snapshot the canvas before each new mark so undo
+  // restores exactly the previous state (cap at 6 to keep memory bounded).
+  const _hist = []; const HMAX = 6;
+  const snap = () => { try {
+    _hist.push(ctx.getImageData(0, 0, cv.width, cv.height));
+    if (_hist.length > HMAX) _hist.shift();
+  } catch {} };
+  const clear = () => { ctx.clearRect(0, 0, cv.width, cv.height); _hist.length = 0; };
+  const undo = () => {
+    if (!_hist.length) { ctx.clearRect(0, 0, cv.width, cv.height); return; }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.putImageData(_hist.pop(), 0, 0);
+  };
   const toPNG = () => { const o = document.createElement("canvas");
     o.width = cv.width; o.height = cv.height; const c = o.getContext("2d");
     c.fillStyle = "#FBF3E7"; c.fillRect(0, 0, o.width, o.height); c.drawImage(cv, 0, 0);
@@ -2521,12 +2543,22 @@ function FreeDraw() {
     mirror.querySelector("svg").setAttribute("stroke", engine.st.mirror ? "var(--cream)" : "var(--ink)"); };
   tools._repaint = () => [cD, cE, cS, cF].forEach(c => c._paint());
   tools.append(cD, cE, cS, cF, mirror);
+  const stampBtns = [];
+  const paintStamps = () => stampBtns.forEach(b => {
+    const sel = b.dataset.k === engine.st.stamp;
+    b.style.background = sel ? "var(--ink)" : "var(--surface-2)";
+    b.style.outline = sel ? "3px solid var(--clay)" : "none";
+    b.style.outlineOffset = "1px";
+  });
   ["star", "heart", "circle", "triangle", "square"].forEach(k => {
     const b = el("button", { cls: "btn btn-quiet", css: "padding:8px;border-radius:14px",
       html: shapeArt(k, 34) });
-    b.onclick = () => { engine.st.stamp = k; engine.st.mode = "stamp"; Sound.fx.tap(); buzz(12); tools._repaint(); };
-    stampTray.append(b);
+    b.dataset.k = k;
+    b.onclick = () => { engine.st.stamp = k; engine.st.mode = "stamp";
+      Sound.fx.tap(); buzz(12); tools._repaint(); paintStamps(); };
+    stampBtns.push(b); stampTray.append(b);
   });
+  paintStamps();
   tools._repaint();
   s.append(tools, stampTray);
 

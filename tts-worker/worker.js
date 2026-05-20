@@ -41,7 +41,17 @@ export default {
         "softer (almost sj-like), and 'g' is somewhat softer than the " +
         "harsh Dutch standard. Not a caricature, not comedic - the " +
         "natural everyday Amsterdam voice. Still perfectly clear and " +
-        "kind for a small child. "
+        "kind for a small child. " +
+        // Strict Dutch vowel/consonant pronunciation - prevents English " +
+        // 'oo' creep ('oog' must NOT sound like English 'oog'/'oeg').
+        "Dutch pronunciation rules (strict): 'oo' is always a long Dutch " +
+        "/oː/ vowel like English 'so' or 'boat' - NEVER English /uː/ as " +
+        "in 'food'. So 'oog' is /oːx/ ('oh-ch'), 'rood' is /roːt/, " +
+        "'boot' is /boːt/. 'aa' is long /aː/ as in 'father'. 'ee' is " +
+        "long /eː/. 'uu' is long /yː/. 'oe' is /u/ as in English 'food'. " +
+        "The letter 'c' in Dutch is hard /k/ before a/o/u/consonant ('cactus', " +
+        "'cadeau' = /k/) and /s/ only before e/i ('citroen' = /s/). " +
+        "Never pronounce Dutch 'c' as /ts/ or /z/. "
       : "";
     const instructions =
       `Language: speak entirely in ${lang} with a natural native ${lang} ` +
