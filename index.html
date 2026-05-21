@@ -592,6 +592,13 @@ function Buddy(mood = "warm", size = 140) {
   const eyeR = mood === "wow" ? 8 : 6.5;
   const hat = S.buddyLevel >= 3
     ? `<path d="M64 50 Q100 18 136 50 Z" fill="var(--rose)"/><circle cx="100" cy="24" r="7" fill="var(--ochre)"/>` : "";
+  // Body language: on happy / wow moods Buddy lifts his right paw to wave.
+  const wave = mood === "happy" || mood === "wow";
+  const armR = wave
+    ? `<ellipse cx="161" cy="118" rx="14" ry="23" fill="${FUR}" transform="rotate(34 161 118)"/>
+       <ellipse cx="173" cy="98" rx="11" ry="9.5" fill="var(--cream)"/>`
+    : `<ellipse cx="150" cy="180" rx="16" ry="23" fill="${FUR}" transform="rotate(22 150 180)"/>
+       <ellipse cx="156" cy="198" rx="11" ry="9" fill="var(--cream)"/>`;
   return `<svg viewBox="0 0 200 230" width="${size}" height="${size * 1.15}" aria-hidden="true">
     <!-- soft fox tail, behind the body -->
     <path d="M70 202 Q14 212 18 158 Q22 136 44 150 Q52 190 86 206 Z" fill="${FUR}"/>
@@ -599,11 +606,10 @@ function Buddy(mood = "warm", size = 140) {
     <!-- body + belly -->
     <ellipse cx="100" cy="186" rx="58" ry="43" fill="${FUR}"/>
     <ellipse cx="100" cy="196" rx="36" ry="33" fill="var(--cream)"/>
-    <!-- arms with cream paws -->
+    <!-- arms with cream paws; right paw waves on happy moods -->
     <ellipse cx="50" cy="180" rx="16" ry="23" fill="${FUR}" transform="rotate(-22 50 180)"/>
-    <ellipse cx="150" cy="180" rx="16" ry="23" fill="${FUR}" transform="rotate(22 150 180)"/>
     <ellipse cx="44" cy="198" rx="11" ry="9" fill="var(--cream)"/>
-    <ellipse cx="156" cy="198" rx="11" ry="9" fill="var(--cream)"/>
+    ${armR}
     <!-- feet -->
     <ellipse cx="79" cy="223" rx="16" ry="11" fill="var(--cream)"/>
     <ellipse cx="121" cy="223" rx="16" ry="11" fill="var(--cream)"/>
@@ -1982,6 +1988,32 @@ let _install;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); _install = e; });
 function maybeInstall() { if (_install) setTimeout(() => _install && _install.prompt(), 1400); }
 
+// Pillar illustrations - a non-reading child has to navigate Home by
+// picture alone, so each pillar shows a clear object: a book, a pencil,
+// a paintbrush. (The old line-icons were abstract, and a play-triangle
+// for "Reading" actively misled.)
+function pillarScene(key) {
+  const W = `width="58" height="58" viewBox="0 0 64 64" fill="none"`;
+  if (key === "read") return `<svg ${W}>
+    <path d="M32 20 Q21 14 11 17 V47 Q21 44 32 49 Q43 44 53 47 V17 Q43 14 32 20 Z" fill="#fff"/>
+    <path d="M32 20 V49" stroke="var(--sky)" stroke-width="2.2"/>
+    <g stroke="var(--sky)" stroke-width="2.4" stroke-linecap="round" opacity=".55">
+      <path d="M16 27 H27 M16 33 H25 M37 27 H48 M37 33 H46"/></g></svg>`;
+  if (key === "write") return `<svg ${W}>
+    <path d="M19 47 L45 17" stroke="#fff" stroke-width="15" stroke-linecap="round"/>
+    <path d="M21 45 L42 21" stroke="var(--ochre)" stroke-width="8.5" stroke-linecap="round"/>
+    <path d="M40 23 L46 16" stroke="var(--rose)" stroke-width="8.5" stroke-linecap="round"/>
+    <path d="M15 51 L24 43 L27 49 Z" fill="#fff"/>
+    <path d="M17 50 L23 45 L25 48 Z" fill="#34302A"/>
+    <path d="M13 53 l-2 7 7 -3 z" fill="#fff" opacity=".7"/></svg>`;
+  return `<svg ${W}>
+    <path d="M13 50 Q24 56 33 50 Q42 44 51 49" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".5"/>
+    <path d="M46 14 L28 38" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+    <path d="M44 17 L30 36" stroke="var(--sky)" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="25" cy="42" rx="9" ry="7" fill="#fff" transform="rotate(-38 25 42)"/>
+    <path d="M22 46 Q14 52 18 58 Q26 56 29 49 Z" fill="var(--ochre)"/></svg>`;
+}
+
 /* ----- 11. Home -------------------------------------------------------- */
 // Home is a 3-part chooser (Draw / Read / Write). With a mode it shows
 // just that part's lessons, with a back arrow to the chooser.
@@ -2015,20 +2047,20 @@ function Home(mode) {
     if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
     const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 116px;container-type:inline-size" });
-    const pillar = (key, icon, col, fn) => {
+    const pillar = (key, col, fn) => {
       const b = el("button", { cls: "card pop",
-        css: `padding:22px;display:flex;align-items:center;gap:18px;background:${col};color:#fff;width:100%;margin-bottom:14px` });
+        css: `padding:20px 22px;display:flex;align-items:center;gap:16px;background:${col};color:#fff;width:100%;margin-bottom:14px` });
       b.innerHTML =
-        `<div style="background:rgba(255,255,255,.22);border-radius:18px;padding:14px">${ic(icon, 34, "#fff")}</div>
+        `<div style="background:rgba(255,255,255,.20);border-radius:18px;padding:9px;display:inline-flex">${pillarScene(key)}</div>
          <div style="text-align:left;flex:1"><div class="t-title">${t("pill_" + key)}</div>
          <div class="t-body" style="opacity:.92">${t("pillSub_" + key)}</div></div>`;
       b.onclick = () => { Sound.fx.tap(); buzz(14); fn(); };
       return b;
     };
     wrap.append(
-      pillar("read", "play", "var(--sky)", () => go("read")),
-      pillar("write", "write", "var(--sage)", () => go("home", "write")),
-      pillar("draw", "brush", "var(--clay)", () => go("home", "draw")),
+      pillar("read", "var(--sky)", () => go("read")),
+      pillar("write", "var(--sage)", () => go("home", "write")),
+      pillar("draw", "var(--clay)", () => go("home", "draw")),
     );
     s.append(wrap, nav("home"));
     APP.append(s);
