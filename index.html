@@ -43,6 +43,14 @@
   body{ background-image:
       radial-gradient(rgba(52,48,42,.025) 1px, transparent 1px);
     background-size:26px 26px; }
+  /* Paper grain: one static SVG turbulence layer over everything. Gives a
+     hand-made, fibrous warmth instead of flat-vector cleanliness. Pure
+     pseudo-element, no DOM node, no repaint cost. Off in high-contrast. */
+  body::after{ content:''; position:fixed; inset:0; pointer-events:none;
+    z-index:9998; opacity:.05; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.82'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3C/filter%3E%3Crect%20width='180'%20height='180'%20filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size:180px 180px; }
+  body.hc::after{ display:none; }
   #app{ position:fixed; inset:0; display:flex; flex-direction:column; }
   button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
   svg{ display:block; }
@@ -92,7 +100,25 @@
   @keyframes float{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-9px)} }
   .nudge{ animation:nudge .6s ease; }
   @keyframes nudge{ 0%,100%{transform:rotate(0)} 30%{transform:rotate(-5deg)} 70%{transform:rotate(5deg)} }
-  body.calm .float,body.calm .nudge{ animation:none !important; }
+  /* One-shot "this is ready" pulse - the only moment a button asks to be
+     pressed, and only when the child has earned it (Pen-Live). */
+  .ready{ animation:readyPulse .9s cubic-bezier(.2,.7,.3,1); }
+  @keyframes readyPulse{ 0%,100%{transform:none} 42%{transform:scale(1.045)} }
+  body.calm .float,body.calm .nudge,body.calm .ready{ animation:none !important; }
+  /* Echo mic button: the child's turn to speak. Holds while they say the
+     sound; a calm plum ring pulses out so they feel the moment is theirs. */
+  .micbtn{ position:relative; width:128px; height:128px; border-radius:50%;
+    background:var(--surface); box-shadow:var(--sh);
+    border:1px solid rgba(226,216,196,.8);
+    display:flex; align-items:center; justify-content:center;
+    transition:background .18s, transform .14s; }
+  .micbtn:active{ transform:scale(.97); }
+  .micbtn.rec{ background:var(--plum); }
+  .micbtn .mr{ position:absolute; inset:-4px; border-radius:50%;
+    border:3px solid var(--plum); opacity:0; pointer-events:none; }
+  .micbtn.rec .mr{ animation:micPulse 1.05s ease-out infinite; }
+  @keyframes micPulse{ 0%{transform:scale(1);opacity:.55} 100%{transform:scale(1.34);opacity:0} }
+  body.calm .micbtn.rec .mr{ animation:none; }
   /* Buddy's world: milestones pop in once when unlocked; gentle ambient
      motion (sun pulse, cloud drift, bird bob) - all off in calm mode. */
   .we{ transform-box:fill-box; transform-origin:center bottom; }
@@ -136,6 +162,12 @@
   #ghost.help path{ stroke:var(--clay); stroke-opacity:.55; stroke-width:34; }
   #ghost.pen path{ stroke-width:var(--gw,15); stroke-dasharray:.5 2.4; stroke-opacity:.22; }
   #ghost.pen.help path{ stroke-width:20; }
+  /* Pen-Live in-stroke nudge: the guide recedes when the child is tracking
+     it well, and warms toward ochre when they have drifted off for a
+     while. Silent, purely visual - a compass, never a scold. Placed last
+     so it wins over the pen-mode opacity. */
+  #ghost.gd-on path{ stroke-opacity:.07; }
+  #ghost.gd-off path{ stroke:var(--ochre); stroke-opacity:.34; }
 
   /* Step progress */
   .prog{ height:8px; border-radius:999px; background:rgba(52,48,42,.10); overflow:hidden; }
@@ -172,6 +204,14 @@
     border-radius:14px; padding:9px 16px; font-weight:700; backdrop-filter:blur(6px); }
   .row{ display:flex; align-items:center; }
   .stack{ display:flex; flex-direction:column; }
+
+  /* Evening warmth: from 18:00 to 06:00 the paper drifts a few points
+     warmer and the ink softens slightly, so a tired child near bedtime
+     isn't looking at a cool, high-contrast screen. Ambient, not a setting.
+     Placed before .hc so high-contrast always wins. */
+  body.evening{ --bg:#F1E5CB; --bg-2:#E9D8BB; --surface-2:#FCF3E2;
+    --cream:#FCEFDC; --ink:#3E382E; }
+  body.evening #paper{ background:var(--cream); }
 
   /* Accessibility modes */
   body.hc{ --bg:#000; --surface:#fff; --surface-2:#fff; --ink:#000; --ink-soft:#222;
@@ -240,10 +280,10 @@ const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
   caseMode: "upper", review: {}, diff: 1, sayName: "", worldSeenStars: 0,
-  phonics: true, readBox: {}, readIntro: 1,
+  readBox: {}, readIntro: 1, readProd: {},
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
-    sound: true, haptics: true, contrast: false, calm: false, limit: "soft",
+    sound: true, haptics: true, contrast: false, calm: false,
     foundations: false },
 });
 function loadIdx() {
@@ -395,6 +435,7 @@ const ICON_PATHS = {
   buzz:    'M12 4v2M12 18v2M5 7l1.4 1.4M17.6 15.6L19 17M5 17l1.4-1.4M17.6 8.4L19 7M9 9h6v6H9z',
   contrast:'M12 3a9 9 0 100 18zM12 3a9 9 0 010 18',
   calm:    'M12 21c5-3 7-7 7-11a7 7 0 00-14 0c0 4 2 8 7 11zM12 21V8',
+  mic:     'M12 4a3 3 0 00-3 3v5a3 3 0 006 0V7a3 3 0 00-3-3zM6 11a6 6 0 0012 0M12 17v3M9 20h6',
 };
 function ic(name, size = 24, color = "currentColor", w = 2.4) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none"
@@ -575,8 +616,6 @@ function buddySay(mood, text) {
    One small SVG per drawing. Used on home cards, stickers, completion.
    Keeps everything cohesive with the studio aesthetic. */
 function ART(id, size = 72) {
-  if (id === "review")
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="var(--clay)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON_PATHS.write}"/><path d="M4 21h16"/></svg>`;
   if (id && id.startsWith("word_")) return wordArt(id.slice(5), size);
   if (id && id.startsWith("abc_")) return wordArt(id.slice(4), size);
   if (id && id.startsWith("num_")) return wordArt(id.slice(4), size);
@@ -680,14 +719,12 @@ const I18N = {
     resetConfirm:"De naam, sterren, stickers en alle bewaarde tekeningen wissen?",
     winTitle:n=>`Je hebt het gedaan, ${n}!`, winSticker:x=>`Je hebt de sticker ${x} verdiend.`,
     drawAgain:"Opnieuw", nextDrawing:"Volgende", home:"Home", share:"Delen",
-    letterTip:c=>`De letter "${c}"`, wholeWordTip:"Het hele woord",
-    letterSay:c=>`Laten we de letter ${c} natekenen. Rustig aan, net zoals papa het voordoet.`,
+    wholeWordTip:"Het hele woord",
     wholeWordSay:w=>`Nu het hele woord. Je schrijft ${w}. Het lukt jou!`,
     praiseOk:["Wat mooi, {n}!","Kijk eens, helemaal zelf gedaan. Knap hoor!","Mooie lijnen, {n}. Goed bezig!"],
     praiseSoft:["Elke streep is goed, {n}. We gaan verder.","Er is geen verkeerde manier om te tekenen. Door!","Mooi gedaan. We gaan verder."],
     winPraise:["Heel knap, {n}. Je hebt goed doorgezet en iets van jezelf gemaakt.","Kijk wat je gemaakt hebt, {n}. Met je eigen handen en je eigen ideeën. Trots op je!","Goed gedaan, {n}. Tekenen kost geduld, en dat had jij vandaag."],
     encourage:["Goed zo. Ga door.","Ik zie je lijn groeien.","Rustig aan. Mooi.","Je werkt echt hard.","Goed. Neem de tijd."],
-    freeEncourage:["Mooie kleuren kies je.","Je kunt hier alles maken wat je bedenkt.","Wat mooi. Ga door.","Het is helemaal van jou. Niks is fout."],
     note:`<div class="t-title" style="margin-bottom:10px">Waarom dit werkt</div>
       <p class="t-body">Scribble Heroes draait om het <b>proces, niet het resultaat</b>.
       De app verbetert of beoordeelt de tekening nooit. Buddy reageert warm op
@@ -736,14 +773,12 @@ const I18N = {
     resetConfirm:"Erase the name, stars, stickers and all saved drawings?",
     winTitle:n=>`You did it, ${n}`, winSticker:x=>`You earned the ${x} sticker.`,
     drawAgain:"Draw again", nextDrawing:"Next drawing", home:"Home", share:"Share",
-    letterTip:c=>`The letter "${c}"`, wholeWordTip:"The whole word",
-    letterSay:c=>`Let's trace the letter ${c}. Go nice and slow, just like Papa shows you.`,
+    wholeWordTip:"The whole word",
     wholeWordSay:w=>`Now the whole word. You are writing ${w}. You can do it!`,
     praiseOk:["That looks wonderful, {n}.","You drew that all by yourself. Well done.","Look at the marks you made, {n}. Really good work."],
     praiseSoft:["Every mark you make is good, {n}. Let's keep going.","There's no wrong way to draw. On to the next part.","I like how you did that. Let's carry on."],
     winPraise:["That's really good work, {n}. You stayed with it the whole way, and you made something all your own.","Look what you made, {n}. You used your own hands and your own ideas. I'm proud of you.","Well done, {n}. Drawing takes patience, and you had plenty of it today."],
     encourage:["That's it. Keep going.","I see your line growing.","Nice and slow. Lovely.","You're really working hard.","Good. Take all the time you need."],
-    freeEncourage:["I like the colours you're choosing.","You can draw anything you imagine here.","That's lovely. Keep going.","It's all yours. There's no wrong way."],
     note:`<div class="t-title" style="margin-bottom:10px">Why this works</div>
       <p class="t-body">Scribble Heroes follows a <b>process-over-product</b> approach.
       The app never corrects or scores the drawing. Buddy responds warmly to
@@ -792,14 +827,12 @@ const I18N = {
     resetConfirm:"¿Borrar el nombre, las estrellas, las pegatinas y todos los dibujos?",
     winTitle:n=>`¡Lo lograste, ${n}!`, winSticker:x=>`Ganaste la pegatina ${x}.`,
     drawAgain:"Otra vez", nextDrawing:"Siguiente dibujo", home:"Inicio", share:"Compartir",
-    letterTip:c=>`La letra "${c}"`, wholeWordTip:"La palabra entera",
-    letterSay:c=>`Vamos a trazar la letra ${c}. Despacito, como te enseña papá.`,
+    wholeWordTip:"La palabra entera",
     wholeWordSay:w=>`Ahora la palabra entera. Estás escribiendo ${w}. ¡Tú puedes!`,
     praiseOk:["¡Qué bonito, {n}!","Lo hiciste tú solito. ¡Muy bien!","Mira esas líneas, {n}. ¡Buen trabajo!"],
     praiseSoft:["Cada trazo está bien, {n}. Seguimos.","No hay una forma incorrecta de dibujar. ¡Adelante!","Me gusta cómo lo hiciste. Seguimos."],
     winPraise:["Muy buen trabajo, {n}. No te rendiste y creaste algo tuyo.","Mira lo que hiciste, {n}. Con tus manos y tus ideas. ¡Estoy orgulloso!","Bien hecho, {n}. Dibujar requiere paciencia, y hoy tú la tuviste."],
     encourage:["Eso es. Sigue así.","Veo tu línea crecer.","Despacito. Qué bien.","Estás trabajando mucho.","Bien. Tómate tu tiempo."],
-    freeEncourage:["Me gustan los colores que eliges.","Aquí puedes dibujar lo que imagines.","Qué bonito. Sigue así.","Es todo tuyo. No hay forma incorrecta."],
     note:`<div class="t-title" style="margin-bottom:10px">Por qué funciona</div>
       <p class="t-body">Scribble Heroes sigue un enfoque de <b>proceso, no resultado</b>.
       La app nunca corrige ni califica el dibujo. Buddy responde con cariño a
@@ -875,7 +908,6 @@ function t(k) { const o = I18N[LC()]; return (o && o[k] !== undefined) ? o[k] : 
 // Display name for a drawing (writing words stay as-is, e.g. "MAMA").
 const drawName = d => {
   if (!d.id) return d.name;
-  if (d.id === "review") return t("dailyName");
   if (d.id.startsWith("word_")) { const w = d.id.slice(5);
     return S.caseMode === "lower" ? w.toLowerCase() : w.toUpperCase(); }
   if (d.id.startsWith("abc_")) { const c = d.id.slice(4);
@@ -910,8 +942,7 @@ function stepText(D, i, stp) {
   // Letter / whole-word steps (writing words AND daily practice).
   if (st._c) {
     const L = String(st._c).toUpperCase();
-    return S.phonics ? phonics(L)
-                     : { tip: t("letterTip")(L), say: t("letterSay")(L) };
+    return phonics(L);
   }
   if (st._w) return { tip: t("wholeWordTip"), say: t("wholeWordSay")(st._w) };
   if (D.id && D.id.startsWith("num_")) {
@@ -935,10 +966,9 @@ const I18N_X = {
   nl: {
     pgTitle:"Even voor de ouders", pgQ:(a,b)=>`Hoeveel is ${a} + ${b}?`,
     pgWrong:"Niet helemaal. Probeer nog eens.", cancel:"Terug",
-    restTitle:"Tijd voor een pauze", restBody:"Goed gespeeld! Leg de tablet weg en ga lekker op papier tekenen met een echt krijtje.",
-    restMore:"Nog 5 minuten", restDone:"Klaar voor nu", restSay:"Wat heb jij goed je best gedaan. Leg de tablet maar weg en pak een echt krijtje en papier.",
     bridge:"Pak nu een echt krijtje en papier en maak het zelf na. Dat is het allerbelangrijkste.",
-    setLimit:"Schermtijd", limOff:"Uit", limSoft:"Zachte herinnering", limLock:"Pauze afdwingen",
+    setLimit:"Schermtijd",
+    screenTimeNote:"We adviseren sessies van 10 tot 15 minuten. Deze app houdt zelf geen tijd bij, want jij bent erbij. Korte momenten, dicht naast je kind, werken het best.",
     numTip:n=>`Het cijfer "${n}"`, numSay:n=>`Trek het cijfer ${n} na. Rustig aan.`,
     numWholeTip:"Het hele getal", numWholeSay:n=>`Nu het hele getal ${n}.`,
     shapeSay:s=>`Laten we de ${s} natekenen. Rustig aan.`,
@@ -952,7 +982,7 @@ const I18N_X = {
     worldTitle:"De wereld van Buddy groeit met je mee",
     worldNext:n=>`Nog ${n} ${n===1?"ster":"sterren"} tot iets nieuws`,
     worldDone:"Je wereld is helemaal vol. Knap gedaan!",
-    modeDraw:"Tekenen", modeErase:"Gum", modeStamp:"Stempel", modeFill:"Vullen", modeMirror:"Spiegel",
+    modeDraw:"Tekenen", modeErase:"Gum", modeStamp:"Stempel", modeFill:"Vullen", modeMore:"Meer",
     shareApp:"App delen", shareText:"Een rustige, reclamevrije teken-app voor kleintjes.",
     parentSheet:"Ouderblad afdrukken", sheetTitle:"Scribble Heroes - voor de ouder",
     sheetIntro:n=>`Wat ${n} oefent: fijne motoriek, volgorde, vormen, letters en taal.`,
@@ -962,6 +992,9 @@ const I18N_X = {
     readTitle:"Lezen met Buddy", readSub:n=>`Je kent al ${n} klanken. Tik om te oefenen!`,
     readListen:"Luister naar Buddy", readWhichLetter:"Welke letter hoor je?",
     readWhichWord:"Welk woord hoor je?", readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
+    echoPrompt:"Nu jij. Zeg de klank.", echoHold:"Houd vast en zeg het",
+    echoSay:c=>`Nu jij. Houd de knop vast en zeg ${c}.`,
+    echoJudge:"Hoe ging het?", echoGood:"Dat ging goed", echoRetry:"Nog een keer",
     rdProgressTitle:"Leesvoortgang",
     rdSummary:(i,T,m,wr,wm)=>`${i} van ${T} klanken in gebruik · ${m} echt beheerst · ${wm} woordjes vast (${wr} al gelezen).`,
     rdSoundsLabel:"Klanken", rdWords:"Woordjes beheerst", rdWordsRead:"al gelezen",
@@ -969,18 +1002,15 @@ const I18N_X = {
     rdSuggestRead:W=>`Doe nu dit: lees het woord "${W}".`,
     rdSuggestNext:"Klaar voor de volgende klank!", rdSuggestDone:"Alles beheerst. Knap!",
     rdStartBtn:"Start oefenen",
-    phLabel:"Letters leren via", phSound:"Klank (Montessori)", phName:"Letternaam",
-    phHint:"Klank: Buddy zegt de klank, zoals mmm voor maan (Montessori). Letternaam: Buddy zegt em, es, enzovoort.",
-    caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes", dailyName:"Oefenen",
+    caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
   en: {
     pgTitle:"Just for grown-ups", pgQ:(a,b)=>`What is ${a} + ${b}?`,
     pgWrong:"Not quite. Try again.", cancel:"Back",
-    restTitle:"Time for a break", restBody:"Great playing! Put the tablet down and go draw on paper with a real crayon.",
-    restMore:"5 more minutes", restDone:"Done for now", restSay:"You worked so hard. Put the tablet away now, and pick up a real crayon and some paper.",
     bridge:"Now pick up a real crayon and paper and make it yourself. That is the most important part.",
-    setLimit:"Screen time", limOff:"Off", limSoft:"Gentle reminder", limLock:"Enforce a break",
+    setLimit:"Screen time",
+    screenTimeNote:"We recommend sessions of 10 to 15 minutes. This app keeps no timer of its own, because you are right here. Short moments, close beside your child, work best.",
     numTip:n=>`The number "${n}"`, numSay:n=>`Trace the number ${n}. Nice and slow.`,
     numWholeTip:"The whole number", numWholeSay:n=>`Now the whole number ${n}.`,
     shapeSay:s=>`Let's trace the ${s}. Nice and slow.`,
@@ -994,7 +1024,7 @@ const I18N_X = {
     worldTitle:"Buddy's world grows as you play",
     worldNext:n=>`${n} more ${n===1?"star":"stars"} until something new`,
     worldDone:"Your world is full. Wonderful!",
-    modeDraw:"Draw", modeErase:"Eraser", modeStamp:"Stamp", modeFill:"Fill", modeMirror:"Mirror",
+    modeDraw:"Draw", modeErase:"Eraser", modeStamp:"Stamp", modeFill:"Fill", modeMore:"More",
     shareApp:"Share app", shareText:"A calm, ad-free drawing app for little ones.",
     parentSheet:"Print parent sheet", sheetTitle:"Scribble Heroes - for the parent",
     sheetIntro:n=>`What ${n} is practising: fine motor, sequencing, shapes, letters and language.`,
@@ -1004,6 +1034,9 @@ const I18N_X = {
     readTitle:"Reading with Buddy", readSub:n=>`You know ${n} sounds. Tap to practise!`,
     readListen:"Listen to Buddy", readWhichLetter:"Which letter do you hear?",
     readWhichWord:"Which word do you hear?", readAgain:"Again", readNext:"Next", readMore:"Read more",
+    echoPrompt:"Your turn. Say the sound.", echoHold:"Hold and say it",
+    echoSay:c=>`Your turn. Hold the button and say ${c}.`,
+    echoJudge:"How did it go?", echoGood:"That went well", echoRetry:"Once more",
     rdProgressTitle:"Reading progress",
     rdSummary:(i,T,m,wr,wm)=>`${i} of ${T} sounds in play · ${m} mastered · ${wm} words solid (${wr} read).`,
     rdSoundsLabel:"Sounds", rdWords:"Words mastered", rdWordsRead:"already read",
@@ -1011,18 +1044,15 @@ const I18N_X = {
     rdSuggestRead:W=>`Do this next: read the word "${W}".`,
     rdSuggestNext:"Ready for the next sound!", rdSuggestDone:"All mastered. Amazing!",
     rdStartBtn:"Start practising",
-    phLabel:"Learn letters by", phSound:"Sound (Montessori)", phName:"Letter name",
-    phHint:"Sound: Buddy says the sound, like mmm for moon (Montessori). Letter name: Buddy says em, es, and so on.",
-    caseLabel:"Letters", setFoundations:"Buddy's little wise words", dailyName:"Practice",
+    caseLabel:"Letters", setFoundations:"Buddy's little wise words",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
   es: {
     pgTitle:"Solo para adultos", pgQ:(a,b)=>`¿Cuánto es ${a} + ${b}?`,
     pgWrong:"Casi. Inténtalo otra vez.", cancel:"Volver",
-    restTitle:"Hora de un descanso", restBody:"¡Bien jugado! Deja la tablet y ve a dibujar en papel con una crayola de verdad.",
-    restMore:"5 minutos más", restDone:"Listo por ahora", restSay:"Trabajaste muchísimo. Deja la tablet y toma una crayola de verdad y papel.",
     bridge:"Ahora toma una crayola de verdad y papel y hazlo tú. Eso es lo más importante.",
-    setLimit:"Tiempo de pantalla", limOff:"Apagado", limSoft:"Recordatorio suave", limLock:"Forzar un descanso",
+    setLimit:"Tiempo de pantalla",
+    screenTimeNote:"Recomendamos sesiones de 10 a 15 minutos. Esta app no lleva ningún temporizador, porque tú estás aquí. Momentos cortos, junto a tu hijo, funcionan mejor.",
     numTip:n=>`El número "${n}"`, numSay:n=>`Traza el número ${n}. Despacito.`,
     numWholeTip:"El número entero", numWholeSay:n=>`Ahora el número entero ${n}.`,
     shapeSay:s=>`Vamos a trazar el ${s}. Despacito.`,
@@ -1036,7 +1066,7 @@ const I18N_X = {
     worldTitle:"El mundo de Buddy crece al jugar",
     worldNext:n=>`${n} ${n===1?"estrella":"estrellas"} más para algo nuevo`,
     worldDone:"¡Tu mundo está completo!",
-    modeDraw:"Dibujar", modeErase:"Goma", modeStamp:"Sello", modeFill:"Rellenar", modeMirror:"Espejo",
+    modeDraw:"Dibujar", modeErase:"Goma", modeStamp:"Sello", modeFill:"Rellenar", modeMore:"Más",
     shareApp:"Compartir app", shareText:"Una app de dibujo tranquila y sin anuncios para los peques.",
     parentSheet:"Imprimir hoja", sheetTitle:"Scribble Heroes - para el adulto",
     sheetIntro:n=>`Lo que practica ${n}: motricidad fina, secuencia, formas, letras y lenguaje.`,
@@ -1046,6 +1076,9 @@ const I18N_X = {
     readTitle:"Leer con Buddy", readSub:n=>`Ya conoces ${n} sonidos. ¡Toca para practicar!`,
     readListen:"Escucha a Buddy", readWhichLetter:"¿Qué letra escuchas?",
     readWhichWord:"¿Qué palabra escuchas?", readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
+    echoPrompt:"Ahora tú. Di el sonido.", echoHold:"Mantén y dilo",
+    echoSay:c=>`Ahora tú. Mantén el botón y di ${c}.`,
+    echoJudge:"¿Cómo fue?", echoGood:"Salió bien", echoRetry:"Otra vez",
     rdProgressTitle:"Progreso de lectura",
     rdSummary:(i,T,m,wr,wm)=>`${i} de ${T} sonidos en juego · ${m} dominados · ${wm} palabras firmes (${wr} leídas).`,
     rdSoundsLabel:"Sonidos", rdWords:"Palabras dominadas", rdWordsRead:"ya leídas",
@@ -1053,9 +1086,7 @@ const I18N_X = {
     rdSuggestRead:W=>`Haz esto ahora: lee la palabra "${W}".`,
     rdSuggestNext:"¡Listo para el siguiente sonido!", rdSuggestDone:"¡Todo dominado!",
     rdStartBtn:"Empezar a practicar",
-    phLabel:"Aprender letras por", phSound:"Sonido (Montessori)", phName:"Nombre de letra",
-    phHint:"Sonido: Buddy dice el sonido, como mmm de mano (Montessori). Nombre: Buddy dice eme, ese, etc.",
-    caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy", dailyName:"Practicar",
+    caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
 };
@@ -1123,42 +1154,9 @@ let _adding = false;
 // instead of every time the screen rebuilds (less chatter).
 let _greeted = false, _splashed = false;
 
-// Screen-time governor. Soft = dismissible nudge; lock = parent gate to
-// continue; off = disabled. Default soft (set in defaultState).
-let _sessionStart = Date.now(), _resting = false;
-const SESSION_MIN = 12;
-function resetSession() { _sessionStart = Date.now(); _resting = false; }
-function checkSession() {
-  const mode = S.settings.limit || "soft";
-  if (mode === "off" || _resting) return;
-  if (Date.now() - _sessionStart < SESSION_MIN * 60000) return;
-  _resting = true;
-  RestScreen(mode);
-}
-setInterval(checkSession, 20000);
-
-function RestScreen(mode) {
-  try { if (_ttsEl) _ttsEl.pause(); speechSynthesis && speechSynthesis.cancel(); } catch {}
-  APP.innerHTML = "";
-  const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:28px;gap:16px" });
-  s.append(
-    el("div", { cls: "float", html: Buddy("calm", 150) }),
-    el("div", { cls: "t-display", textContent: t("restTitle") }),
-    el("div", { cls: "t-body muted", css: "max-width:440px", textContent: t("restBody") }));
-  const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px" });
-  const more = el("button", { cls: "btn btn-quiet t-head", textContent: t("restMore") });
-  more.onclick = () => parentGate(() => { resetSession(); go("home"); });
-  const done = el("button", { cls: "btn btn-go t-head", textContent: t("restDone") });
-  done.onclick = () => {
-    if (mode === "lock") parentGate(() => { resetSession(); go("home"); });
-    else { resetSession(); go("home"); }
-  };
-  // Soft mode: a single calm dismissal is allowed (it is a nudge, not a wall).
-  row.append(done, more);
-  s.append(row);
-  APP.append(s);
-  buddySay("calm", t("restSay"));
-}
+// No in-app screen-time governor. Pacing a session is the parent's job -
+// they have the device's own controls and they are sitting alongside.
+// Settings carries a short written recommendation instead of a timer.
 
 const DRAWINGS = [
   { id:"sun", name:"The Sun", category:"nature", accent:"var(--ochre)", finale:"spin", steps:[
@@ -1403,20 +1401,6 @@ function letterSteps(word) {
 // The whole alphabet, in the current case (caps or lowercase).
 const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const abcCase = L => S.caseMode === "lower" ? L.toLowerCase() : L;
-// Daily practice = spaced repetition across the WHOLE alphabet: the
-// least-recently-traced letters come back first, so she learns them all.
-function reviewSteps() {
-  const pool = ABC.map(abcCase).filter(c => glyphSet()[c]);
-  const seen = c => S.review[String(c).toUpperCase()] || 0;
-  pool.sort((a, b) => seen(a) - seen(b));
-  return pool.slice(0, Math.min(5, pool.length)).map(glyphStep);
-}
-DRAWINGS.push({
-  id: "review", name: "Daily practice", category: "writing",
-  accent: "var(--clay)", finale: "bounce",
-  pen: true, clearEachStep: true,
-  build: reviewSteps, steps: [],
-});
 WORDS.forEach(wd => DRAWINGS.push({
   id: "word_" + wd, name: wd, category: "writing",
   accent: "var(--sky)", finale: "bounce",
@@ -1462,31 +1446,68 @@ function shapeArt(key, size) {
 }
 
 /* ----- 8f. P2: Buddy's growing world (progress arc) -------------------
-   A calm scene that gains elements at star milestones. It rewards the
-   PARENT's sense of progress without pressuring the child. */
-const WORLD_STEPS = [3, 6, 10, 15, 22, 32, 45];
-function worldSVG(stars, seen) {
-  const seenN = seen || 0;
+   A calm, layered landscape that gains elements at star milestones and
+   shifts with the local time of day. It rewards the PARENT's sense of
+   progress without pressuring the child. Milestones come quickly at first
+   so a young child feels the world grow within the first sessions. */
+const WORLD_STEPS = [2, 4, 7, 11, 16, 24, 36];
+function worldTOD() {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 9)  return "dawn";
+  if (h >= 9 && h < 17) return "day";
+  if (h >= 17 && h < 20) return "dusk";
+  return "night";
+}
+function worldScene(stars, seen) {
+  const seenN = seen || 0, tod = worldTOD(), night = tod === "night";
+  const SKY = { dawn:["#F3DABE","#EFE6D0"], day:["#CFE2EA","#E9F0DF"],
+                dusk:["#E7BE94","#DBC2A4"], night:["#2D3252","#474C6A"] };
+  const sky = SKY[tod];
+  const hillFar  = night ? "#3B3F62" : "#cdd9bc";
+  const hillNear = night ? "#454A6C" : "#bccaa6";
+  const ground   = night ? "#4E5378" : "#d2ddb6";
+  const groundLn = night ? "#3a3f5e" : "#bbc79e";
   // Each milestone is a <g class="we">; locked = hidden, just-unlocked
-  // (need > previously-seen) gets "new" so it pops in once. Cloud/bird
-  // have an inner ambient layer so the pop and the drift don't clash.
+  // (need > previously-seen) gets "new" so it pops in once.
   const cell = (need, inner, amb) => {
     const lock = stars < need, isNew = !lock && need > seenN;
     const body = amb ? `<g class="${amb}">${inner}</g>` : inner;
     return `<g class="we${lock ? " lock" : ""}${isNew ? " new" : ""}">${body}</g>`;
   };
-  return `<svg viewBox="0 0 320 96" width="100%" height="92" aria-hidden="true">
-    <rect x="0" y="0" width="320" height="96" fill="none"/>
-    <g class="w-sun"><circle cx="40" cy="30" r="15" fill="var(--ochre)"/></g>
-    <path d="M0 78 H320" stroke="#cdbb98" stroke-width="2"/>
-    <rect x="0" y="80" width="320" height="16" fill="#dfead2"/>
-    ${cell(3, '<path d="M70 80 V58" stroke="#7a5a3a" stroke-width="5"/><circle cx="70" cy="48" r="16" fill="var(--sage)"/>')}
-    ${cell(6, '<path d="M120 80 V64" stroke="var(--sage)" stroke-width="3"/><circle cx="120" cy="58" r="7" fill="var(--rose)"/><circle cx="120" cy="58" r="3" fill="var(--ochre)"/>')}
-    ${cell(10, '<rect x="150" y="56" width="40" height="24" fill="var(--clay)"/><path d="M148 56 L170 40 L192 56 Z" fill="#8a4b34"/><rect x="164" y="64" width="12" height="16" fill="#f4e9d8"/>')}
-    ${cell(15, '<ellipse cx="245" cy="28" rx="22" ry="11" fill="#ffffff"/><ellipse cx="262" cy="24" rx="14" ry="9" fill="#ffffff"/>', 'w-cloud')}
-    ${cell(22, '<path d="M210 34 q6 -6 12 0 q6 -6 12 0" stroke="var(--plum)" stroke-width="3" fill="none" stroke-linecap="round"/>', 'w-bird')}
-    ${cell(32, '<path d="M285 80 V52" stroke="#9aa" stroke-width="2"/><path d="M280 56 Q288 36 296 56 L296 70 H280 Z" fill="var(--plum)"/><path d="M286 70 Q288 80 290 70" fill="var(--ochre)"/>')}
-    ${cell(45, '<path d="M300 18 l3 6 6 1 -4 5 1 6 -6 -3 -6 3 1 -6 -4 -5 6 -1 z" fill="var(--ochre)"/>')}
+  let celest;
+  if (night) {
+    celest = `<g class="w-sun"><circle cx="268" cy="34" r="14" fill="#F1EBD6"/>
+      <circle cx="262" cy="30" r="11.5" fill="${sky[0]}"/></g>`;
+  } else {
+    const sx = tod === "dawn" ? 46 : tod === "dusk" ? 278 : 62;
+    const sy = tod === "day" ? 30 : 44;
+    const sc = tod === "dusk" ? "#E8954C" : "var(--ochre)";
+    celest = `<g class="w-sun"><circle cx="${sx}" cy="${sy}" r="16" fill="${sc}"/></g>`;
+  }
+  const stardots = night
+    ? [[44,30],[96,22],[150,38],[206,26],[244,52],[120,58]]
+        .map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.5" fill="#F1EBD6" opacity=".85"/>`).join("")
+    : "";
+  const buddy = Buddy("warm", 42).replace("<svg ", '<svg x="34" y="74" ');
+  return `<svg viewBox="0 0 320 150" width="100%" aria-hidden="true">
+    <defs><linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/>
+    </linearGradient></defs>
+    <rect width="320" height="150" fill="url(#wsky)"/>
+    ${stardots}
+    ${celest}
+    <path d="M0 100 Q70 80 150 96 Q230 110 320 92 V150 H0 Z" fill="${hillFar}" opacity=".75"/>
+    <path d="M0 114 Q90 98 180 112 Q250 124 320 110 V150 H0 Z" fill="${hillNear}"/>
+    <rect x="0" y="120" width="320" height="30" fill="${ground}"/>
+    <path d="M0 120 H320" stroke="${groundLn}" stroke-width="2"/>
+    ${cell(2,  '<path d="M64 120 V94" stroke="#7a5a3a" stroke-width="6" stroke-linecap="round"/><circle cx="64" cy="80" r="20" fill="var(--sage)"/>')}
+    ${cell(4,  '<path d="M112 120 V102" stroke="var(--sage)" stroke-width="4" stroke-linecap="round"/><circle cx="112" cy="93" r="6" fill="var(--rose)"/><circle cx="105" cy="99" r="6" fill="var(--rose)"/><circle cx="119" cy="99" r="6" fill="var(--rose)"/><circle cx="112" cy="99" r="4.5" fill="var(--ochre)"/>')}
+    ${cell(7,  '<rect x="150" y="92" width="46" height="28" fill="var(--clay)"/><path d="M146 92 L173 72 L200 92 Z" fill="#8a4b34"/><rect x="166" y="100" width="14" height="20" fill="#f4e9d8"/>')}
+    ${cell(11, '<ellipse cx="232" cy="34" rx="24" ry="12" fill="#fbf6ec"/><ellipse cx="250" cy="29" rx="15" ry="10" fill="#fbf6ec"/>', 'w-cloud')}
+    ${cell(16, `<path d="M118 50 q7 -7 14 0 q7 -7 14 0" stroke="${night ? "#cfc6dd" : "var(--plum)"}" stroke-width="3.4" fill="none" stroke-linecap="round"/>`, 'w-bird')}
+    ${cell(24, '<path d="M252 120 V86" stroke="#9a9a8a" stroke-width="2.4"/><path d="M246 92 Q255 66 264 92 L264 116 H246 Z" fill="var(--plum)"/><path d="M253 116 Q255 102 257 116 Z" fill="var(--ochre)"/>')}
+    ${cell(36, '<path d="M292 60 l4 8 8 1 -6 6 1.5 8 -7.5 -4 -7.5 4 1.5 -8 -6 -6 8 -1 z" fill="var(--ochre)"/>')}
+    ${buddy}
   </svg>`;
 }
 
@@ -1548,6 +1569,15 @@ const readMasteredCount = () => rdIntro().filter(c => rdBox("s:" + c) >= 3).leng
 function buildReadSession() {
   const intro = rdIntro(), top = RD().sounds[S.readIntro - 1], items = [];
   if (rdBox("s:" + top) === 0) items.push({ t: "teach", s: top });
+  // Echo: one active-production item per session, for a taught sound that
+  // has had the least production practice. Receptive picks alone overstate
+  // mastery; saying the sound aloud is what anchors the letter-sound link.
+  const taught = intro.filter(c => rdBox("s:" + c) >= 1);
+  if (taught.length) {
+    const byProd = [...taught].sort((a, b) =>
+      ((S.readProd && S.readProd[a]) || 0) - ((S.readProd && S.readProd[b]) || 0) || Math.random() - .5);
+    items.push({ t: "echo", s: byProd[0] });
+  }
   const bySound = [...intro].sort((a, b) => rdBox("s:" + a) - rdBox("s:" + b) || Math.random() - .5);
   for (let i = 0; i < 5; i++) items.push({ t: "pick", s: bySound[i % bySound.length] });
   const masteredS = intro.filter(c => rdBox("s:" + c) >= 2).length;
@@ -1617,9 +1647,75 @@ function ReadScreen() {
     const b = el("button", { cls: "card", css: "padding:16px 20px;min-width:96px;background:var(--surface)" });
     b.innerHTML = inner; b.onclick = on; return b;
   }
+  // Echo: the child's active-production turn. Buddy says the sound, the
+  // child holds the mic and says it back, Buddy models it once more, and
+  // the child self-assesses (Reggio: the child as judge). "Once more"
+  // simply restarts - never a wrong answer, only another try.
+  function echoItem(it) {
+    const L = it.s.toUpperCase();
+    const kw = (SOUND[LC()] || SOUND.en)[L] || it.s;
+    const stretched = kw[0] + kw[0] + kw[0];
+    promptEl.textContent = t("echoPrompt");
+    showEl.innerHTML = lowerArt(it.s, 120);
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    replay.onclick = () => { Sound.fx.tap(); speak(t("echoSay")(stretched)); };
+    buddySay("happy", t("echoSay")(stretched));
+
+    const wrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:12px" });
+    const mic = el("button", { cls: "micbtn",
+      html: `<span class="mr"></span>` + ic("mic", 50, "var(--plum)") });
+    wrap.append(mic, el("div", { cls: "t-body muted", textContent: t("echoHold") }));
+    choices.append(wrap);
+
+    let held = false, done = false;
+    const setIcon = c => { const sv = mic.querySelector("svg"); if (sv) sv.setAttribute("stroke", c); };
+    function startHold(e) {
+      if (held || done) return;
+      if (e && e.preventDefault) e.preventDefault();
+      held = true;
+      mic.classList.add("rec"); setIcon("var(--cream)"); buzz(14);
+      try { speechSynthesis.cancel(); } catch {}
+      if (_ttsEl) try { _ttsEl.pause(); } catch {}
+    }
+    function endHold() {
+      if (!held || done) return;
+      held = false; done = true;
+      mic.classList.remove("rec"); setIcon("var(--plum)"); buzz(10);
+      // Buddy models the sound right after the child's attempt.
+      setTimeout(() => speak(stretched + ". " + kw + "."), 220);
+      setTimeout(showJudge, 1500);
+    }
+    mic.addEventListener("pointerdown", startHold);
+    mic.addEventListener("pointerup", endHold);
+    mic.addEventListener("pointerleave", () => { if (held) endHold(); });
+    mic.addEventListener("pointercancel", () => { if (held) endHold(); });
+
+    function showJudge() {
+      promptEl.textContent = t("echoJudge");
+      choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+      const jt = (icon, label, col, fn) => {
+        const b = el("button", { cls: "card",
+          css: "padding:16px 22px;min-width:128px;display:flex;flex-direction:column;align-items:center;gap:8px;background:var(--surface)" });
+        b.innerHTML = `<span style="background:${col};border-radius:14px;padding:10px;display:inline-flex">${ic(icon, 26, "#fff")}</span><span class="t-head">${label}</span>`;
+        b.onclick = fn; return b;
+      };
+      choices.append(
+        jt("check", t("echoGood"), "var(--sage)", () => {
+          rdBump("s:" + it.s, true);
+          S.readProd = S.readProd || {};
+          S.readProd[it.s] = (S.readProd[it.s] || 0) + 1;
+          save();
+          resolve(true, null);
+        }),
+        jt("undo", t("echoRetry"), "var(--ochre)", () => {
+          Sound.fx.tap(); buzz(12); echoItem(it);
+        }));
+    }
+  }
   function showItem() {
     const it = session[i];
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    if (it.t === "echo") { echoItem(it); return; }
     if (it.t === "teach") {
       const L = it.s.toUpperCase();
       promptEl.textContent = t("readListen");
@@ -1702,8 +1798,11 @@ function readingDashboard() {
     const box = rdBox("s:" + c);
     const pct = locked ? 0 : Math.min(5, box) / 5 * 100;
     const isActive = !locked && c === active;
-    const cell = el("div", { css: `display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:10px;background:${locked ? "var(--surface-2)" : "var(--surface)"};border:2px solid ${isActive ? "var(--clay)" : "var(--line)"};${locked ? "opacity:.45" : ""}` });
+    const produced = !locked && ((S.readProd && S.readProd[c]) || 0) > 0;
+    const cell = el("div", { css: `position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border-radius:10px;background:${locked ? "var(--surface-2)" : "var(--surface)"};border:2px solid ${isActive ? "var(--clay)" : "var(--line)"};${locked ? "opacity:.45" : ""}` });
+    // A small plum mic badge marks sounds the child has said aloud (Echo).
     cell.innerHTML =
+      (produced ? `<span style="position:absolute;top:3px;right:3px;background:var(--plum);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center">${ic("mic", 11, "#fff")}</span>` : "") +
       `<div style="height:36px;display:flex;align-items:center;justify-content:center">${lowerArt(c, 32)}</div>
        <div style="height:5px;width:100%;background:rgba(52,48,42,.12);border-radius:99px;overflow:hidden">
          <i style="display:block;height:100%;width:${pct}%;background:${box >= 3 ? "var(--sage)" : "var(--ochre)"}"></i></div>`;
@@ -1737,6 +1836,9 @@ const APP = $("#app");
 function applyFlags() {
   document.body.classList.toggle("hc", S.settings.contrast);
   document.body.classList.toggle("calm", S.settings.calm);
+  // Ambient evening warmth (18:00-06:00 local time).
+  const h = new Date().getHours();
+  document.body.classList.toggle("evening", h >= 18 || h < 6);
 }
 function go(screen, data) {
   applyFlags(); APP.innerHTML = "";
@@ -1864,10 +1966,12 @@ function Home(mode) {
     const prevSeen = S.worldSeenStars || 0;
     const nextStep = WORLD_STEPS.find(x => x > S.stars);
     const hint = nextStep ? t("worldNext")(nextStep - S.stars) : t("worldDone");
-    const world = el("div", { cls: "card", css: "margin:6px 20px 0;padding:10px 12px 6px;background:linear-gradient(180deg,#EAF1F4,#F4EFE2)" });
-    world.innerHTML = worldSVG(S.stars, prevSeen) +
-      `<div class="t-label" style="text-align:center;margin-top:2px">${t("worldTitle")}</div>
-       <div class="t-body muted" style="text-align:center;font-size:13px;margin-top:1px">${hint}</div>`;
+    const world = el("div", { cls: "card", css: "margin:6px 20px 0;padding:0;overflow:hidden" });
+    world.innerHTML = worldScene(S.stars, prevSeen) +
+      `<div style="text-align:center;padding:7px 12px 9px">
+         <div class="t-label">${t("worldTitle")}</div>
+         <div class="t-body muted" style="font-size:13px;margin-top:1px">${hint}</div>
+       </div>`;
     s.append(world);
     if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
@@ -2124,6 +2228,7 @@ function makeEngine(stage, opts = {}) {
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs) st.pts.push(xy(ev));
     smooth();
+    liveClassify();
   });
   function end() {
     if (!st.down) return;
@@ -2133,7 +2238,39 @@ function makeEngine(stage, opts = {}) {
       dot(st.pts[0]); if (st.mirror) dot(mir(st.pts[0]));
     }
     st.down = false; st.strokes++; st.pts = [];
+    ghost.classList.remove("gd-on", "gd-off"); _offSince = 0;  // back to rest
     buzz(14); opts.onStroke && opts.onStroke(st.strokes);
+  }
+  // Pen-Live B: throttled in-stroke compass. Compares the child's latest
+  // point to cached ghost samples. Tracking well -> guide recedes; drifted
+  // off for >800ms -> guide warms. Silent. Skipped when there's no ghost.
+  // Ghost samples are stored in viewBox units (0..1000), so they stay
+  // valid even when setGhost runs before the canvas has been sized. The
+  // child's point is converted into the same space at compare time.
+  let _ghostPts = [], _lastLive = 0, _offSince = 0;
+  function liveClassify() {
+    if (!_ghostPts.length || !st.pts.length || !size) return;
+    const now = performance.now();
+    if (now - _lastLive < 170) return;
+    _lastLive = now;
+    const raw = st.pts[st.pts.length - 1];
+    const p = { x: raw.x / size * 1000, y: raw.y / size * 1000 };  // -> viewBox
+    let best = 1e9;
+    for (const g of _ghostPts) {
+      const dx = g.x - p.x, dy = g.y - p.y, d = dx * dx + dy * dy;
+      if (d < best) best = d;
+    }
+    best = Math.sqrt(best);
+    const gw = parseFloat(getComputedStyle(ghost).getPropertyValue("--gw")) || 26;
+    if (best < gw * 0.7) {                       // on the line - guide recedes
+      ghost.classList.add("gd-on"); ghost.classList.remove("gd-off"); _offSince = 0;
+    } else if (best < gw * 1.9) {                // near - neutral, no signal
+      ghost.classList.remove("gd-on", "gd-off"); _offSince = 0;
+    } else {                                     // drifted off
+      ghost.classList.remove("gd-on");
+      if (!_offSince) _offSince = now;
+      else if (now - _offSince > 800) ghost.classList.add("gd-off");
+    }
   }
   cv.addEventListener("pointerup", end);
   cv.addEventListener("pointercancel", end);
@@ -2141,9 +2278,22 @@ function makeEngine(stage, opts = {}) {
 
   let gp = [];
   function setGhost(arr) {
-    ghost.innerHTML = ""; demo.innerHTML = ""; ghost.classList.remove("help"); gp = arr;
+    ghost.innerHTML = ""; demo.innerHTML = ""; gp = arr;
+    ghost.classList.remove("help", "gd-on", "gd-off"); _offSince = 0;
     arr.forEach(d => { const p = document.createElementNS(SVGNS, "path");
       p.setAttribute("d", d); p.setAttribute("pathLength", "100"); ghost.append(p); });
+    // Cache ghost samples in viewBox units for the live in-stroke compass.
+    _ghostPts = [];
+    const tmp = document.createElementNS(SVGNS, "path");
+    for (const d of arr) {
+      tmp.setAttribute("d", d);
+      const len = tmp.getTotalLength() || 1;
+      const n = clamp(Math.round(len / 24), 6, 90);
+      for (let k = 0; k <= n; k++) {
+        const pt = tmp.getPointAtLength((k / n) * len);
+        _ghostPts.push({ x: pt.x, y: pt.y });
+      }
+    }
   }
   let raf, demoF = 1;
   const setDemoFactor = f => { demoF = clamp(f, .6, 1.6); };
@@ -2277,9 +2427,11 @@ function DrawScreen(id) {
   const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:4px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(86vw,560px);margin:auto" });
   sw.append(stage); s.append(sw);
-  const engine = makeEngine(stage, { onStroke: () => {
-    if (Math.random() < .12) buddySay("happy", rnd("encourage"));
-  }});
+  // Pen-Live: every finished stroke recomputes real coverage so the
+  // progress bar fills continuously, not in step-sized jumps. When the
+  // step first becomes "complete enough", the Next button pulses once -
+  // contingent reinforcement, never a gate (Next always works).
+  const engine = makeEngine(stage, { onStroke: () => liveUpdate() });
   // Writing lessons: fine pen, no brush chooser, thinner ghost guide.
   if (D.pen) {
     engine.st.brush = "pen";
@@ -2310,8 +2462,24 @@ function DrawScreen(id) {
   APP.append(s);
   applyLandscape(s, sw, stage);
 
+  // Continuous coverage feedback. Within step i the bar fills by how much
+  // of the ghost the child has actually covered (capped at the pass mark).
+  let stepPassed = false;
+  function liveUpdate() {
+    const sc = engine.score();
+    const frac = clamp(sc / engine.cfg.pass, 0, 1);
+    prog.firstChild.style.width = ((i + frac) / steps.length) * 100 + "%";
+    if (!stepPassed && sc >= engine.cfg.pass) {
+      stepPassed = true;
+      next.classList.remove("ready"); void next.offsetWidth; next.classList.add("ready");
+      Sound.fx.soft();
+      if (Math.random() < .35) buddySay("happy", rnd("encourage"));
+    }
+  }
+
   function show() {
     const stp = steps[i], L = stepText(D, i, stp);
+    stepPassed = false;
     prog.firstChild.style.width = (i / steps.length) * 100 + "%";
     pNum.textContent = t("stepOf")(i + 1, steps.length);
     $("#sIcon").innerHTML = ic(stp.icon, 26, D.accent);
@@ -2359,7 +2527,7 @@ function DrawScreen(id) {
     const blob = await engine.toPNG();
     S.completed[D.id] = Math.max(S.completed[D.id] || 0, stars);
     S.stars += stars;
-    if (D.id !== "review" && !S.stickers.includes(D.id)) S.stickers.push(D.id);
+    if (!S.stickers.includes(D.id)) S.stickers.push(D.id);
     if (S.stars > S.buddyLevel * 8) S.buddyLevel++;
     // Spaced repetition: remember when each traced letter was practised.
     S.review = S.review || {};
@@ -2380,12 +2548,17 @@ function WinScreen({ D, stars, blob }) {
     html: Array.from({ length: 3 }, (_, k) =>
       ic("star", 30, k < stars ? "var(--ochre)" : "rgba(52,48,42,.18)")).join("") });
   s.append(starsRow);
-  const fin = el("div", { id: "fin", css: "margin:4px 0", html: ART(D.id, 110) });
-  const frame = el("div", { cls: "card", css: "padding:12px;background:var(--cream)" });
+  // The child's own drawing is the centerpiece. A slow cream warmth-pulse
+  // breathes around the frame once (calm-mode skips it).
+  const frameWrap = el("div", { css: "position:relative;margin:8px 0;padding:14px;display:inline-block" });
+  const halo = el("div", { id: "winHalo",
+    css: "position:absolute;inset:0;border-radius:24px;pointer-events:none;background:radial-gradient(closest-side,rgba(251,243,231,.85),rgba(251,243,231,0) 72%);opacity:0" });
+  const frame = el("div", { cls: "card", css: "padding:12px;background:var(--cream);position:relative" });
   frame.append(el("img", { src: url, alt: "Your drawing",
-    css: "width:min(62vw,280px);border-radius:14px;display:block" }));
-  s.append(fin, frame);
-  s.append(el("div", { cls: "bubble t-body", css: "margin-top:14px",
+    css: "width:min(72vw,360px);border-radius:14px;display:block" }));
+  frameWrap.append(halo, frame);
+  s.append(frameWrap);
+  s.append(el("div", { cls: "bubble t-body", css: "margin-top:10px",
     textContent: t("winSticker")(drawName(D)) }));
   // Off-screen bridge: push the child back to real paper (panel P0).
   s.append(el("div", { cls: "t-body muted", css: "max-width:440px;margin-top:4px",
@@ -2415,30 +2588,23 @@ function WinScreen({ D, stars, blob }) {
   s.append(row);
   APP.append(s);
 
-  Sound.fx.win(); buzz([20, 40, 20]); burst(1);
-  finale($("#fin"), D.finale);
-  setTimeout(() => Sound.fx.sticker(), 1300);
+  Sound.fx.win(); buzz([20, 40, 20]);
+  // A single slow cream warmth-pulse around the drawing - the visual
+  // equivalent of a warm exhale. Calm mode and reduced-motion skip it.
+  const haloEl = $("#winHalo");
+  if (haloEl && !S.settings.calm) {
+    haloEl.animate(
+      [{ opacity: 0, transform: "scale(.92)" },
+       { opacity: 1, transform: "scale(1.18)" },
+       { opacity: 0, transform: "scale(1.28)" }],
+      { duration: 2200, easing: "cubic-bezier(.3,.7,.3,1)" });
+  }
   setTimeout(() => speak(rnd("winPraise")), 700);
-  // (bridge nudge stays as on-screen text only; not spoken every win)
-  if (S.settings.foundations) setTimeout(() => speak(rnd("found")), 9000);
-}
-function finale(node, kind) {
-  if (!node || S.settings.calm) return;
-  const a = {
-    fly:    [{ transform: "translateY(0)" }, { transform: "translateY(-220px)", opacity: .5 }],
-    bounce: [{ transform: "translateY(0)" }, { transform: "translateY(-46px)" }, { transform: "translateY(0)" }],
-    wag:    [{ transform: "rotate(-8deg)" }, { transform: "rotate(8deg)" }, { transform: "rotate(-8deg)" }],
-    spin:   [{ transform: "rotate(0)" }, { transform: "rotate(360deg)" }],
-    grow:   [{ transform: "scale(.6)" }, { transform: "scale(1.06)" }, { transform: "scale(1)" }],
-  };
-  node.animate(a[kind] || a.bounce,
-    { duration: kind === "fly" ? 2200 : 1400, iterations: kind === "wag" ? 3 : 2, easing: "cubic-bezier(.3,.7,.3,1)" });
 }
 function burst(scale = 1) {
   if (S.settings.calm || typeof confetti !== "function") return;
   confetti({ particleCount: Math.round(90 * scale), spread: 78, origin: { y: .62 },
-    colors: COLORS, // single tokenized palette (matches the crayons)
-    scalar: 1.05, disableForReducedMotion: true, ticks: 160 });
+    colors: COLORS, scalar: 1.05, disableForReducedMotion: true, ticks: 160 });
 }
 
 /* ----- 15. Gallery ----------------------------------------------------- */
@@ -2482,8 +2648,7 @@ function StickerScreen() {
   const s = el("div", { cls: "screen" });
   s.append(header(t("stickersTitle")));
   const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
-  // "Oefenen" (daily practice) is not a collectible sticker - exclude it.
-  const collectible = DRAWINGS.filter(d => d.id !== "review");
+  const collectible = DRAWINGS;
   wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-bottom:12px",
     textContent: t("stickersCount")(S.stickers.length, collectible.length) }));
   const grid = el("div", { cls: "grid" });
@@ -2512,12 +2677,14 @@ function FreeDraw() {
   const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
   const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(90vw,620px);margin:auto" });
   sw.append(stage); s.append(sw);
-  let n = 0;
-  const engine = makeEngine(stage, { onStroke: () => {
-    if (++n % 12 === 0) speak(rnd("freeEncourage")); }});
+  // Free expression: Buddy stays silent here. The value of free drawing
+  // is the absence of any judgement, including positive judgement.
+  const engine = makeEngine(stage, {});
   s.append(toolbar(engine));
 
-  // Free Draw extras: Draw / Stamp / Fill modes, Mirror, stamp tray.
+  // Free Draw extras. Default surface holds only Draw + Erase - a toddler
+  // works with at most three tools at once. Stamp + Fill live behind a
+  // "More" chip so first contact with the canvas stays uncluttered.
   const tools = el("div", { css: "display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:0 14px 2px" });
   const stampTray = el("div", { css: "display:none;gap:8px;justify-content:center;padding:2px 14px 4px;flex-wrap:wrap" });
   const modeChip = (m, icon, label) => {
@@ -2537,12 +2704,21 @@ function FreeDraw() {
   const cE = modeChip("erase", "eraser", t("modeErase"));
   const cS = modeChip("stamp", "sticker", t("modeStamp"));
   const cF = modeChip("fill", "save", t("modeFill"));
-  const mirror = el("button", { cls: "chip", html: ic("contrast", 18, "var(--ink)") + `<span>${t("modeMirror")}</span>` });
-  mirror.onclick = () => { engine.st.mirror = !engine.st.mirror; Sound.fx.tap(); buzz(12);
-    mirror.classList.toggle("sel", engine.st.mirror);
-    mirror.querySelector("svg").setAttribute("stroke", engine.st.mirror ? "var(--cream)" : "var(--ink)"); };
+  cS.style.display = cF.style.display = "none";
+  // "More" reveals the two advanced tools; closing it returns to Draw.
+  let moreOpen = false;
+  const more = el("button", { cls: "chip", html: ic("help", 18, "var(--ink)") + `<span>${t("modeMore")}</span>` });
+  more.onclick = () => {
+    moreOpen = !moreOpen; Sound.fx.tap(); buzz(12);
+    cS.style.display = cF.style.display = moreOpen ? "flex" : "none";
+    more.classList.toggle("sel", moreOpen);
+    more.querySelector("svg").setAttribute("stroke", moreOpen ? "var(--cream)" : "var(--ink)");
+    if (!moreOpen && (engine.st.mode === "stamp" || engine.st.mode === "fill")) {
+      engine.st.mode = "draw"; tools._repaint();
+    }
+  };
   tools._repaint = () => [cD, cE, cS, cF].forEach(c => c._paint());
-  tools.append(cD, cE, cS, cF, mirror);
+  tools.append(cD, cE, more, cS, cF);
   const stampBtns = [];
   const paintStamps = () => stampBtns.forEach(b => {
     const sel = b.dataset.k === engine.st.stamp;
@@ -2605,18 +2781,12 @@ function Settings() {
   langCard.append(lseg);
   wrap.append(langCard);
 
-  // Screen-time governor
-  const limCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
-  limCard.append(el("div", { cls: "t-label", textContent: t("setLimit") }));
-  const limSeg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
-  [["off", t("limOff")], ["soft", t("limSoft")], ["lock", t("limLock")]].forEach(([v, label]) => {
-    const on = (S.settings.limit || "soft") === v;
-    const b = el("button", { textContent: label,
-      css: `flex:1;padding:12px 6px;border-radius:10px;font-weight:800;border:none;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--cream)" : "var(--ink-soft)"}` });
-    b.onclick = () => { S.settings.limit = v; save(); Sound.fx.tap(); buzz(12); resetSession(); Settings(); };
-    limSeg.append(b);
-  });
-  limCard.append(limSeg);
+  // Screen time: a written recommendation, not an in-app timer. Pacing the
+  // session is the parent's job - they have the device's own controls.
+  const limCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:8px" });
+  limCard.append(
+    el("div", { cls: "t-label", textContent: t("setLimit") }),
+    el("div", { cls: "t-body muted", css: "font-size:14px", textContent: t("screenTimeNote") }));
   wrap.append(limCard);
 
   // Profiles
@@ -2640,21 +2810,6 @@ function Settings() {
   });
   caseCard.append(caseSeg);
   wrap.append(caseCard);
-
-  // Phonics vs letter name (Montessori: teach the sound)
-  const phCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
-  phCard.append(el("div", { cls: "t-label", textContent: t("phLabel") }));
-  const phSeg = el("div", { css: "display:flex;gap:8px;background:var(--surface-2);padding:6px;border-radius:14px" });
-  [[true, t("phSound")], [false, t("phName")]].forEach(([v, label]) => {
-    const on = !!S.phonics === v;
-    const b = el("button", { textContent: label,
-      css: `flex:1;padding:12px 6px;border-radius:10px;font-weight:800;border:none;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--cream)" : "var(--ink-soft)"}` });
-    b.onclick = () => { S.phonics = v; save(); Sound.fx.tap(); buzz(12); Settings(); };
-    phSeg.append(b);
-  });
-  phCard.append(phSeg);
-  phCard.append(el("div", { cls: "t-body muted", css: "font-size:13px", textContent: t("phHint") }));
-  wrap.append(phCard);
 
   // Reading progress (parent dashboard, read-only)
   wrap.append(readingDashboard());
