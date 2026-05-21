@@ -55,11 +55,13 @@
   button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
   svg{ display:block; }
 
-  /* Fluid, hierarchical type - heavy but tight, never childish-cheap. */
-  .t-display{ font-size:clamp(30px,6.4vw,52px); font-weight:800; letter-spacing:-.02em; line-height:1.04; }
-  .t-title{ font-size:clamp(20px,4vw,30px); font-weight:800; letter-spacing:-.015em; line-height:1.12; }
-  .t-head{ font-size:clamp(17px,3vw,22px); font-weight:800; letter-spacing:-.01em; }
-  .t-body{ font-size:clamp(15px,2.4vw,18px); font-weight:600; line-height:1.55; }
+  /* Fluid type. Hierarchy comes from BOTH size and weight - heaviest only
+     where it earns it, so the screen has a clear loudest-to-quietest order
+     instead of everything shouting at weight 800. */
+  .t-display{ font-size:clamp(30px,6.4vw,52px); font-weight:700; letter-spacing:-.02em; line-height:1.04; }
+  .t-title{ font-size:clamp(20px,4vw,30px); font-weight:700; letter-spacing:-.015em; line-height:1.12; }
+  .t-head{ font-size:clamp(17px,3vw,22px); font-weight:600; letter-spacing:-.01em; }
+  .t-body{ font-size:clamp(15px,2.4vw,18px); font-weight:500; line-height:1.55; }
   .t-label{ font-size:clamp(12px,2vw,14px); font-weight:700; letter-spacing:.04em;
     text-transform:uppercase; color:var(--ink-soft); }
   .muted{ color:var(--ink-soft); }
@@ -68,7 +70,7 @@
   .card{ background:var(--surface); border-radius:var(--r); box-shadow:var(--sh);
     border:1px solid rgba(226,216,196,.7); }
   .btn{ display:inline-flex; align-items:center; justify-content:center; gap:10px;
-    border-radius:999px; font-weight:800; padding:16px 26px; font-size:clamp(15px,2.6vw,18px);
+    border-radius:999px; font-weight:700; padding:16px 26px; font-size:clamp(15px,2.6vw,18px);
     background:var(--surface); color:var(--ink); box-shadow:var(--sh-sm);
     border:1px solid rgba(226,216,196,.8);
     transition:transform .14s cubic-bezier(.2,.7,.3,1), box-shadow .14s, background .14s; }
