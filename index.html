@@ -55,6 +55,30 @@
   button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
   svg{ display:block; }
 
+  /* Content width caps - on wide screens cards, pillars and grids stay at
+     a comfortable reading / tapping width and centre, instead of
+     stretching edge to edge. Harmless on phones (already narrower). */
+  .cap{ max-width:680px; margin-inline:auto; width:100%; }
+  .cap-wide{ max-width:980px; margin-inline:auto; width:100%; }
+
+  /* Desktop: a touch app must not stretch across a monitor. Present it as
+     a centred device panel floating on the textured backdrop. Phones and
+     tablets (coarse pointer) stay edge-to-edge fullscreen, as a PWA should. */
+  @media (min-width:1024px) and (hover:hover) and (pointer:fine){
+    body{ display:flex; align-items:center; justify-content:center;
+      background-color:#E4D9C2;
+      background-image:
+        radial-gradient(72% 56% at 50% 36%, rgba(255,255,255,.5), transparent 72%),
+        radial-gradient(rgba(52,48,42,.045) 1px, transparent 1px);
+      background-size:100% 100%, 26px 26px; }
+    #app{ position:relative; inset:auto;
+      width:min(780px,94vw); height:min(1120px,94dvh);
+      border-radius:36px; overflow:hidden;
+      border:1px solid rgba(226,216,196,.7);
+      box-shadow:0 2px 8px rgba(52,48,42,.10),
+        0 44px 100px rgba(52,48,42,.30), 0 14px 34px rgba(52,48,42,.18); }
+  }
+
   /* Fluid type. Hierarchy comes from BOTH size and weight - heaviest only
      where it earns it, so the screen has a clear loudest-to-quietest order
      instead of everything shouting at weight 800. */
@@ -197,9 +221,11 @@
     background:#fff; box-shadow:var(--sh-sm); transition:transform .2s cubic-bezier(.2,.7,.3,1); }
   .sw.on i{ transform:translateX(24px); }
 
+  /* .grid always lives inside a container-type wrap, so column count
+     follows the content column width (not the window). */
   .grid{ display:grid; gap:14px; grid-template-columns:repeat(2,1fr); }
-  @container (min-width:560px){ .grid{ grid-template-columns:repeat(3,1fr); } }
-  @media (min-width:760px){ .grid{ grid-template-columns:repeat(3,1fr); } }
+  @container (min-width:520px){ .grid{ grid-template-columns:repeat(3,1fr); } }
+  @container (min-width:760px){ .grid{ grid-template-columns:repeat(4,1fr); } }
   .scroll{ overflow-y:auto; -webkit-overflow-scrolling:touch; }
   .hidden{ display:none !important; }
   .caption{ background:rgba(52,48,42,.86); color:var(--cream);
@@ -1135,7 +1161,7 @@ for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
 // success; used for Settings, "5 more minutes", and reset.
 function parentGate(onPass) {
   const a = 2 + ((Math.random() * 7) | 0), b = 3 + ((Math.random() * 6) | 0);
-  const ov = el("div", { css: "position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
+  const ov = el("div", { css: "position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
   const card = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:14px;text-align:center" });
   card.append(
     el("div", { cls: "t-title", textContent: t("pgTitle") }),
@@ -1154,14 +1180,14 @@ function parentGate(onPass) {
   const cancel = el("button", { cls: "btn", css: "background:var(--surface-2)", textContent: t("cancel") });
   cancel.onclick = () => ov.remove();
   card.append(opts, cancel);
-  ov.append(card); document.body.append(ov);
+  ov.append(card); APP.append(ov);
 }
 
 // Profile picker: children tap their own name to switch (no data lost);
 // adding / deleting a child is parent-gated.
 function ProfilePicker() {
   const list = profileList();
-  const ov = el("div", { css: "position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
+  const ov = el("div", { css: "position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
   const card = el("div", { cls: "card", css: "background:var(--surface);padding:22px;width:min(460px,92vw);display:flex;flex-direction:column;gap:12px;max-height:86vh;overflow:auto" });
   card.append(el("div", { cls: "t-title", css: "text-align:center", textContent: t("whoPlaying") }));
   list.forEach(p => {
@@ -1186,7 +1212,7 @@ function ProfilePicker() {
   const close = el("button", { cls: "btn", css: "background:var(--surface-2)", textContent: t("cancel") });
   close.onclick = () => ov.remove();
   card.append(add, close);
-  ov.append(card); document.body.append(ov);
+  ov.append(card); APP.append(ov);
 }
 let _adding = false;
 // One-shot speech flags: Buddy greets / introduces once per app load
@@ -1679,9 +1705,9 @@ function ReadScreen() {
   head.append(back, el("div", { css: "flex:1", html: `<div class="t-title">${t("readTitle")}</div>` }),
     muteBtn(), el("div", { id: "buddy", "data-size": 52, html: Buddy("happy", 52) }));
   s.append(head);
-  const prog = el("div", { cls: "prog", css: "margin:2px 20px 8px", html: "<i style='width:0'></i>" });
+  const prog = el("div", { cls: "prog", css: "margin:2px auto 8px;max-width:640px;width:calc(100% - 40px)", html: "<i style='width:0'></i>" });
   s.append(prog);
-  const stage = el("div", { css: "flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:10px 18px;text-align:center" });
+  const stage = el("div", { cls: "cap", css: "flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:10px 18px;text-align:center" });
   s.append(stage);
   const promptEl = el("div", { cls: "t-title" });
   const showEl = el("div", { css: "min-height:120px;display:flex;align-items:center;justify-content:center" });
@@ -2046,7 +2072,7 @@ function Home(mode) {
   const s = el("div", { cls: "screen" });
 
   if (!mode) {
-    const top = el("div", { css: "display:flex;align-items:center;gap:14px;padding:20px 22px 8px" });
+    const top = el("div", { cls: "cap", css: "display:flex;align-items:center;gap:14px;padding:20px 20px 8px" });
     const who = el("button", { css: "flex:1;display:flex;align-items:center;gap:14px;text-align:left;background:none",
       html: `<span id="buddy" data-size="76">${Buddy("warm", 76)}</span>
         <span><span class="t-title">${t("hello")(S.name)}</span><br>
@@ -2061,7 +2087,7 @@ function Home(mode) {
     const prevSeen = S.worldSeenStars || 0;
     const nextStep = WORLD_STEPS.find(x => x > S.stars);
     const hint = nextStep ? t("worldNext")(nextStep - S.stars) : t("worldDone");
-    const world = el("div", { cls: "card", css: "margin:6px 20px 0;padding:0;overflow:hidden" });
+    const world = el("div", { cls: "card", css: "margin:6px auto 0;max-width:680px;width:calc(100% - 40px);padding:0;overflow:hidden" });
     world.innerHTML = worldScene(S.stars, prevSeen) +
       `<div style="text-align:center;padding:7px 12px 9px">
          <div class="t-label">${t("worldTitle")}</div>
@@ -2070,7 +2096,7 @@ function Home(mode) {
     s.append(world);
     if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
-    const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 116px;container-type:inline-size" });
+    const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 116px;container-type:inline-size" });
     const pillar = (key, col, fn) => {
       const b = el("button", { cls: "card pop",
         css: `padding:20px 22px;display:flex;align-items:center;gap:16px;background:${col};color:#fff;width:100%;margin-bottom:14px` });
@@ -2096,12 +2122,12 @@ function Home(mode) {
   }
 
   // A part page (Draw or Write): slim header + that part's lessons.
-  const head = el("div", { css: "display:flex;align-items:center;gap:12px;padding:16px 20px 6px" });
+  const head = el("div", { cls: "cap-wide", css: "display:flex;align-items:center;gap:12px;padding:16px 20px 6px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
   back.onclick = () => { Sound.fx.tap(); go("home"); };
   head.append(back, el("div", { cls: "t-title", css: "flex:1", textContent: t("pill_" + mode) }), muteBtn());
   s.append(head);
-  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:8px 20px 116px;container-type:inline-size" });
+  const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:8px 20px 116px;container-type:inline-size" });
   if (mode === "draw") {
     const fd = el("button", { cls: "card pop",
       css: "padding:18px;display:flex;align-items:center;gap:14px;background:var(--surface);width:100%;margin-bottom:4px" });
@@ -2136,8 +2162,10 @@ function Home(mode) {
 // portrait is byte-identical. Re-parents the controls into a right scroll
 // column and lets the canvas take the left full-height. Inline styles
 // only, so nothing fights .sw, the cascade, or existing inline styles.
-const isLand = () => window.matchMedia &&
-  window.matchMedia("(orientation:landscape) and (min-width:740px)").matches;
+// Landscape 2-col kicks in when the APP BOX (not the window) is clearly
+// wide and landscape - the 1.15 margin keeps a near-square box (e.g. the
+// desktop device panel) in the calmer single-column portrait layout.
+const isLand = () => APP && APP.clientWidth >= 740 && APP.clientWidth > APP.clientHeight * 1.15;
 function applyLandscape(s, sw, stage) {
   if (!isLand()) return;
   s.style.flexDirection = "row";
@@ -2168,7 +2196,8 @@ function applyLandscape(s, sw, stage) {
 }
 
 function nav(active) {
-  const bar = el("div", { cls: "navbar", css: "position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(239,231,216,.9);backdrop-filter:blur(10px);border-top:1px solid var(--line)" });
+  const bar = el("div", { cls: "navbar", css: "position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(239,231,216,.9);backdrop-filter:blur(10px);border-top:1px solid var(--line)" });
+  const row = el("div", { cls: "cap", css: "display:flex;gap:8px" });
   const mk = (label, icon, fn, key) => {
     const on = active === key;
     const b = el("button", { css: `flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-radius:16px;font-weight:800;font-size:12px;color:${on ? "var(--ink)" : "var(--ink-soft)"};background:${on ? "var(--surface)" : "transparent"};box-shadow:${on ? "var(--sh-sm)" : "none"}` });
@@ -2176,7 +2205,7 @@ function nav(active) {
     b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); };
     return b;
   };
-  bar.append(
+  row.append(
     mk(t("nHome"), "home", () => go("home"), "home"),
     mk(t("nGallery"), "gallery", () => go("gallery"), "gallery"),
     mk(t("nStickers"), "sticker", () => go("stickers"), "stickers"),
@@ -2189,7 +2218,8 @@ function nav(active) {
   const cancel = () => clearTimeout(hold);
   g.addEventListener("pointerup", cancel); g.addEventListener("pointerleave", cancel);
   g.addEventListener("click", () => speak(t("grownHint")));
-  bar.append(g);
+  row.append(g);
+  bar.append(row);
   return bar;
 }
 
@@ -2714,7 +2744,7 @@ async function GalleryScreen() {
   APP.innerHTML = ""; applyFlags(); // called directly after delete - clear
   const s = el("div", { cls: "screen" });
   s.append(header(t("galleryTitle")));
-  const wrap = el("div", { cls: "scroll fridge", css: "flex:1;padding:18px 20px 116px;container-type:inline-size" });
+  const wrap = el("div", { cls: "scroll fridge cap-wide", css: "flex:1;padding:18px 20px 116px;container-type:inline-size" });
   const items = await galleryAll();
   if (!items.length) {
     wrap.append(el("div", { cls: "t-body", css: "text-align:center;margin-top:48px;color:var(--ink)",
@@ -2749,7 +2779,7 @@ function StickerScreen() {
   APP.innerHTML = ""; applyFlags();
   const s = el("div", { cls: "screen" });
   s.append(header(t("stickersTitle")));
-  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
+  const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
   const collectible = DRAWINGS;
   wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-bottom:12px",
     textContent: t("stickersCount")(S.stickers.length, collectible.length) }));
@@ -2867,7 +2897,7 @@ function Settings() {
   APP.innerHTML = ""; applyFlags(); // re-called on lang/age change - clear
   const s = el("div", { cls: "screen" });
   s.append(header(t("settingsTitle")));
-  const wrap = el("div", { cls: "scroll", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
+  const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
 
   // Language selector
   const langCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
