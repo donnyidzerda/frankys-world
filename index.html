@@ -1652,7 +1652,7 @@ const blendSay = w => [...w].map(c => {
 function ReadScreen() {
   _rdAdvanced = new Set();          // fresh spacing window for this session
   const session = buildReadSession();
-  let i = 0;
+  let i = 0, busy = false, finished = false;   // interaction locks
   const s = el("div", { cls: "screen" });
   const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:14px 18px 6px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
@@ -1677,6 +1677,11 @@ function ReadScreen() {
     return out;
   };
   function resolve(ok, key) {
+    // Lock until the next item renders, so a child rapid-tapping during
+    // the feedback pause cannot advance twice or trigger finish() twice.
+    if (busy) return;
+    busy = true;
+    choices.style.pointerEvents = "none";
     if (ok) { Sound.fx.step(); buzz(20); if (key) rdBump(key, true); }
     else { Sound.fx.soft(); buzz(12); if (key) rdBump(key, false); }
     i++; prog.firstChild.style.width = (i / session.length) * 100 + "%";
@@ -1753,6 +1758,7 @@ function ReadScreen() {
   }
   function showItem() {
     const it = session[i];
+    busy = false;
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     if (it.t === "echo") { echoItem(it); return; }
     if (it.t === "teach") {
@@ -1762,7 +1768,10 @@ function ReadScreen() {
       const say = () => speak(phonics(L).say);
       replay.onclick = () => { Sound.fx.tap(); say(); };
       const go2 = el("button", { cls: "btn btn-go", css: "min-width:120px", html: ic("next", 20, "#fff") + `<span>${t("readNext")}</span>` });
-      go2.onclick = () => { Sound.fx.tap(); buzz(12); rdBump("s:" + it.s, true); i++;
+      go2.onclick = () => {
+        if (busy) return;
+        busy = true;
+        Sound.fx.tap(); buzz(12); rdBump("s:" + it.s, true); i++;
         prog.firstChild.style.width = (i / session.length) * 100 + "%";
         i >= session.length ? finish() : showItem(); };
       choices.append(go2);
@@ -1796,6 +1805,8 @@ function ReadScreen() {
     }
   }
   function finish() {
+    if (finished) return;          // one session-end only
+    finished = true;
     rdAdvance();
     S.stars += 1; if (S.stars > S.buddyLevel * 8) S.buddyLevel++;
     save();
@@ -2469,7 +2480,7 @@ function DrawScreen(id) {
   const built = D.build ? D.build() : D.steps;
   const steps = (AGE[S.age].oneStep && !D.pen)
     ? built.slice(0, Math.min(2, built.length)) : built;
-  let i = 0;
+  let i = 0, busy = false;        // lock against double-tapped Next
   const s = el("div", { cls: "screen" });
 
   const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:12px 16px 2px" });
@@ -2546,6 +2557,7 @@ function DrawScreen(id) {
   }
 
   function show() {
+    busy = false;
     const stp = steps[i], L = stepText(D, i, stp);
     stepPassed = false;
     prog.firstChild.style.width = (i / steps.length) * 100 + "%";
@@ -2573,6 +2585,8 @@ function DrawScreen(id) {
   }
   const scores = [];
   function advance() {
+    if (busy) return;             // ignore a double-tapped Next
+    busy = true;
     scores[i] = engine.score();
     const ok = scores[i] >= engine.cfg.pass;
     // Adapt: cruising -> a little less help next time; struggling -> more.
