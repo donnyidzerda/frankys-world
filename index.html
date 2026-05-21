@@ -724,6 +724,37 @@ function ART(id, size = 72) {
     monster:`<svg ${w}><path d="M30 40Q50 20 70 40Q80 64 64 78Q50 88 36 78Q20 64 30 40Z" fill="var(--plum)"/>
       <circle cx="50" cy="50" r="13" fill="#fff"/><circle cx="50" cy="51" r="6" fill="var(--ink)"/>
       <g stroke="var(--plum)" stroke-width="4" stroke-linecap="round"><path d="M40 26 38 14M50 22V10M60 26 62 14"/></g></svg>`,
+    horse:`<svg ${w}><path d="M40 31 L36 16 L49 29Z" fill="#9A6B45"/><path d="M60 31 L64 16 L51 29Z" fill="#9A6B45"/>
+      <path d="M38 32 Q50 24 62 32 Q65 56 57 70 Q50 76 43 70 Q35 56 38 32Z" fill="#9A6B45"/>
+      <circle cx="44" cy="45" r="3.4" fill="var(--ink)"/><circle cx="56" cy="45" r="3.4" fill="var(--ink)"/>
+      <circle cx="46" cy="63" r="2.2" fill="var(--ink)"/><circle cx="54" cy="63" r="2.2" fill="var(--ink)"/></svg>`,
+    dog:`<svg ${w}><path d="M29 41 Q22 47 27 61 Q35 57 38 47Z" fill="#8A6840"/><path d="M71 41 Q78 47 73 61 Q65 57 62 47Z" fill="#8A6840"/>
+      <circle cx="50" cy="52" r="25" fill="#B98C5A"/><circle cx="42" cy="48" r="3.6" fill="var(--ink)"/>
+      <circle cx="58" cy="48" r="3.6" fill="var(--ink)"/><circle cx="50" cy="60" r="5" fill="var(--ink)"/></svg>`,
+    rabbit:`<svg ${w}><path d="M41 44 Q37 14 48 14 Q53 19 49 44Z" fill="#B7AEA0"/><path d="M59 44 Q63 14 52 14 Q47 19 51 44Z" fill="#B7AEA0"/>
+      <circle cx="50" cy="58" r="23" fill="#B7AEA0"/><circle cx="43" cy="55" r="3.3" fill="var(--ink)"/>
+      <circle cx="57" cy="55" r="3.3" fill="var(--ink)"/><circle cx="50" cy="65" r="3.4" fill="var(--rose)"/></svg>`,
+    bird:`<svg ${w}><path d="M37 52 Q45 36 64 46 Q77 54 67 69 Q50 81 40 67 Q31 59 37 52Z" fill="#6FA0C0"/>
+      <path d="M35 58 L21 52 L28 65Z" fill="#5E8AA0"/><circle cx="60" cy="50" r="3" fill="var(--ink)"/>
+      <path d="M71 53 L84 57 L71 61Z" fill="var(--ochre)"/></svg>`,
+    butterfly:`<svg ${w}><path d="M50 50 Q31 30 25 47 Q30 57 49 53Z" fill="#C47FB0"/><path d="M50 50 Q69 30 75 47 Q70 57 51 53Z" fill="#C47FB0"/>
+      <path d="M50 53 Q35 63 32 78 Q44 80 49 60Z" fill="#A86698"/><path d="M50 53 Q65 63 68 78 Q56 80 51 60Z" fill="#A86698"/>
+      <path d="M50 42 L50 72" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M50 42 Q46 34 42 31M50 42 Q54 34 58 31" stroke="var(--ink)" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+    boat:`<svg ${w}><path d="M22 58 L78 58 Q71 73 50 73 Q29 73 22 58Z" fill="var(--clay)"/>
+      <path d="M50 58 L50 24" stroke="#6E5A40" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M53 28 L71 54 L53 54Z" fill="var(--cream)" stroke="var(--clay)" stroke-width="2"/>
+      <g stroke="var(--sky)" stroke-width="2.4" fill="none" stroke-linecap="round"><path d="M18 66 Q24 71 30 66M40 66 Q46 71 52 66M62 66 Q68 71 74 66"/></g></svg>`,
+    train:`<svg ${w}><rect x="18" y="46" width="42" height="27" rx="3" fill="var(--plum)"/>
+      <rect x="56" y="31" width="26" height="42" rx="3" fill="var(--plum)"/><circle cx="69" cy="46" r="6.5" fill="var(--cream)"/>
+      <rect x="29" y="35" width="9" height="12" fill="var(--plum)"/>
+      <circle cx="33" cy="78" r="7" fill="var(--ink)"/><circle cx="54" cy="78" r="7" fill="var(--ink)"/><circle cx="73" cy="78" r="6" fill="var(--ink)"/></svg>`,
+    tree:`<svg ${w}><rect x="45" y="54" width="10" height="33" rx="2" fill="#7A5A3A"/>
+      <circle cx="50" cy="40" r="25" fill="var(--sage)"/><circle cx="40" cy="35" r="4.5" fill="var(--clay)"/>
+      <circle cx="59" cy="31" r="4.5" fill="var(--clay)"/><circle cx="56" cy="48" r="4.5" fill="var(--clay)"/></svg>`,
+    icecream:`<svg ${w}><path d="M37 50 L63 50 L50 87Z" fill="var(--ochre)"/>
+      <circle cx="50" cy="40" r="21" fill="var(--rose)"/><circle cx="50" cy="20" r="7.5" fill="var(--clay)"/>
+      <path d="M50 14 Q56 6 63 9" stroke="var(--sage)" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`,
   };
   return A[id] || A.sun;
 }
@@ -934,6 +965,15 @@ const STEP_T = {
     happy:[["Een groot rond gezicht","Maak een groot rond gezicht."],["Twee ogen","Twee ogen, die recht naar je kijken."],["Een brede glimlach","En een brede, warme glimlach."]],
     star:[["Trek de ster na","Volg de ster, punt voor punt."],["Een paar fonkels","Doe er een paar kleine fonkels omheen."]],
     monster:[["Een zacht rond lijf","Teken een zacht, rond, mollig lijf."],["Eén groot oog","Geef hem één groot, vriendelijk oog."],["Twee zwaaiende armen","Twee golvende armen, om hallo te zwaaien."],["Een beetje haar","En een beetje haar bovenop."]],
+    horse:[["Een lange kop","Teken een lange paardenkop."],["Twee puntige oren","Twee puntige oren, boven op de kop."],["Ogen en neus","Twee ogen, en twee kleine neusgaten."]],
+    dog:[["Een rond hoofd","Maak een rond hoofd voor de hond."],["Twee flaporen","Twee zachte flaporen."],["Ogen en een neus","Twee ogen en een knopneusje."]],
+    rabbit:[["Een rond hoofd","Teken een rond hoofdje."],["Twee lange oren","Twee lange oren, recht omhoog."],["Ogen en een neus","Twee ogen en een klein neusje."]],
+    bird:[["Een rond lijfje","Teken een rond, mollig vogellijfje."],["Een vleugel en staart","Een vleugel op de zij, en een staart."],["Een oog en een snavel","Een helder oog en een snaveltje."]],
+    butterfly:[["Twee bovenvleugels","Twee grote vleugels bovenaan."],["Twee ondervleugels","En twee vleugels onderaan."],["Lijfje en voelsprieten","Een lijfje in het midden, en twee voelsprieten."]],
+    boat:[["De romp van de boot","Teken de onderkant van de boot."],["Een mast en zeil","Een hoge mast, en een zeil."],["Een paar golven","En een paar golven in het water."]],
+    train:[["De trein","Teken de lange trein."],["Een raam en schoorsteen","Een rond raam, en een schoorsteen."],["Drie ronde wielen","Drie ronde wielen, zodat hij kan rijden."]],
+    tree:[["De boomstam","Teken de hoge boomstam."],["Een grote kruin","Een grote ronde bladerkruin."],["Een paar appels","En een paar kleine appeltjes."]],
+    icecream:[["Een puntig hoorntje","Teken een puntig hoorntje."],["Een ronde bol","Een grote ronde bol erop."],["Een kersje bovenop","En een kersje, helemaal bovenop."]],
   },
   es: {
     sun:[["Un círculo grande","Empezamos con un círculo grande y redondo. Sin prisa."],["Rayos hacia afuera","Ahora dibuja rayos hacia afuera, como el sol."],["Una sonrisa suave","Y una sonrisa suave abajo."]],
@@ -946,6 +986,15 @@ const STEP_T = {
     happy:[["Una cara redonda","Haz una cara grande y redonda."],["Dos ojos","Dos ojos, que te miran a ti."],["Una gran sonrisa","Y una sonrisa amplia y cálida."]],
     star:[["Traza la estrella","Sigue la estrella, punta por punta."],["Unos destellos","Añade unos destellos pequeños alrededor."]],
     monster:[["Un cuerpo blandito","Dibuja un cuerpo blandito y redondo."],["Un ojo grande","Dale un ojo grande y amable."],["Dos brazos ondulados","Dos brazos ondulados, para saludar."],["Un poco de pelo","Y un poco de pelo arriba."]],
+    horse:[["Una cabeza larga","Dibuja una cabeza larga de caballo."],["Dos orejas puntiagudas","Dos orejas puntiagudas, arriba."],["Ojos y nariz","Dos ojos, y dos orificios de la nariz."]],
+    dog:[["Una cabeza redonda","Haz una cabeza redonda para el perro."],["Dos orejas caídas","Dos orejas suaves y caídas."],["Ojos y una nariz","Dos ojos y una naricita."]],
+    rabbit:[["Una cabeza redonda","Dibuja una cabecita redonda."],["Dos orejas largas","Dos orejas largas, hacia arriba."],["Ojos y una nariz","Dos ojos y una nariz pequeña."]],
+    bird:[["Un cuerpo redondo","Dibuja un cuerpo redondo y regordete."],["Un ala y una cola","Un ala al lado, y una cola."],["Un ojo y un pico","Un ojo brillante y un piquito."]],
+    butterfly:[["Dos alas de arriba","Dos alas grandes arriba."],["Dos alas de abajo","Y dos alas abajo."],["Cuerpo y antenas","Un cuerpo en el medio, y dos antenas."]],
+    boat:[["El casco del barco","Dibuja la parte de abajo del barco."],["Un mástil y vela","Un mástil alto, y una vela."],["Unas olas","Y unas olas en el agua."]],
+    train:[["El tren","Dibuja el tren largo."],["Una ventana y chimenea","Una ventana redonda, y una chimenea."],["Tres ruedas redondas","Tres ruedas redondas para que ruede."]],
+    tree:[["El tronco","Dibuja el tronco alto del árbol."],["Una copa grande","Una copa grande y redonda de hojas."],["Unas manzanas","Y unas manzanitas."]],
+    icecream:[["Un cucurucho","Dibuja un cucurucho puntiagudo."],["Una bola redonda","Una bola grande y redonda encima."],["Una cereza encima","Y una cereza, justo encima."]],
   },
 };
 const CAT_NAMES = {
@@ -965,13 +1014,19 @@ const CAT_NAMES = {
 const DRAW_NAMES = {
   nl:{ sun:"De zon", cat:"Een kat", fish:"Een vis", flower:"Een bloem", car:"Een auto",
        rocket:"Een raket", apple:"Een appel", happy:"Een blij gezicht", star:"Een ster",
-       monster:"Een lief monster" },
+       monster:"Een lief monster", horse:"Een paard", dog:"Een hond", rabbit:"Een konijn",
+       bird:"Een vogel", butterfly:"Een vlinder", boat:"Een boot", train:"Een trein",
+       tree:"Een boom", icecream:"Een ijsje" },
   en:{ sun:"The Sun", cat:"A Cat", fish:"A Fish", flower:"A Flower", car:"A Car",
        rocket:"A Rocket", apple:"An Apple", happy:"A Happy Face", star:"A Star",
-       monster:"A Friendly Monster" },
+       monster:"A Friendly Monster", horse:"A Horse", dog:"A Dog", rabbit:"A Rabbit",
+       bird:"A Bird", butterfly:"A Butterfly", boat:"A Boat", train:"A Train",
+       tree:"A Tree", icecream:"An Ice Cream" },
   es:{ sun:"El sol", cat:"Un gato", fish:"Un pez", flower:"Una flor", car:"Un coche",
        rocket:"Un cohete", apple:"Una manzana", happy:"Una cara feliz", star:"Una estrella",
-       monster:"Un monstruo amable" },
+       monster:"Un monstruo amable", horse:"Un caballo", dog:"Un perro", rabbit:"Un conejo",
+       bird:"Un pájaro", butterfly:"Una mariposa", boat:"Un barco", train:"Un tren",
+       tree:"Un árbol", icecream:"Un helado" },
 };
 const LC = () => I18N[S.lang] ? S.lang : "en";
 function t(k) { const o = I18N[LC()]; return (o && o[k] !== undefined) ? o[k] : I18N.en[k]; }
@@ -1324,6 +1379,78 @@ const DRAWINGS = [
       d:[ "M300 520 Q160 480 180 620","M700 520 Q840 480 820 620" ] },
     { tip:"A little hair", icon:"play", say:"And a little hair on top.",
       d:[ "M380 300 L360 180","M500 270 L500 150","M620 300 L640 180" ] },
+  ]},
+  { id:"horse", name:"A Horse", category:"animals", accent:"#9A6B45", steps:[
+    { tip:"A long head", icon:"star", say:"Draw a long horse head.",
+      d:[ "M375 330 Q500 250 625 330 Q650 560 565 695 Q500 755 435 695 Q350 560 375 330 Z" ] },
+    { tip:"Two pointy ears", icon:"play", say:"Two pointy ears, right on top.",
+      d:[ "M410 325 L375 175 L495 295 Z","M590 325 L625 175 L505 295 Z" ] },
+    { tip:"Eyes and a nose", icon:"star", say:"Two eyes, and two little nostrils.",
+      d:[ C(445,455,30), C(555,455,30), C(462,645,18), C(538,645,18) ] },
+  ]},
+  { id:"dog", name:"A Dog", category:"animals", accent:"#B98C5A", steps:[
+    { tip:"A round head", icon:"star", say:"Make a round head for the dog.",
+      d:[ C(500,500,215) ] },
+    { tip:"Two floppy ears", icon:"play", say:"Two soft floppy ears.",
+      d:[ "M335 360 Q245 405 285 580 Q365 545 385 425 Z","M665 360 Q755 405 715 580 Q635 545 615 425 Z" ] },
+    { tip:"Eyes and a nose", icon:"star", say:"Two eyes and a little button nose.",
+      d:[ C(435,475,28), C(565,475,28), C(500,575,34) ] },
+  ]},
+  { id:"rabbit", name:"A Rabbit", category:"animals", accent:"#B7AEA0", steps:[
+    { tip:"A round head", icon:"star", say:"Draw a round little head.",
+      d:[ C(500,560,185) ] },
+    { tip:"Two tall ears", icon:"play", say:"Two long ears, standing up tall.",
+      d:[ "M430 410 Q395 140 460 140 Q505 165 480 410 Z","M570 410 Q605 140 540 140 Q495 165 520 410 Z" ] },
+    { tip:"Eyes and a nose", icon:"star", say:"Two eyes and a tiny nose.",
+      d:[ C(445,545,26), C(555,545,26), C(500,620,22) ] },
+  ]},
+  { id:"bird", name:"A Bird", category:"animals", accent:"#6FA0C0", steps:[
+    { tip:"A round body", icon:"star", say:"Draw a round, plump bird body.",
+      d:[ "M390 490 Q470 360 610 440 Q720 510 640 650 Q500 740 410 640 Q340 565 390 490 Z" ] },
+    { tip:"A wing and a tail", icon:"play", say:"A wing on the side, and a tail.",
+      d:[ "M470 530 Q560 485 605 565 Q545 615 470 565 Z","M385 555 L250 520 L300 625 Z" ] },
+    { tip:"An eye and a beak", icon:"star", say:"A bright eye and a little beak.",
+      d:[ C(560,495,22), "M640 515 L740 545 L640 575 Z" ] },
+  ]},
+  { id:"butterfly", name:"A Butterfly", category:"animals", accent:"#C47FB0", steps:[
+    { tip:"Two top wings", icon:"star", say:"Two big wings at the top.",
+      d:[ "M500 500 Q320 300 270 460 Q295 545 490 530 Z","M500 500 Q680 300 730 460 Q705 545 510 530 Z" ] },
+    { tip:"Two bottom wings", icon:"play", say:"And two wings at the bottom.",
+      d:[ "M500 520 Q360 610 330 730 Q430 760 495 605 Z","M500 520 Q640 610 670 730 Q570 760 505 605 Z" ] },
+    { tip:"Body and antennae", icon:"check", say:"A body in the middle, and two antennae.",
+      d:[ "M500 420 L500 690","M500 420 Q468 350 432 330","M500 420 Q532 350 568 330" ] },
+  ]},
+  { id:"boat", name:"A Boat", category:"vehicles", accent:"var(--clay)", steps:[
+    { tip:"The boat hull", icon:"star", say:"Draw the bottom of the boat.",
+      d:[ "M250 590 L750 590 Q695 715 500 715 Q305 715 250 590 Z" ] },
+    { tip:"A mast and sail", icon:"play", say:"A tall mast, and a sail.",
+      d:[ "M500 590 L500 270","M520 310 L690 540 L520 540 Z" ] },
+    { tip:"Some waves", icon:"check", say:"And some waves in the water.",
+      d:[ "M210 660 Q270 705 330 660","M380 685 Q440 730 500 685","M560 660 Q620 705 680 660" ] },
+  ]},
+  { id:"train", name:"A Train", category:"vehicles", accent:"var(--plum)", steps:[
+    { tip:"The train", icon:"star", say:"Draw the long train.",
+      d:[ "M210 630 L210 430 L590 430 L590 320 L770 320 L770 630 Z" ] },
+    { tip:"A window and chimney", icon:"play", say:"A round window, and a chimney.",
+      d:[ C(680,440,46), "M320 430 L320 345 L400 345 L400 430" ] },
+    { tip:"Three round wheels", icon:"star", say:"Three round wheels, so it can roll.",
+      d:[ C(335,650,68), C(520,650,68), C(690,650,58) ] },
+  ]},
+  { id:"tree", name:"A Tree", category:"nature", accent:"var(--sage)", steps:[
+    { tip:"The tree trunk", icon:"star", say:"Draw the tall tree trunk.",
+      d:[ "M455 750 L455 470 L545 470 L545 750 Z" ] },
+    { tip:"A big leafy top", icon:"play", say:"A big round leafy top.",
+      d:[ C(500,360,210) ] },
+    { tip:"A few apples", icon:"check", say:"And a few little apples.",
+      d:[ C(410,330,34), C(560,300,34), C(520,450,34) ] },
+  ]},
+  { id:"icecream", name:"An Ice Cream", category:"food", accent:"var(--rose)", steps:[
+    { tip:"A pointy cone", icon:"star", say:"Draw a pointy cone.",
+      d:[ "M375 535 L625 535 L500 850 Z" ] },
+    { tip:"A round scoop", icon:"play", say:"A big round scoop on top.",
+      d:[ C(500,415,165) ] },
+    { tip:"A cherry on top", icon:"check", say:"And a cherry, right on top.",
+      d:[ C(500,235,56), "M500 182 Q545 120 590 135" ] },
   ]},
 ];
 
