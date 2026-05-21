@@ -2116,7 +2116,7 @@ function Home(mode) {
     s.append(world);
     if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
-    const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 116px;container-type:inline-size" });
+    const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 140px;container-type:inline-size" });
     const pillar = (key, col, fn) => {
       const b = el("button", { cls: "card pop",
         css: `padding:26px 24px;display:flex;align-items:center;gap:20px;background:${col};color:#fff;width:100%;margin-bottom:16px;min-height:128px` });
@@ -2149,7 +2149,7 @@ function Home(mode) {
   const secColor = mode === "write" ? "var(--sage)" : "var(--clay)";
   head.append(back, el("div", { cls: "t-title", css: "flex:1;color:" + secColor, textContent: t("pill_" + mode) }), muteBtn());
   s.append(head);
-  const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:8px 20px 116px;container-type:inline-size" });
+  const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:8px 20px 140px;container-type:inline-size" });
   // Writing: a big "Buddy's pick" hero so the child has one obvious tap
   // instead of hunting through the whole alphabet. The category grids
   // stay below for browsing.
@@ -2238,8 +2238,8 @@ function nav(active) {
   const row = el("div", { cls: "cap", css: "display:flex;gap:8px" });
   const mk = (label, icon, fn, key) => {
     const on = active === key;
-    const b = el("button", { css: `flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:13px 4px;border-radius:18px;font-weight:800;font-size:13px;color:${on ? "var(--ink)" : "var(--ink-soft)"};background:${on ? "var(--surface)" : "transparent"};box-shadow:${on ? "var(--sh-sm)" : "none"}` });
-    b.innerHTML = ic(icon, 27, on ? "var(--clay)" : "var(--ink-soft)") + `<span>${label}</span>`;
+    const b = el("button", { css: `flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;border-radius:18px;font-weight:800;font-size:13px;color:${on ? "var(--ink)" : "var(--ink-soft)"};background:${on ? "var(--surface)" : "transparent"};box-shadow:${on ? "var(--sh-sm)" : "none"}` });
+    b.innerHTML = ic(icon, 25, on ? "var(--clay)" : "var(--ink-soft)") + `<span>${label}</span>`;
     b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); };
     return b;
   };
@@ -2249,8 +2249,8 @@ function nav(active) {
     mk(t("nStickers"), "sticker", () => go("stickers"), "stickers"),
   );
   // Parent-only: hold 800ms (toddlers tap, adults hold).
-  const g = el("button", { css: "flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:13px 4px;border-radius:18px;font-weight:800;font-size:13px;color:var(--ink-soft)" });
-  g.innerHTML = ic("gear", 27, "var(--ink-soft)") + `<span>${t("nGrown")}</span>`;
+  const g = el("button", { css: "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;border-radius:18px;font-weight:800;font-size:13px;color:var(--ink-soft)" });
+  g.innerHTML = ic("gear", 25, "var(--ink-soft)") + `<span>${t("nGrown")}</span>`;
   let hold;
   g.addEventListener("pointerdown", () => hold = setTimeout(() => { Sound.fx.soft(); buzz(30); parentGate(() => go("settings")); }, 1000));
   const cancel = () => clearTimeout(hold);
@@ -2780,7 +2780,7 @@ async function GalleryScreen() {
   APP.innerHTML = ""; applyFlags(); // called directly after delete - clear
   const s = el("div", { cls: "screen" });
   s.append(header(t("galleryTitle")));
-  const wrap = el("div", { cls: "scroll fridge cap-wide", css: "flex:1;padding:18px 20px 116px;container-type:inline-size" });
+  const wrap = el("div", { cls: "scroll fridge cap-wide", css: "flex:1;padding:18px 20px 140px;container-type:inline-size" });
   const items = await galleryAll();
   if (!items.length) {
     wrap.append(el("div", { cls: "t-body", css: "text-align:center;margin-top:48px;color:var(--ink)",
@@ -2815,7 +2815,7 @@ function StickerScreen() {
   APP.innerHTML = ""; applyFlags();
   const s = el("div", { cls: "screen" });
   s.append(header(t("stickersTitle")));
-  const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:14px 20px 116px;container-type:inline-size" });
+  const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:14px 20px 140px;container-type:inline-size" });
   const collectible = DRAWINGS;
   wrap.append(el("div", { cls: "t-body muted", css: "text-align:center;margin-bottom:12px",
     textContent: t("stickersCount")(S.stickers.length, collectible.length) }));
@@ -2937,7 +2937,9 @@ function FreeDraw() {
       speak(t("freeSave")(S.name));
     }, "btn-go"),
   );
-  s.append(row, nav("free"));
+  // Free Draw is an immersive activity - its own action row is the only
+  // bottom bar (no global nav bar to sit behind). Header back returns home.
+  s.append(row);
   APP.append(s);
   applyLandscape(s, sw, stage);
   buddySay("warm", t("freeIntro")(S.name));
