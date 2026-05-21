@@ -211,8 +211,9 @@
   .well.sel{ transform:scale(1.1); }
   .well.sel::after{ content:''; position:absolute; inset:-6px; border-radius:50%;
     border:3px solid var(--ink); opacity:.5; }
-  .chip{ display:flex; align-items:center; gap:9px; padding:13px 18px; border-radius:16px;
-    min-height:52px; background:var(--surface-2); font-weight:800; box-shadow:var(--sh-sm);
+  .chip{ display:flex; align-items:center; justify-content:center; gap:9px;
+    padding:13px 14px; border-radius:16px; min-height:54px;
+    background:var(--surface-2); font-weight:800; box-shadow:var(--sh-sm);
     border:1px solid rgba(226,216,196,.8); }
   .chip.sel{ background:var(--ink); color:var(--cream); }
   .chip.sel svg{ stroke:var(--cream); }
@@ -1051,7 +1052,8 @@ const I18N_X = {
     worldTitle:"De wereld van Buddy groeit met je mee",
     worldNext:n=>`Nog ${n} ${n===1?"ster":"sterren"} tot iets nieuws`,
     worldDone:"Je wereld is helemaal vol. Knap gedaan!",
-    modeDraw:"Tekenen", modeErase:"Gum", modeStamp:"Stempel", modeFill:"Vullen", modeMore:"Meer",
+    modeErase:"Gum", modeStamp:"Stempel", modeFill:"Vullen",
+    toolCrayon:"Krijt", toolMarker:"Stift", toolGlow:"Gloed",
     shareApp:"App delen", shareText:"Een rustige, reclamevrije teken-app voor kleintjes.",
     parentSheet:"Ouderblad afdrukken", sheetTitle:"Scribble Heroes - voor de ouder",
     sheetIntro:n=>`Wat ${n} oefent: fijne motoriek, volgorde, vormen, letters en taal.`,
@@ -1095,7 +1097,8 @@ const I18N_X = {
     worldTitle:"Buddy's world grows as you play",
     worldNext:n=>`${n} more ${n===1?"star":"stars"} until something new`,
     worldDone:"Your world is full. Wonderful!",
-    modeDraw:"Draw", modeErase:"Eraser", modeStamp:"Stamp", modeFill:"Fill", modeMore:"More",
+    modeErase:"Eraser", modeStamp:"Stamp", modeFill:"Fill",
+    toolCrayon:"Crayon", toolMarker:"Marker", toolGlow:"Glow",
     shareApp:"Share app", shareText:"A calm, ad-free drawing app for little ones.",
     parentSheet:"Print parent sheet", sheetTitle:"Scribble Heroes - for the parent",
     sheetIntro:n=>`What ${n} is practising: fine motor, sequencing, shapes, letters and language.`,
@@ -1139,7 +1142,8 @@ const I18N_X = {
     worldTitle:"El mundo de Buddy crece al jugar",
     worldNext:n=>`${n} ${n===1?"estrella":"estrellas"} más para algo nuevo`,
     worldDone:"¡Tu mundo está completo!",
-    modeDraw:"Dibujar", modeErase:"Goma", modeStamp:"Sello", modeFill:"Rellenar", modeMore:"Más",
+    modeErase:"Goma", modeStamp:"Sello", modeFill:"Rellenar",
+    toolCrayon:"Cera", toolMarker:"Rotulador", toolGlow:"Brillo",
     shareApp:"Compartir app", shareText:"Una app de dibujo tranquila y sin anuncios para los peques.",
     parentSheet:"Imprimir hoja", sheetTitle:"Scribble Heroes - para el adulto",
     sheetIntro:n=>`Lo que practica ${n}: motricidad fina, secuencia, formas, letras y lenguaje.`,
@@ -2541,18 +2545,19 @@ function makeEngine(stage, opts = {}) {
 }
 
 function toolbar(engine, opts = {}) {
-  const bar = el("div", { css: "display:flex;flex-direction:column;gap:8px;align-items:center;padding:4px 14px" });
-  // Colours in a tidy 3x2 grid - balanced and predictable (a 5+1 wrap
-  // looked broken), and centred so the selected ring never hits the edge.
-  const cols = el("div", { css: "display:grid;grid-template-columns:repeat(3,auto);gap:16px 22px;justify-content:center;padding:4px 0" });
+  // One centred panel of a fixed width so every row lines up.
+  const bar = el("div", { css: "display:flex;flex-direction:column;gap:12px;width:100%;max-width:460px;margin:0 auto;padding:6px 16px" });
+  // Colours - 3x2 grid.
+  const cols = el("div", { css: "display:grid;grid-template-columns:repeat(3,1fr);gap:14px;justify-items:center" });
   COLORS.forEach((c, i) => {
     const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
     b.onclick = () => { engine.st.color = c; Sound.fx.tap(); buzz(12);
       [...cols.children].forEach(x => x.classList.remove("sel")); b.classList.add("sel"); };
     cols.append(b);
   });
-  const br = el("div", { css: "display:flex;gap:10px" });
-  [["crayon", "Crayon", "brush"], ["marker", "Marker", "save"], ["glow", "Glow", "star"]].forEach(([k, label, icon], i) => {
+  // Brushes - 3 equal columns, so they never look ragged.
+  const br = el("div", { css: "display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px" });
+  [["crayon", t("toolCrayon"), "brush"], ["marker", t("toolMarker"), "write"], ["glow", t("toolGlow"), "star"]].forEach(([k, label, icon], i) => {
     const b = el("button", { cls: "chip" + (i === 0 ? " sel" : ""),
       html: ic(icon, 18, i === 0 ? "var(--cream)" : "var(--ink)") + `<span>${label}</span>` });
     b.onclick = () => { engine.st.brush = k; Sound.fx.tap(); buzz(12);
@@ -2851,45 +2856,56 @@ function FreeDraw() {
   // Free expression: Buddy stays silent here. The value of free drawing
   // is the absence of any judgement, including positive judgement.
   const engine = makeEngine(stage, {});
-  s.append(toolbar(engine));
+  // ---- One tidy control panel: two matching 3x2 grids (colours, tools)
+  // plus the action row - all the same width and column-aligned, instead
+  // of five ragged groups each doing their own thing. -------------------
+  const panel = el("div", { css: "display:flex;flex-direction:column;gap:12px;width:100%;max-width:480px;margin:0 auto;padding:8px 16px calc(12px + env(safe-area-inset-bottom))" });
 
-  // Free Draw extras. Default surface holds only Draw + Erase - a toddler
-  // works with at most three tools at once. Stamp + Fill live behind a
-  // "More" chip so first contact with the canvas stays uncluttered.
-  const tools = el("div", { css: "display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:0 14px 2px" });
-  const stampTray = el("div", { css: "display:none;gap:8px;justify-content:center;padding:2px 14px 4px;flex-wrap:wrap" });
-  const modeChip = (m, icon, label) => {
-    const b = el("button", { cls: "chip", html: ic(icon, 18, "var(--ink)") + `<span>${label}</span>` });
-    const paint = () => {
-      [...tools.querySelectorAll(".chip")].forEach(c => { if (c.dataset.m) { c.classList.remove("sel");
-        c.querySelector("svg").setAttribute("stroke", "var(--ink)"); } });
-      if (engine.st.mode === m) { b.classList.add("sel"); b.querySelector("svg").setAttribute("stroke", "var(--cream)"); }
-      stampTray.style.display = engine.st.mode === "stamp" ? "flex" : "none";
+  // Colours - 3x2 grid. minmax(0,1fr) forces truly equal columns, and the
+  // gap matches the tool grid below so the two grids line up exactly.
+  const colGrid = el("div", { css: "display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;justify-items:center" });
+  COLORS.forEach((c, i) => {
+    const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
+    b.onclick = () => { engine.st.color = c; Sound.fx.tap(); buzz(12);
+      [...colGrid.children].forEach(x => x.classList.remove("sel")); b.classList.add("sel"); };
+    colGrid.append(b);
+  });
+
+  // Tools - 3x2 grid. Brushes and modes are one unified set with a single
+  // selected highlight (picking a brush implies draw mode).
+  const TOOLS = [
+    { k: "crayon", brush: true,  label: t("toolCrayon"), icon: "brush" },
+    { k: "marker", brush: true,  label: t("toolMarker"), icon: "write" },
+    { k: "glow",   brush: true,  label: t("toolGlow"),   icon: "star" },
+    { k: "erase",  brush: false, label: t("modeErase"),  icon: "eraser" },
+    { k: "stamp",  brush: false, label: t("modeStamp"),  icon: "sticker" },
+    { k: "fill",   brush: false, label: t("modeFill"),   icon: "contrast" },
+  ];
+  const toolGrid = el("div", { css: "display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px" });
+  const stampTray = el("div", { css: "display:none;grid-template-columns:repeat(5,1fr);gap:8px" });
+  const toolBtns = [];
+  const repaintTools = () => {
+    toolBtns.forEach(({ b, T }) => {
+      const on = T.brush ? (engine.st.mode === "draw" && engine.st.brush === T.k)
+                         : (engine.st.mode === T.k);
+      b.classList.toggle("sel", on);
+      const sv = b.querySelector("svg");
+      if (sv) sv.setAttribute("stroke", on ? "var(--cream)" : "var(--ink)");
+    });
+    stampTray.style.display = engine.st.mode === "stamp" ? "grid" : "none";
+  };
+  TOOLS.forEach(T => {
+    const b = el("button", { cls: "chip", css: "width:100%;padding:13px 6px;gap:6px;font-size:14px",
+      html: ic(T.icon, 18, "var(--ink)") + `<span>${T.label}</span>` });
+    b.onclick = () => {
+      if (T.brush) { engine.st.brush = T.k; engine.st.mode = "draw"; }
+      else { engine.st.mode = T.k; }
+      Sound.fx.tap(); buzz(12); repaintTools();
     };
-    b.dataset.m = m;
-    b.onclick = () => { engine.st.mode = m; Sound.fx.tap(); buzz(12);
-      tools._repaint(); };
-    b._paint = paint; return b;
-  };
-  const cD = modeChip("draw", "brush", t("modeDraw"));
-  const cE = modeChip("erase", "eraser", t("modeErase"));
-  const cS = modeChip("stamp", "sticker", t("modeStamp"));
-  const cF = modeChip("fill", "save", t("modeFill"));
-  cS.style.display = cF.style.display = "none";
-  // "More" reveals the two advanced tools; closing it returns to Draw.
-  let moreOpen = false;
-  const more = el("button", { cls: "chip", html: ic("help", 18, "var(--ink)") + `<span>${t("modeMore")}</span>` });
-  more.onclick = () => {
-    moreOpen = !moreOpen; Sound.fx.tap(); buzz(12);
-    cS.style.display = cF.style.display = moreOpen ? "flex" : "none";
-    more.classList.toggle("sel", moreOpen);
-    more.querySelector("svg").setAttribute("stroke", moreOpen ? "var(--cream)" : "var(--ink)");
-    if (!moreOpen && (engine.st.mode === "stamp" || engine.st.mode === "fill")) {
-      engine.st.mode = "draw"; tools._repaint();
-    }
-  };
-  tools._repaint = () => [cD, cE, cS, cF].forEach(c => c._paint());
-  tools.append(cD, cE, more, cS, cF);
+    toolBtns.push({ b, T }); toolGrid.append(b);
+  });
+
+  // Stamp tray - five shapes, shown only while the Stamp tool is active.
   const stampBtns = [];
   const paintStamps = () => stampBtns.forEach(b => {
     const sel = b.dataset.k === engine.st.stamp;
@@ -2898,26 +2914,22 @@ function FreeDraw() {
     b.style.outlineOffset = "1px";
   });
   ["star", "heart", "circle", "triangle", "square"].forEach(k => {
-    const b = el("button", { cls: "btn btn-quiet", css: "padding:8px;border-radius:14px",
-      html: shapeArt(k, 34) });
+    const b = el("button", { cls: "btn btn-quiet", css: "padding:8px;border-radius:14px;min-height:0",
+      html: shapeArt(k, 32) });
     b.dataset.k = k;
     b.onclick = () => { engine.st.stamp = k; engine.st.mode = "stamp";
-      Sound.fx.tap(); buzz(12); tools._repaint(); paintStamps(); };
+      Sound.fx.tap(); buzz(12); repaintTools(); paintStamps(); };
     stampBtns.push(b); stampTray.append(b);
   });
-  paintStamps();
-  tools._repaint();
-  s.append(tools, stampTray);
+  paintStamps(); repaintTools();
 
-  const row = el("div", { css: "display:flex;gap:10px;align-items:stretch;padding:6px 16px calc(14px + env(safe-area-inset-bottom))" });
-  // Undo is a compact icon-only button - a toddler reads the curved arrow,
-  // not a word, and it leaves room for the two labelled buttons to fit.
+  // Actions - compact undo, press-and-hold clear, save.
+  const row = el("div", { css: "display:flex;gap:10px;align-items:stretch" });
   const undoBtn = el("button", { cls: "btn btn-quiet btn-icon", css: "flex:none",
     html: ic("undo", 24) });
   undoBtn.onclick = () => { Sound.fx.tap(); buzz(12); engine.undo(); };
   // "Clear" wipes the whole drawing, so it is gated behind a deliberate
-  // press-and-hold - a toddler tapping around can never erase their work
-  // by accident. A fill bar shows the hold progressing.
+  // press-and-hold - a child tapping around can never erase by accident.
   const clearBtn = el("button", { cls: "btn btn-quiet",
     css: "flex:1;min-width:0;padding:15px 10px;gap:7px;position:relative;overflow:hidden",
     html: ic("eraser", 20) + `<span>${t("clear")}</span>` });
@@ -2942,9 +2954,9 @@ function FreeDraw() {
     speak(t("freeSave")(S.name));
   };
   row.append(undoBtn, clearBtn, saveBtn);
-  // Free Draw is an immersive activity - its own action row is the only
-  // bottom bar (no global nav bar to sit behind). Header back returns home.
-  s.append(row);
+
+  panel.append(colGrid, toolGrid, stampTray, row);
+  s.append(panel);
   APP.append(s);
   applyLandscape(s, sw, stage);
   buddySay("warm", t("freeIntro")(S.name));
