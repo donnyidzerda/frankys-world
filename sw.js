@@ -6,7 +6,7 @@
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'scribble-heroes-v39';
+const CACHE = 'scribble-heroes-v40';
 
 // Everything needed to boot fully offline after the first visit.
 const APP_SHELL = [
