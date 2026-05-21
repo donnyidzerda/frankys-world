@@ -1070,6 +1070,7 @@ const I18N_X = {
     rdStartBtn:"Start oefenen",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes",
     statStreak:"dagen", statStars:"sterren", statStickers:"stickers",
+    writeHero:"Verder oefenen", writeHeroSub:"Buddy heeft een letter voor je klaar",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
   en: {
@@ -1113,6 +1114,7 @@ const I18N_X = {
     rdStartBtn:"Start practising",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words",
     statStreak:"days", statStars:"stars", statStickers:"stickers",
+    writeHero:"Keep practising", writeHeroSub:"Buddy has a letter ready for you",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
   es: {
@@ -1156,6 +1158,7 @@ const I18N_X = {
     rdStartBtn:"Empezar a practicar",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy",
     statStreak:"días", statStars:"estrellas", statStickers:"pegatinas",
+    writeHero:"Seguir practicando", writeHeroSub:"Buddy tiene una letra para ti",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
 };
@@ -2068,6 +2071,18 @@ function pillarScene(key) {
     <path d="M22 46 Q14 52 18 58 Q26 56 29 49 Z" fill="var(--ochre)"/></svg>`;
 }
 
+// Buddy's pick for the next writing lesson: the least-practised letter
+// (fewest stars), in A-Z order. Gives the child one obvious tap instead
+// of choosing from the whole alphabet.
+function nextWriteLesson() {
+  let best = "abc_" + ABC[0], least = Infinity;
+  for (const L of ABC) {
+    const id = "abc_" + L, st = S.completed[id] || 0;
+    if (st < least) { least = st; best = id; }
+  }
+  return best;
+}
+
 /* ----- 11. Home -------------------------------------------------------- */
 // Home is a 3-part chooser (Draw / Read / Write). With a mode it shows
 // just that part's lessons, with a back arrow to the chooser.
@@ -2131,6 +2146,21 @@ function Home(mode) {
   head.append(back, el("div", { cls: "t-title", css: "flex:1", textContent: t("pill_" + mode) }), muteBtn());
   s.append(head);
   const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:8px 20px 116px;container-type:inline-size" });
+  // Writing: a big "Buddy's pick" hero so the child has one obvious tap
+  // instead of hunting through the whole alphabet. The category grids
+  // stay below for browsing.
+  if (mode === "write") {
+    const nid = nextWriteLesson();
+    const hero = el("button", { cls: "card pop",
+      css: "padding:22px 24px;display:flex;align-items:center;gap:18px;background:var(--sage);color:#fff;width:100%;margin:4px 0 16px;min-height:118px" });
+    hero.innerHTML =
+      `<div style="background:rgba(255,255,255,.93);border-radius:20px;padding:8px;display:inline-flex">${ART(nid, 70)}</div>
+       <div style="text-align:left;flex:1"><div class="t-title">${t("writeHero")}</div>
+       <div class="t-body" style="opacity:.92;margin-top:2px">${t("writeHeroSub")}</div></div>
+       <div style="background:rgba(255,255,255,.2);border-radius:50%;padding:12px;display:inline-flex">${ic("next", 26, "#fff")}</div>`;
+    hero.onclick = () => { Sound.fx.tap(); buzz(14); go("draw", nid); };
+    wrap.append(hero);
+  }
   if (mode === "draw") {
     const fd = el("button", { cls: "card pop",
       css: "padding:18px;display:flex;align-items:center;gap:14px;background:var(--surface);width:100%;margin-bottom:4px" });
