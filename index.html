@@ -218,6 +218,13 @@
   .chip.sel{ background:var(--ink); color:var(--cream); }
   .chip.sel svg{ stroke:var(--cream); }
 
+  /* Reading answer feedback - a clear green ring on the right answer, a
+     red ring + shake on a wrong tap; the letter inside stays readable. */
+  .rc-ok{ box-shadow:0 0 0 5px var(--sage), var(--sh) !important; }
+  .rc-no{ box-shadow:0 0 0 5px var(--rose), var(--sh) !important; animation:rcshake .4s ease; }
+  @keyframes rcshake{ 0%,100%{transform:translateX(0)} 22%{transform:translateX(-9px)} 64%{transform:translateX(9px)} }
+  body.calm .rc-no{ animation:none; }
+
   /* Switch */
   .sw{ width:58px; height:34px; border-radius:999px; background:rgba(52,48,42,.18);
     position:relative; transition:background .2s; flex:none; }
@@ -567,7 +574,7 @@ function applyPronounce(text) {
 }
 async function realisticSpeak(text, teach) {
   const base = ttsUrl();
-  if (!base || !navigator.onLine || !("caches" in window)) return false;
+  if (!base || !("caches" in window)) return false;
   try {
     text = applyPronounce(text);
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
@@ -576,6 +583,9 @@ async function realisticSpeak(text, teach) {
     _ttsCache = _ttsCache || await caches.open("tts-v6");
     let res = await _ttsCache.match(key);
     if (!res) {
+      // Cache miss: only then do we need the network. A cached phrase
+      // must keep playing offline (the whole point of caching it).
+      if (!navigator.onLine) return false;
       res = await fetch(key, { mode: "cors" });
       if (!res.ok) return false;
       try { await _ttsCache.put(key, res.clone()); } catch {}
@@ -1971,13 +1981,22 @@ Object.keys(SHAPES).forEach(k => DRAWINGS.push({
    Decoupled from the pen (tap only). Explicit sound teaching, mastery
    gate (Leitner boxes), spaced retrieval, blending into decodable mkm
    words, high-utility introduction order. Per-language regular words. */
+// Sounds are introduced in a high-utility order (so words can be blended
+// early), then the whole alphabet is covered - the rarer letters come
+// last. The mastery gate paces how fast a child moves through them.
 const READING = {
-  nl:{ sounds:["s","a","m","n","t","i","p","o","k","e","r","d","l","u"],
-       words:["sap","mat","man","tas","pan","nat","tak","pet","pit","kip","pot","tor","rok","dak","lat","pen","kar","mes","sok","map","lip","net","tor","sik"] },
-  en:{ sounds:["s","a","t","p","i","n","m","d","g","o","c","k","e","u","r","h","b","f","l"],
-       words:["sat","pat","tap","pin","nip","pan","nap","sit","tin","pit","tip","mad","dad","dig","dog","got","cot","cap","cat","pen","ten","net","bed","red","run","fun","sun","hop","big","bag","leg"] },
-  es:{ sounds:["a","m","s","l","p","t","o","n","d","i","r","u","e"],
-       words:["sol","sal","mar","pan","mes","dos","los","las","mil","sur","red","tos","luna","mapa"] },
+  nl:{ sounds:["s","a","m","n","t","i","p","o","k","e","r","d","l","u",
+               "g","b","v","h","z","w","f","j","c","x","y","q"],
+       words:["sap","mat","man","tas","pan","nat","tak","pet","pit","kip","pot","tor","rok","dak","lat","pen","kar","mes","sok","map","lip","net","sik",
+              "bus","bos","bal","big","gat","gum","vis","vos","weg","wol","web","zak","hut","jas","duf","laf","wak","gif"] },
+  en:{ sounds:["s","a","t","p","i","n","m","d","g","o","c","k","e","u","r","h","b","f","l",
+               "j","v","w","y","z","x","q"],
+       words:["sat","pat","tap","pin","nip","pan","nap","sit","tin","pit","tip","mad","dad","dig","dog","got","cot","cap","cat","pen","ten","net","bed","red","run","fun","sun","hop","big","bag","leg",
+              "jam","jet","van","wet","wig","zip","box","fox","jog","hug","mix","fan","win","yes"] },
+  es:{ sounds:["a","m","s","l","p","t","o","n","d","i","r","u","e",
+               "b","c","f","g","h","j","v","y","z","k","w","x","q"],
+       words:["sol","sal","mar","pan","mes","dos","los","las","mil","sur","red","tos","luna","mapa",
+              "boca","casa","vaca","foca","gota","bota","jugo","beso","hoja","gafa"] },
 };
 const RD = () => READING[LC()] || READING.en;
 const rdBox = k => S.readBox[k] || 0;
@@ -2173,25 +2192,47 @@ function ReadScreen() {
       const say = () => speak(phonics(L).say, true);
       replay.onclick = () => { Sound.fx.tap(); say(); };
       const opts = [it.s, ...distract(RD().sounds, it.s, 2)].sort(() => Math.random() - .5);
-      opts.forEach(o => choices.append(tile(lowerArt(o, 70), () => {
-        if (o === it.s) { resolve(true, "s:" + it.s); }
-        else { choices.style.pointerEvents = "none"; buddySay("warm", phonics(L).say, true);
-          resolve(false, "s:" + it.s); }
-      })));
+      const tiles = {};
+      opts.forEach(o => {
+        const b = tile(lowerArt(o, 70), () => {
+          if (busy) return;
+          if (o === it.s) { b.classList.add("rc-ok"); resolve(true, "s:" + it.s); }
+          else {
+            b.classList.add("rc-no");
+            if (tiles[it.s]) tiles[it.s].classList.add("rc-ok");   // show the right one
+            buddySay("warm", phonics(L).say, true);
+            resolve(false, "s:" + it.s);
+          }
+        });
+        tiles[o] = b; choices.append(b);
+      });
       setTimeout(say, 250);
       buddySay("happy", "");
     } else { // read a word
       const w = it.w;
       promptEl.textContent = t("readWhichWord");
       showEl.innerHTML = "";
-      const say = () => speak(w, true);
-      replay.onclick = () => { Sound.fx.tap(); speak(blendSay(w), true); };
+      // Say the sounds blending into the word - a longer, reliable
+      // utterance, and it models decoding. Replay does the same.
+      const say = () => speak(blendSay(w), true);
+      replay.onclick = () => { Sound.fx.tap(); say(); };
       const opts = [w, ...distract(rdWords().length >= 3 ? rdWords() : RD().words, w, 2)].sort(() => Math.random() - .5);
-      opts.forEach(o => choices.append(tile(lowerArt(o, 80), () => {
-        if (o === w) resolve(true, "w:" + w);
-        else { choices.style.pointerEvents = "none"; speak(blendSay(w), true); resolve(false, "w:" + w); }
-      })));
+      const tiles = {};
+      opts.forEach(o => {
+        const b = tile(lowerArt(o, 80), () => {
+          if (busy) return;
+          if (o === w) { b.classList.add("rc-ok"); resolve(true, "w:" + w); }
+          else {
+            b.classList.add("rc-no");
+            if (tiles[w]) tiles[w].classList.add("rc-ok");
+            say();
+            resolve(false, "w:" + w);
+          }
+        });
+        tiles[o] = b; choices.append(b);
+      });
       setTimeout(say, 250);
+      buddySay("happy", "");
     }
   }
   function finish() {
