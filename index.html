@@ -2550,13 +2550,11 @@ function DrawScreen(id) {
   progWrap.append(prog, pNum);
   s.append(progWrap);
 
-  const banner = el("div", { cls: "card", css: "margin:2px 16px;padding:10px 14px;display:flex;align-items:center;gap:12px" });
-  banner.innerHTML = `<div id="sIcon" style="background:var(--surface-2);border-radius:12px;padding:7px"></div>
-    <div id="sTip" class="t-head" style="flex:1"></div>`;
-  s.append(banner);
-
-  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:4px 14px" });
-  const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(86vw,560px);margin:auto" });
+  // No text tip-banner: a toddler can't read it, Buddy says it aloud, and
+  // the dotted ghost + the pencil demo ARE the instruction. Dropping it
+  // hands the freed space straight to the canvas.
+  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
+  const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(92vw,620px);margin:auto" });
   sw.append(stage); s.append(sw);
   // Pen-Live: every finished stroke recomputes real coverage so the
   // progress bar fills continuously, not in step-sized jumps. When the
@@ -2580,11 +2578,12 @@ function DrawScreen(id) {
     b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); };
     return b;
   };
-  const helpers = el("div", { css: "display:flex;gap:8px;padding:2px 16px 0" });
+  // Just one helper - "show me". Undo and Clear are adult concepts that
+  // only crowd the screen; tracing never blocks, and each letter starts on
+  // a fresh sheet anyway.
+  const helpers = el("div", { css: "display:flex;padding:2px 16px 0" });
   helpers.append(
-    mk("help", t("showMe"), () => { engine.helpMe(); speak(t("showMeSay")); }),
-    mk("undo", t("undo"), () => engine.undo()),
-    mk("eraser", t("clear"), () => { engine.clear(); engine.setGhost(steps[i].d); }),
+    mk("play", t("showMe"), () => { engine.helpMe(); speak(t("showMeSay")); }),
   );
   const next = mk("next", t("next"), () => advance(), { primary: true });
   const nextWrap = el("div", { css: "padding:4px 16px calc(6px + env(safe-area-inset-bottom))" });
@@ -2614,9 +2613,6 @@ function DrawScreen(id) {
     stepPassed = false;
     prog.firstChild.style.width = (i / steps.length) * 100 + "%";
     pNum.textContent = t("stepOf")(i + 1, steps.length);
-    $("#sIcon").innerHTML = ic(stp.icon, 26, D.accent);
-    const tip = $("#sTip"); tip.textContent = L.tip;
-    tip.classList.remove("pop"); void tip.offsetWidth; tip.classList.add("pop");
     if (D.clearEachStep) engine.clear(); // each letter starts on a fresh sheet
     engine.setGhost(stp.d);
     applyDiff();
@@ -2879,9 +2875,24 @@ function FreeDraw() {
       html: ic(icon, 20, kind === "btn-go" ? "#fff" : "var(--ink)") + `<span>${label}</span>` });
     b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); }; return b;
   };
+  // "Clear" wipes the whole drawing, so it is gated behind a deliberate
+  // hold - a toddler tapping around can never erase their work by accident.
+  // A little fill bar shows the hold progressing.
+  const clearBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;position:relative;overflow:hidden",
+    html: ic("eraser", 20) + `<span>${t("clear")}</span>` });
+  let _cT, _cFill;
+  const cClear = () => { clearTimeout(_cT); if (_cFill) { _cFill.remove(); _cFill = null; } };
+  clearBtn.addEventListener("pointerdown", () => {
+    cClear();
+    _cFill = el("i", { css: "position:absolute;left:0;top:0;bottom:0;width:0;background:var(--clay);opacity:.3;transition:width .65s linear;pointer-events:none" });
+    clearBtn.append(_cFill);
+    requestAnimationFrame(() => { if (_cFill) _cFill.style.width = "100%"; });
+    _cT = setTimeout(() => { cClear(); engine.clear(); Sound.fx.soft(); buzz([18, 28]); }, 650);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => clearBtn.addEventListener(ev, cClear));
   row.append(
     mk("undo", t("undo"), () => engine.undo()),
-    mk("eraser", t("clear"), () => engine.clear()),
+    clearBtn,
     mk("save", t("save"), async () => {
       const blob = await engine.toPNG();
       await galleryAdd({ id: Date.now(), name: t("freeTitle"), art: "star", blob });
