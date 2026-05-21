@@ -203,13 +203,14 @@
     transition:width .5s cubic-bezier(.2,.7,.3,1); }
 
   /* Colour wells + brush chips */
-  /* Colour wells - fat, easy targets for small fingers (min ~60px). */
-  .well{ width:clamp(60px,14vw,76px); height:clamp(60px,14vw,76px); border-radius:50%;
+  /* Colour wells - fat, easy targets for small fingers. The selected ring
+     is kept tight so it never bleeds into a neighbour or off-screen. */
+  .well{ width:clamp(62px,15vw,78px); height:clamp(62px,15vw,78px); border-radius:50%;
     box-shadow:var(--sh-sm), inset 0 0 0 3px rgba(255,255,255,.55);
     transition:transform .14s cubic-bezier(.2,.7,.3,1); position:relative; }
-  .well.sel{ transform:scale(1.16); }
-  .well.sel::after{ content:''; position:absolute; inset:-8px; border-radius:50%;
-    border:4px solid var(--ink); opacity:.55; }
+  .well.sel{ transform:scale(1.1); }
+  .well.sel::after{ content:''; position:absolute; inset:-6px; border-radius:50%;
+    border:3px solid var(--ink); opacity:.5; }
   .chip{ display:flex; align-items:center; gap:9px; padding:13px 18px; border-radius:16px;
     min-height:52px; background:var(--surface-2); font-weight:800; box-shadow:var(--sh-sm);
     border:1px solid rgba(226,216,196,.8); }
@@ -2541,7 +2542,9 @@ function makeEngine(stage, opts = {}) {
 
 function toolbar(engine, opts = {}) {
   const bar = el("div", { css: "display:flex;flex-direction:column;gap:8px;align-items:center;padding:4px 14px" });
-  const cols = el("div", { css: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center" });
+  // Colours in a tidy 3x2 grid - balanced and predictable (a 5+1 wrap
+  // looked broken), and centred so the selected ring never hits the edge.
+  const cols = el("div", { css: "display:grid;grid-template-columns:repeat(3,auto);gap:16px 22px;justify-content:center;padding:4px 0" });
   COLORS.forEach((c, i) => {
     const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
     b.onclick = () => { engine.st.color = c; Sound.fx.tap(); buzz(12);
@@ -2906,16 +2909,17 @@ function FreeDraw() {
   tools._repaint();
   s.append(tools, stampTray);
 
-  const row = el("div", { css: "display:flex;gap:10px;padding:6px 18px calc(14px + env(safe-area-inset-bottom))" });
-  const mk = (icon, label, fn, kind) => {
-    const b = el("button", { cls: "btn " + (kind || "btn-quiet"), css: "flex:1",
-      html: ic(icon, 20, kind === "btn-go" ? "#fff" : "var(--ink)") + `<span>${label}</span>` });
-    b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); }; return b;
-  };
+  const row = el("div", { css: "display:flex;gap:10px;align-items:stretch;padding:6px 16px calc(14px + env(safe-area-inset-bottom))" });
+  // Undo is a compact icon-only button - a toddler reads the curved arrow,
+  // not a word, and it leaves room for the two labelled buttons to fit.
+  const undoBtn = el("button", { cls: "btn btn-quiet btn-icon", css: "flex:none",
+    html: ic("undo", 24) });
+  undoBtn.onclick = () => { Sound.fx.tap(); buzz(12); engine.undo(); };
   // "Clear" wipes the whole drawing, so it is gated behind a deliberate
-  // hold - a toddler tapping around can never erase their work by accident.
-  // A little fill bar shows the hold progressing.
-  const clearBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;position:relative;overflow:hidden",
+  // press-and-hold - a toddler tapping around can never erase their work
+  // by accident. A fill bar shows the hold progressing.
+  const clearBtn = el("button", { cls: "btn btn-quiet",
+    css: "flex:1;min-width:0;padding:15px 10px;gap:7px;position:relative;overflow:hidden",
     html: ic("eraser", 20) + `<span>${t("clear")}</span>` });
   let _cT, _cFill;
   const cClear = () => { clearTimeout(_cT); if (_cFill) { _cFill.remove(); _cFill = null; } };
@@ -2927,16 +2931,17 @@ function FreeDraw() {
     _cT = setTimeout(() => { cClear(); engine.clear(); Sound.fx.soft(); buzz([18, 28]); }, 650);
   });
   ["pointerup", "pointerleave", "pointercancel"].forEach(ev => clearBtn.addEventListener(ev, cClear));
-  row.append(
-    mk("undo", t("undo"), () => engine.undo()),
-    clearBtn,
-    mk("save", t("save"), async () => {
-      const blob = await engine.toPNG();
-      await galleryAdd({ id: Date.now(), name: t("freeTitle"), art: "star", blob });
-      Sound.fx.win(); burst(.5);
-      speak(t("freeSave")(S.name));
-    }, "btn-go"),
-  );
+  const saveBtn = el("button", { cls: "btn btn-go",
+    css: "flex:1;min-width:0;padding:15px 10px;gap:7px",
+    html: ic("save", 20, "#fff") + `<span>${t("save")}</span>` });
+  saveBtn.onclick = async () => {
+    Sound.fx.tap(); buzz(12);
+    const blob = await engine.toPNG();
+    await galleryAdd({ id: Date.now(), name: t("freeTitle"), art: "star", blob });
+    Sound.fx.win(); burst(.5);
+    speak(t("freeSave")(S.name));
+  };
+  row.append(undoBtn, clearBtn, saveBtn);
   // Free Draw is an immersive activity - its own action row is the only
   // bottom bar (no global nav bar to sit behind). Header back returns home.
   s.append(row);
