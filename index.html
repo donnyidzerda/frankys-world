@@ -28,6 +28,8 @@
     --ink:#34302A; --ink-soft:#7A7164; --line:#E2D8C4;
     --clay:#C9633F; --sage:#6E8C5E; --ochre:#D89A36; --sky:#5E8AA0;
     --rose:#CF8585; --plum:#7C6C90; --cream:#FBF3E7;
+    /* Soft section tints - colour-code the three worlds without shouting. */
+    --sky-soft:#E6EEF1; --sage-soft:#EAEFE3; --clay-soft:#F6E7DE;
     --r:26px; --r-sm:18px;
     --sh-sm:0 1px 2px rgba(52,48,42,.05), 0 3px 8px rgba(52,48,42,.07);
     --sh:0 2px 6px rgba(52,48,42,.06), 0 16px 34px rgba(52,48,42,.10);
@@ -1709,7 +1711,7 @@ function ReadScreen() {
   const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:14px 18px 6px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
   back.onclick = () => { Sound.fx.tap(); go("home"); };
-  head.append(back, el("div", { css: "flex:1", html: `<div class="t-title">${t("readTitle")}</div>` }),
+  head.append(back, el("div", { css: "flex:1", html: `<div class="t-title" style="color:var(--sky)">${t("readTitle")}</div>` }),
     muteBtn(), el("div", { id: "buddy", "data-size": 52, html: Buddy("happy", 52) }));
   s.append(head);
   const prog = el("div", { cls: "prog", css: "margin:2px auto 8px;max-width:640px;width:calc(100% - 40px)", html: "<i style='width:0'></i>" });
@@ -2143,7 +2145,9 @@ function Home(mode) {
   const head = el("div", { cls: "cap-wide", css: "display:flex;align-items:center;gap:12px;padding:16px 20px 6px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
   back.onclick = () => { Sound.fx.tap(); go("home"); };
-  head.append(back, el("div", { cls: "t-title", css: "flex:1", textContent: t("pill_" + mode) }), muteBtn());
+  // Section colour-coding: the page title carries the world's colour.
+  const secColor = mode === "write" ? "var(--sage)" : "var(--clay)";
+  head.append(back, el("div", { cls: "t-title", css: "flex:1;color:" + secColor, textContent: t("pill_" + mode) }), muteBtn());
   s.append(head);
   const wrap = el("div", { cls: "scroll cap-wide", css: "flex:1;padding:8px 20px 116px;container-type:inline-size" });
   // Writing: a big "Buddy's pick" hero so the child has one obvious tap
@@ -2173,12 +2177,13 @@ function Home(mode) {
     if (!items.length) return;
     wrap.append(el("div", { cls: "t-label", css: "margin:18px 4px 10px", textContent: catName(cat.id) }));
     const grid = el("div", { cls: "grid" });
+    const tint = mode === "write" ? "var(--sage-soft)" : "var(--clay-soft)";
     items.forEach(d => {
       const stars = S.completed[d.id];
       const c = el("button", { cls: "card pop",
-        css: "padding:18px 16px;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;background:var(--surface)" });
+        css: `padding:18px 16px;display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;background:${tint}` });
       c.innerHTML =
-        `<div style="background:var(--surface-2);border-radius:20px;padding:14px">${ART(d.id, 76)}</div>
+        `<div style="background:var(--surface);border-radius:20px;padding:14px;box-shadow:var(--sh-sm)">${ART(d.id, 76)}</div>
          <div class="t-head">${drawName(d)}</div>` +
         (stars ? `<div style="position:absolute;top:12px;right:12px;display:flex;gap:2px">${
           Array.from({ length: stars }, () => ic("star", 16, "var(--ochre)")).join("")}</div>` : "");
@@ -2257,7 +2262,9 @@ function nav(active) {
 }
 
 /* ----- 12. Drawing engine (canvas, brushes, ghost, scoring) ------------ */
-const COLORS = ["#CC4B3C", "#E2952F", "#EBC44A", "#6E9E5F", "#5C90A8", "#8A6FA0"];
+// A bright crayon-box for the child to draw with - vivid and saturated
+// (the calm, muted palette stays for the app's backdrop and chrome).
+const COLORS = ["#E5392B", "#F2851C", "#F4BE2C", "#54A63F", "#2C90C8", "#9054B5"];
 const AGE = {
   1: { brush: 44, tol: 150, pass: .10, oneStep: true },
   2: { brush: 34, tol: 112, pass: .18, oneStep: false },
