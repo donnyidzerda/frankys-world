@@ -2918,12 +2918,14 @@ function FreeDraw() {
   });
 
   // Stamp tray - five shapes, shown only while the Stamp tool is active.
+  // Selected = a light clay tint + a clay ring; the background stays light
+  // so the (dark-inked) shape itself never disappears.
   const stampBtns = [];
   const paintStamps = () => stampBtns.forEach(b => {
     const sel = b.dataset.k === engine.st.stamp;
-    b.style.background = sel ? "var(--ink)" : "var(--surface-2)";
+    b.style.background = sel ? "var(--clay-soft)" : "var(--surface-2)";
     b.style.outline = sel ? "3px solid var(--clay)" : "none";
-    b.style.outlineOffset = "1px";
+    b.style.outlineOffset = "2px";
   });
   ["star", "heart", "circle", "triangle", "square"].forEach(k => {
     const b = el("button", { cls: "btn btn-quiet", css: "padding:8px;border-radius:14px;min-height:0",
