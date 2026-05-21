@@ -281,7 +281,7 @@ const pKey = id => SAVE_KEY + "::" + id;
 const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
-  caseMode: "upper", review: {}, diff: 1, sayName: "", worldSeenStars: 0,
+  caseMode: "upper", review: {}, drawDiff: 1, writeDiff: 1, sayName: "", worldSeenStars: 0,
   readBox: {}, readIntro: 1, readProd: {},
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
   settings: { muted: false, voice: true, slowVoice: false, music: true,
@@ -1507,7 +1507,15 @@ function worldScene(stars, seen) {
     ? [[44,30],[96,22],[150,38],[206,26],[244,52],[120,58]]
         .map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.5" fill="#F1EBD6" opacity=".85"/>`).join("")
     : "";
-  const buddy = Buddy("warm", 42).replace("<svg ", '<svg x="34" y="74" ');
+  // Buddy lives in the scene and follows the day: awake by day, asleep at
+  // night with a soft "z z z".
+  const buddy = Buddy(night ? "rest" : "warm", 42).replace("<svg ", '<svg x="34" y="74" ');
+  const zzz = night
+    ? `<g fill="#F1EBD6" opacity=".8" font-family="inherit" font-weight="700">
+         <text x="74" y="86" font-size="9">z</text>
+         <text x="82" y="78" font-size="11">z</text>
+         <text x="91" y="69" font-size="13">z</text></g>`
+    : "";
   return `<svg viewBox="0 0 320 150" width="100%" aria-hidden="true">
     <defs><linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/>
@@ -1527,6 +1535,7 @@ function worldScene(stars, seen) {
     ${cell(24, '<path d="M252 120 V86" stroke="#9a9a8a" stroke-width="2.4"/><path d="M246 92 Q255 66 264 92 L264 116 H246 Z" fill="var(--plum)"/><path d="M253 116 Q255 102 257 116 Z" fill="var(--ochre)"/>')}
     ${cell(36, '<path d="M292 60 l4 8 8 1 -6 6 1.5 8 -7.5 -4 -7.5 4 1.5 -8 -6 -6 8 -1 z" fill="var(--ochre)"/>')}
     ${buddy}
+    ${zzz}
   </svg>`;
 }
 
@@ -2530,9 +2539,11 @@ function DrawScreen(id) {
     setTimeout(() => engine.playDemo(), 800);
   }
   // Invisible dynamic difficulty: scale the guide thickness + demo speed
-  // by the child's recent success. Never shown, never blocks.
+  // by the child's recent success. Tracked SEPARATELY for drawing and
+  // writing - cruising at circles says nothing about tracing letters.
+  const diffKey = D.pen ? "writeDiff" : "drawDiff";
   function applyDiff() {
-    const d = clamp(S.diff || 1, .7, 1.35);
+    const d = clamp(S[diffKey] || 1, .7, 1.35);
     const base = D.pen ? 15 : 26;
     const gh = stage.querySelector("#ghost");
     if (gh) gh.style.setProperty("--gw", (base * d).toFixed(1));
@@ -2543,8 +2554,8 @@ function DrawScreen(id) {
     scores[i] = engine.score();
     const ok = scores[i] >= engine.cfg.pass;
     // Adapt: cruising -> a little less help next time; struggling -> more.
-    if (scores[i] >= engine.cfg.pass * 1.6) S.diff = clamp((S.diff || 1) - .06, .7, 1.35);
-    else if (scores[i] < engine.cfg.pass) S.diff = clamp((S.diff || 1) + .08, .7, 1.35);
+    if (scores[i] >= engine.cfg.pass * 1.6) S[diffKey] = clamp((S[diffKey] || 1) - .06, .7, 1.35);
+    else if (scores[i] < engine.cfg.pass) S[diffKey] = clamp((S[diffKey] || 1) + .08, .7, 1.35);
     save();
     if (ok) {
       Sound.fx.step(); burst(.3);
