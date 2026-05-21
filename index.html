@@ -1581,7 +1581,17 @@ const READING = {
 };
 const RD = () => READING[LC()] || READING.en;
 const rdBox = k => S.readBox[k] || 0;
-const rdBump = (k, ok) => { S.readBox[k] = ok ? Math.min(5, rdBox(k) + 1) : Math.max(1, rdBox(k)); };
+// Keys whose Leitner box already advanced this reading session. Spaced
+// mastery: a sound/word can move up at most once per sitting, so it cannot
+// be "mastered" by repeating it five times in a row in one session - real
+// retrieval needs the practice spread across separate sessions.
+let _rdAdvanced = new Set();
+const rdBump = (k, ok) => {
+  if (!ok) { S.readBox[k] = Math.max(1, rdBox(k)); return; }
+  if (_rdAdvanced.has(k)) return;
+  S.readBox[k] = Math.min(5, rdBox(k) + 1);
+  _rdAdvanced.add(k);
+};
 const rdIntro = () => RD().sounds.slice(0, S.readIntro);
 const rdWords = () => RD().words.filter(wd => [...wd].every(c => rdIntro().includes(c)));
 const readMasteredCount = () => rdIntro().filter(c => rdBox("s:" + c) >= 3).length;
@@ -1631,6 +1641,7 @@ const blendSay = w => [...w].map(c => {
 }).join(" ") + ". " + w + ".";
 
 function ReadScreen() {
+  _rdAdvanced = new Set();          // fresh spacing window for this session
   const session = buildReadSession();
   let i = 0, hits = 0;
   const s = el("div", { cls: "screen" });
@@ -2319,10 +2330,17 @@ function makeEngine(stage, opts = {}) {
   function playDemo() {
     cancelAnimationFrame(raf); demo.innerHTML = "";
     const tmp = document.createElementNS(SVGNS, "path");
-    const dot = document.createElementNS(SVGNS, "circle");
-    dot.setAttribute("r", "22"); dot.setAttribute("fill", "var(--clay)");
-    dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", "6");
-    demo.append(dot);
+    // A little pencil leads the demo - the child reads "a pencil draws
+    // this" instead of "a dot moves". The graphite tip sits at local
+    // (0,0); a translate places it on the path point.
+    const pencil = document.createElementNS(SVGNS, "g");
+    pencil.innerHTML =
+      `<path d="M16 -20 L74 -98" stroke="#fff" stroke-width="30" stroke-linecap="round"/>
+       <path d="M16 -20 L74 -98" stroke="var(--clay)" stroke-width="21" stroke-linecap="round"/>
+       <path d="M64 -88 L80 -100" stroke="var(--plum)" stroke-width="21" stroke-linecap="round"/>
+       <path d="M0 0 L21 -11 L12 -25 Z" fill="#fff"/>
+       <path d="M3 -2 L18 -11 L11 -22 Z" fill="#34302A"/>`;
+    demo.append(pencil);
     let i = 0;
     const run = () => {
       if (i >= gp.length) { demo.innerHTML = ""; return; }
@@ -2334,7 +2352,7 @@ function makeEngine(stage, opts = {}) {
         // Ease in/out: slow at the start and the corners/end, like a hand.
         const e = k < .5 ? 2 * k * k : 1 - ((-2 * k + 2) ** 2) / 2;
         const pt = tmp.getPointAtLength(e * len);
-        dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
+        pencil.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
         if (k < 1) raf = requestAnimationFrame(fr); else { i++; run(); }
       };
       raf = requestAnimationFrame(fr);
