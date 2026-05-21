@@ -520,13 +520,29 @@ function unlockAudio() {
     else _ttsUnlocked = true;
   } catch {}
 }
-async function realisticSpeak(text) {
+// Pronunciation overrides. The neural voice is excellent but not perfect;
+// when it says a specific word wrong, respell it here PHONETICALLY for the
+// current language and it will be spoken (and cached) correctly. Tune by
+// ear on a real device. Word-boundary, case-insensitive. Example:
+//   nl: { "tas": "tas" }   // (respell only if a word is actually wrong)
+const PRONOUNCE = { nl: {}, en: {}, es: {} };
+function applyPronounce(text) {
+  const map = PRONOUNCE[LC()];
+  if (!map) return text;
+  return text.replace(/[A-Za-zÀ-ÿ]+/g, w => {
+    const hit = map[w.toLowerCase()];
+    return hit === undefined ? w : hit;
+  });
+}
+async function realisticSpeak(text, teach) {
   const base = ttsUrl();
   if (!base || !navigator.onLine || !("caches" in window)) return false;
   try {
+    text = applyPronounce(text);
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
+      "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v5");
+    _ttsCache = _ttsCache || await caches.open("tts-v6");
     let res = await _ttsCache.match(key);
     if (!res) {
       res = await fetch(key, { mode: "cors" });
@@ -557,7 +573,10 @@ function deviceSpeak(text) {
     speechSynthesis.speak(u);
   } catch {}
 }
-function speak(text) {
+// speak(text, teach): teach=true uses the precise, accent-free teaching
+// voice (letter sounds, words, blending); teach=false (default) uses
+// Buddy's warm everyday voice.
+function speak(text, teach) {
   if (S.settings.muted || !S.settings.voice) return;
   // Spoken-name override: the display name stays (e.g. "Lucy") but the
   // voice says the parent's phonetic spelling (e.g. "Loesie") so names
@@ -566,7 +585,7 @@ function speak(text) {
   try { speechSynthesis.cancel(); } catch {}
   if (_ttsEl) try { _ttsEl.pause(); } catch {}
   // Try the realistic voice first; gracefully fall back to the device voice.
-  realisticSpeak(text).then(ok => { if (!ok) deviceSpeak(text); });
+  realisticSpeak(text, teach).then(ok => { if (!ok) deviceSpeak(text); });
 }
 
 /* ----- 5. Haptics ------------------------------------------------------- */
@@ -626,10 +645,10 @@ function Buddy(mood = "warm", size = 140) {
     ${hat}
   </svg>`;
 }
-function buddySay(mood, text) {
+function buddySay(mood, text, teach) {
   const b = $("#buddy");
   if (b) b.innerHTML = Buddy(mood, +b.dataset.size || 92);
-  if (text) speak(text);
+  if (text) speak(text, teach);
 }
 
 /* ----- 7. Subject illustrations - flat brand-palette art (no emoji) ----
@@ -1702,8 +1721,8 @@ function ReadScreen() {
     promptEl.textContent = t("echoPrompt");
     showEl.innerHTML = lowerArt(it.s, 120);
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
-    replay.onclick = () => { Sound.fx.tap(); speak(t("echoSay")(stretched)); };
-    buddySay("happy", t("echoSay")(stretched));
+    replay.onclick = () => { Sound.fx.tap(); speak(t("echoSay")(stretched), true); };
+    buddySay("happy", t("echoSay")(stretched), true);
 
     const wrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:12px" });
     const mic = el("button", { cls: "micbtn",
@@ -1726,7 +1745,7 @@ function ReadScreen() {
       held = false; done = true;
       mic.classList.remove("rec"); setIcon("var(--plum)"); buzz(10);
       // Buddy models the sound right after the child's attempt.
-      setTimeout(() => speak(stretched + ". " + kw + "."), 220);
+      setTimeout(() => speak(stretched + ". " + kw + ".", true), 220);
       setTimeout(showJudge, 1500);
     }
     mic.addEventListener("pointerdown", startHold);
@@ -1765,7 +1784,7 @@ function ReadScreen() {
       const L = it.s.toUpperCase();
       promptEl.textContent = t("readListen");
       showEl.innerHTML = lowerArt(it.s, 120);
-      const say = () => speak(phonics(L).say);
+      const say = () => speak(phonics(L).say, true);
       replay.onclick = () => { Sound.fx.tap(); say(); };
       const go2 = el("button", { cls: "btn btn-go", css: "min-width:120px", html: ic("next", 20, "#fff") + `<span>${t("readNext")}</span>` });
       go2.onclick = () => {
@@ -1775,17 +1794,17 @@ function ReadScreen() {
         prog.firstChild.style.width = (i / session.length) * 100 + "%";
         i >= session.length ? finish() : showItem(); };
       choices.append(go2);
-      buddySay("happy", phonics(L).say);
+      buddySay("happy", phonics(L).say, true);
     } else if (it.t === "pick") {
       const L = it.s.toUpperCase();
       promptEl.textContent = t("readWhichLetter");
       showEl.innerHTML = "";
-      const say = () => speak(phonics(L).say);
+      const say = () => speak(phonics(L).say, true);
       replay.onclick = () => { Sound.fx.tap(); say(); };
       const opts = [it.s, ...distract(RD().sounds, it.s, 2)].sort(() => Math.random() - .5);
       opts.forEach(o => choices.append(tile(lowerArt(o, 70), () => {
         if (o === it.s) { resolve(true, "s:" + it.s); }
-        else { choices.style.pointerEvents = "none"; buddySay("warm", phonics(L).say);
+        else { choices.style.pointerEvents = "none"; buddySay("warm", phonics(L).say, true);
           resolve(false, "s:" + it.s); }
       })));
       setTimeout(say, 250);
@@ -1794,12 +1813,12 @@ function ReadScreen() {
       const w = it.w;
       promptEl.textContent = t("readWhichWord");
       showEl.innerHTML = "";
-      const say = () => speak(w);
-      replay.onclick = () => { Sound.fx.tap(); speak(blendSay(w)); };
+      const say = () => speak(w, true);
+      replay.onclick = () => { Sound.fx.tap(); speak(blendSay(w), true); };
       const opts = [w, ...distract(rdWords().length >= 3 ? rdWords() : RD().words, w, 2)].sort(() => Math.random() - .5);
       opts.forEach(o => choices.append(tile(lowerArt(o, 80), () => {
         if (o === w) resolve(true, "w:" + w);
-        else { choices.style.pointerEvents = "none"; speak(blendSay(w)); resolve(false, "w:" + w); }
+        else { choices.style.pointerEvents = "none"; speak(blendSay(w), true); resolve(false, "w:" + w); }
       })));
       setTimeout(say, 250);
     }
@@ -2569,7 +2588,9 @@ function DrawScreen(id) {
     engine.setGhost(stp.d);
     applyDiff();
     next.querySelector("span").textContent = (i === steps.length - 1) ? t("allDone") : t("next");
-    buddySay("happy", L.say);
+    // Letter / whole-word steps teach a sound, so they use the precise
+    // accent-free teaching voice.
+    buddySay("happy", L.say, !!(stp._c || stp._w));
     setTimeout(() => engine.playDemo(), 800);
   }
   // Invisible dynamic difficulty: scale the guide thickness + demo speed
