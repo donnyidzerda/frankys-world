@@ -201,14 +201,15 @@
     transition:width .5s cubic-bezier(.2,.7,.3,1); }
 
   /* Colour wells + brush chips */
-  .well{ width:clamp(44px,10vw,60px); height:clamp(44px,10vw,60px); border-radius:50%;
-    box-shadow:var(--sh-sm), inset 0 0 0 2px rgba(255,255,255,.5);
+  /* Colour wells - fat, easy targets for small fingers (min ~60px). */
+  .well{ width:clamp(60px,14vw,76px); height:clamp(60px,14vw,76px); border-radius:50%;
+    box-shadow:var(--sh-sm), inset 0 0 0 3px rgba(255,255,255,.55);
     transition:transform .14s cubic-bezier(.2,.7,.3,1); position:relative; }
   .well.sel{ transform:scale(1.16); }
-  .well.sel::after{ content:''; position:absolute; inset:-7px; border-radius:50%;
-    border:3px solid var(--ink); opacity:.55; }
-  .chip{ display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:14px;
-    background:var(--surface-2); font-weight:800; box-shadow:var(--sh-sm);
+  .well.sel::after{ content:''; position:absolute; inset:-8px; border-radius:50%;
+    border:4px solid var(--ink); opacity:.55; }
+  .chip{ display:flex; align-items:center; gap:9px; padding:13px 18px; border-radius:16px;
+    min-height:52px; background:var(--surface-2); font-weight:800; box-shadow:var(--sh-sm);
     border:1px solid rgba(226,216,196,.8); }
   .chip.sel{ background:var(--ink); color:var(--cream); }
   .chip.sel svg{ stroke:var(--cream); }
@@ -1068,6 +1069,7 @@ const I18N_X = {
     rdSuggestNext:"Klaar voor de volgende klank!", rdSuggestDone:"Alles beheerst. Knap!",
     rdStartBtn:"Start oefenen",
     caseLabel:"Letters", setFoundations:"Buddy's wijze woordjes",
+    statStreak:"dagen", statStars:"sterren", statStickers:"stickers",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
   },
   en: {
@@ -1110,6 +1112,7 @@ const I18N_X = {
     rdSuggestNext:"Ready for the next sound!", rdSuggestDone:"All mastered. Amazing!",
     rdStartBtn:"Start practising",
     caseLabel:"Letters", setFoundations:"Buddy's little wise words",
+    statStreak:"days", statStars:"stars", statStickers:"stickers",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
   },
   es: {
@@ -1152,6 +1155,7 @@ const I18N_X = {
     rdSuggestNext:"¡Listo para el siguiente sonido!", rdSuggestDone:"¡Todo dominado!",
     rdStartBtn:"Empezar a practicar",
     caseLabel:"Letras", setFoundations:"Las palabritas sabias de Buddy",
+    statStreak:"días", statStars:"estrellas", statStickers:"pegatinas",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
   },
 };
@@ -2043,7 +2047,7 @@ function maybeInstall() { if (_install) setTimeout(() => _install && _install.pr
 // a paintbrush. (The old line-icons were abstract, and a play-triangle
 // for "Reading" actively misled.)
 function pillarScene(key) {
-  const W = `width="58" height="58" viewBox="0 0 64 64" fill="none"`;
+  const W = `width="72" height="72" viewBox="0 0 64 64" fill="none"`;
   if (key === "read") return `<svg ${W}>
     <path d="M32 20 Q21 14 11 17 V47 Q21 44 32 49 Q43 44 53 47 V17 Q43 14 32 20 Z" fill="#fff"/>
     <path d="M32 20 V49" stroke="var(--sky)" stroke-width="2.2"/>
@@ -2078,10 +2082,9 @@ function Home(mode) {
         <span><span class="t-title">${t("hello")(S.name)}</span><br>
         <span class="t-body muted">${t("whatDraw")}</span></span>` });
     who.onclick = () => { Sound.fx.tap(); buzz(12); ProfilePicker(); };
-    const stat = el("div", { cls: "card", css: "display:flex;gap:18px;padding:12px 18px;align-items:center;font-weight:800" });
-    const pillS = (icon, n, c) => `<span style="display:inline-flex;align-items:center;gap:7px;color:var(--ink)">${ic(icon, 20, c)} ${n}</span>`;
-    stat.innerHTML = pillS("flame", S.streak, "var(--clay)") + pillS("star", S.stars, "var(--ochre)") + pillS("sticker", S.stickers.length, "var(--sage)");
-    top.append(who, stat, muteBtn());
+    // Counters (streak/stars/stickers) moved to the parent dashboard - they
+    // mean nothing to a toddler and only crowded the header.
+    top.append(who, muteBtn());
     s.append(top);
 
     const prevSeen = S.worldSeenStars || 0;
@@ -2099,11 +2102,11 @@ function Home(mode) {
     const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 116px;container-type:inline-size" });
     const pillar = (key, col, fn) => {
       const b = el("button", { cls: "card pop",
-        css: `padding:20px 22px;display:flex;align-items:center;gap:16px;background:${col};color:#fff;width:100%;margin-bottom:14px` });
+        css: `padding:26px 24px;display:flex;align-items:center;gap:20px;background:${col};color:#fff;width:100%;margin-bottom:16px;min-height:128px` });
       b.innerHTML =
-        `<div style="background:rgba(255,255,255,.20);border-radius:18px;padding:9px;display:inline-flex">${pillarScene(key)}</div>
+        `<div style="background:rgba(255,255,255,.20);border-radius:22px;padding:13px;display:inline-flex">${pillarScene(key)}</div>
          <div style="text-align:left;flex:1"><div class="t-title">${t("pill_" + key)}</div>
-         <div class="t-body" style="opacity:.92">${t("pillSub_" + key)}</div></div>`;
+         <div class="t-body" style="opacity:.92;margin-top:2px">${t("pillSub_" + key)}</div></div>`;
       b.onclick = () => { Sound.fx.tap(); buzz(14); fn(); };
       return b;
     };
@@ -2200,8 +2203,8 @@ function nav(active) {
   const row = el("div", { cls: "cap", css: "display:flex;gap:8px" });
   const mk = (label, icon, fn, key) => {
     const on = active === key;
-    const b = el("button", { css: `flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-radius:16px;font-weight:800;font-size:12px;color:${on ? "var(--ink)" : "var(--ink-soft)"};background:${on ? "var(--surface)" : "transparent"};box-shadow:${on ? "var(--sh-sm)" : "none"}` });
-    b.innerHTML = ic(icon, 23, on ? "var(--clay)" : "var(--ink-soft)") + `<span>${label}</span>`;
+    const b = el("button", { css: `flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:13px 4px;border-radius:18px;font-weight:800;font-size:13px;color:${on ? "var(--ink)" : "var(--ink-soft)"};background:${on ? "var(--surface)" : "transparent"};box-shadow:${on ? "var(--sh-sm)" : "none"}` });
+    b.innerHTML = ic(icon, 27, on ? "var(--clay)" : "var(--ink-soft)") + `<span>${label}</span>`;
     b.onclick = () => { Sound.fx.tap(); buzz(12); fn(); };
     return b;
   };
@@ -2211,8 +2214,8 @@ function nav(active) {
     mk(t("nStickers"), "sticker", () => go("stickers"), "stickers"),
   );
   // Parent-only: hold 800ms (toddlers tap, adults hold).
-  const g = el("button", { css: "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 4px;border-radius:16px;font-weight:800;font-size:12px;color:var(--ink-soft)" });
-  g.innerHTML = ic("gear", 23, "var(--ink-soft)") + `<span>${t("nGrown")}</span>`;
+  const g = el("button", { css: "flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:13px 4px;border-radius:18px;font-weight:800;font-size:13px;color:var(--ink-soft)" });
+  g.innerHTML = ic("gear", 27, "var(--ink-soft)") + `<span>${t("nGrown")}</span>`;
   let hold;
   g.addEventListener("pointerdown", () => hold = setTimeout(() => { Sound.fx.soft(); buzz(30); parentGate(() => go("settings")); }, 1000));
   const cancel = () => clearTimeout(hold);
@@ -2898,6 +2901,18 @@ function Settings() {
   const s = el("div", { cls: "screen" });
   s.append(header(t("settingsTitle")));
   const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
+
+  // Progress at a glance (moved off the child's Home - this is for you).
+  const stat = el("div", { cls: "card", css: "padding:16px 18px;display:flex;justify-content:space-around;align-items:center" });
+  const statCell = (icon, n, c, label) =>
+    `<span style="display:flex;flex-direction:column;align-items:center;gap:4px">
+       <span style="display:inline-flex;align-items:center;gap:7px;font-weight:800;font-size:20px;color:var(--ink)">${ic(icon, 22, c)} ${n}</span>
+       <span class="t-label" style="font-size:11px">${label}</span></span>`;
+  stat.innerHTML =
+    statCell("flame", S.streak, "var(--clay)", t("statStreak")) +
+    statCell("star", S.stars, "var(--ochre)", t("statStars")) +
+    statCell("sticker", S.stickers.length, "var(--sage)", t("statStickers"));
+  wrap.append(stat);
 
   // Language selector
   const langCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
