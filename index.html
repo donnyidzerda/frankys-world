@@ -577,9 +577,12 @@ function speak(text) {
 /* ----- 5. Haptics ------------------------------------------------------- */
 const buzz = p => { if (S.settings.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
 
-/* ----- 6. Buddy - a calm, well-drawn fox; mood swaps the expression ----- */
+/* ----- 6. Buddy - a calm fox with a body; mood swaps the expression -----
+   A chunky, seated character: a big recognisable head on a compact round
+   body with little paws and feet, and a soft fox tail. Reads as a whole
+   creature from an avatar chip up to the splash screen. viewBox 200x230. */
 function Buddy(mood = "warm", size = 140) {
-  const I = "#34302A";
+  const I = "#34302A", FUR = "#E0884A";
   const mouth = {
     warm:  `<path d="M88 122 Q100 132 112 122" stroke="${I}" stroke-width="6" fill="none" stroke-linecap="round"/>`,
     happy: `<path d="M84 120 Q100 140 116 120" stroke="${I}" stroke-width="7" fill="none" stroke-linecap="round"/>`,
@@ -589,14 +592,28 @@ function Buddy(mood = "warm", size = 140) {
   const eyeR = mood === "wow" ? 8 : 6.5;
   const hat = S.buddyLevel >= 3
     ? `<path d="M64 50 Q100 18 136 50 Z" fill="var(--rose)"/><circle cx="100" cy="24" r="7" fill="var(--ochre)"/>` : "";
-  return `<svg viewBox="0 0 200 210" width="${size}" height="${size * 1.05}" aria-hidden="true">
-    <path d="M152 150 Q190 156 184 196 Q170 208 156 196 Q150 174 152 150Z" fill="var(--plum)"/>
-    <rect x="170" y="186" width="22" height="12" rx="5" transform="rotate(38 181 192)" fill="var(--ochre)"/>
+  return `<svg viewBox="0 0 200 230" width="${size}" height="${size * 1.15}" aria-hidden="true">
+    <!-- soft fox tail, behind the body -->
+    <path d="M70 202 Q14 212 18 158 Q22 136 44 150 Q52 190 86 206 Z" fill="${FUR}"/>
+    <path d="M18 158 Q22 136 44 150 Q33 157 29 174 Q21 169 18 158 Z" fill="var(--cream)"/>
+    <!-- body + belly -->
+    <ellipse cx="100" cy="186" rx="58" ry="43" fill="${FUR}"/>
+    <ellipse cx="100" cy="196" rx="36" ry="33" fill="var(--cream)"/>
+    <!-- arms with cream paws -->
+    <ellipse cx="50" cy="180" rx="16" ry="23" fill="${FUR}" transform="rotate(-22 50 180)"/>
+    <ellipse cx="150" cy="180" rx="16" ry="23" fill="${FUR}" transform="rotate(22 150 180)"/>
+    <ellipse cx="44" cy="198" rx="11" ry="9" fill="var(--cream)"/>
+    <ellipse cx="156" cy="198" rx="11" ry="9" fill="var(--cream)"/>
+    <!-- feet -->
+    <ellipse cx="79" cy="223" rx="16" ry="11" fill="var(--cream)"/>
+    <ellipse cx="121" cy="223" rx="16" ry="11" fill="var(--cream)"/>
+    <!-- ears -->
     <path d="M58 84 L46 34 L96 62 Z" fill="var(--clay)"/>
     <path d="M142 84 L154 34 L104 62 Z" fill="var(--clay)"/>
     <path d="M63 78 L57 50 L86 64 Z" fill="#F0CDB4"/>
     <path d="M137 78 L143 50 L114 64 Z" fill="#F0CDB4"/>
-    <circle cx="100" cy="108" r="70" fill="#E0884A"/>
+    <!-- head -->
+    <circle cx="100" cy="108" r="70" fill="${FUR}"/>
     <ellipse cx="100" cy="128" rx="48" ry="40" fill="var(--cream)"/>
     <circle cx="76" cy="100" r="${eyeR}" fill="${I}"/>
     <circle cx="124" cy="100" r="${eyeR}" fill="${I}"/>
