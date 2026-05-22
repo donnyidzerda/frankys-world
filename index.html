@@ -1192,7 +1192,8 @@ const I18N_X = {
     sayNameTry:"Probeer",
     worldTitle:"De wereld van Buddy groeit met je mee",
     worldNext:n=>`Nog ${n} ${n===1?"ster":"sterren"} tot iets nieuws`,
-    worldDone:"Je wereld is helemaal vol. Knap gedaan!",
+    worldDone:"Alle werelden ontdekt. Wauw, knap gedaan!",
+    worldNew:nm=>`Een nieuwe wereld: ${nm}!`,
     modeErase:"Gum", modeStamp:"Stempel", modeFill:"Vullen",
     toolCrayon:"Krijt", toolMarker:"Stift", toolGlow:"Gloed",
     shareApp:"App delen", shareText:"Een rustige, reclamevrije teken-app voor kleintjes.",
@@ -1240,7 +1241,8 @@ const I18N_X = {
     sayNameTry:"Try it",
     worldTitle:"Buddy's world grows as you play",
     worldNext:n=>`${n} more ${n===1?"star":"stars"} until something new`,
-    worldDone:"Your world is full. Wonderful!",
+    worldDone:"Every world discovered. Wow, wonderful!",
+    worldNew:nm=>`A new world: ${nm}!`,
     modeErase:"Eraser", modeStamp:"Stamp", modeFill:"Fill",
     toolCrayon:"Crayon", toolMarker:"Marker", toolGlow:"Glow",
     shareApp:"Share app", shareText:"A calm, ad-free drawing app for little ones.",
@@ -1288,7 +1290,8 @@ const I18N_X = {
     sayNameTry:"Probar",
     worldTitle:"El mundo de Buddy crece al jugar",
     worldNext:n=>`${n} ${n===1?"estrella":"estrellas"} más para algo nuevo`,
-    worldDone:"¡Tu mundo está completo!",
+    worldDone:"¡Todos los mundos descubiertos!",
+    worldNew:nm=>`¡Un mundo nuevo: ${nm}!`,
     modeErase:"Goma", modeStamp:"Sello", modeFill:"Rellenar",
     toolCrayon:"Cera", toolMarker:"Rotulador", toolGlow:"Brillo",
     shareApp:"Compartir app", shareText:"Una app de dibujo tranquila y sin anuncios para los peques.",
@@ -1874,77 +1877,133 @@ function shapeArt(key, size) {
   }</svg>`;
 }
 
-/* ----- 8f. P2: Buddy's growing world (progress arc) -------------------
-   A calm, layered landscape that gains elements at star milestones and
-   shifts with the local time of day. It rewards the PARENT's sense of
-   progress without pressuring the child. Milestones come quickly at first
-   so a young child feels the world grow within the first sessions. */
-const WORLD_STEPS = [2, 4, 7, 11, 16, 24, 36];
+/* ----- 8f. P2: Buddy's growing worlds --------------------------------
+   Buddy travels: when one world fills up he journeys to the next - a
+   meadow, a beach, a forest, snowy mountains, a starry sky. Each world
+   has 6 milestones, so the world keeps growing for a long, long time.
+   It rewards the PARENT's sense of progress without pressuring the child. */
 function worldTOD() {
   const h = new Date().getHours();
-  if (h >= 6 && h < 9)  return "dawn";
-  if (h >= 9 && h < 17) return "day";
-  if (h >= 17 && h < 20) return "dusk";
-  return "night";
+  return (h >= 7 && h < 20) ? "day" : "night";
 }
+const WORLD_GATES = [3, 7, 12, 18, 25, 34];   // stars within a world
+const WORLD_SPAN = 36;
+// Each world: sky gradient, a base landscape, and 6 milestone snippets.
+const WORLDS = [
+  { sky:["#CFE2EA","#E9F0DF"],
+    base:`<path d="M0 100 Q70 80 150 96 Q230 110 320 92 V150 H0 Z" fill="#cdd9bc" opacity=".75"/>
+      <path d="M0 114 Q90 98 180 112 Q250 124 320 110 V150 H0 Z" fill="#bccaa6"/>
+      <rect x="0" y="120" width="320" height="30" fill="#d2ddb6"/><path d="M0 120 H320" stroke="#bbc79e" stroke-width="2"/>`,
+    cells:[
+      {a:'<path d="M60 120 V96" stroke="#7a5a3a" stroke-width="6" stroke-linecap="round"/><circle cx="60" cy="82" r="20" fill="var(--sage)"/>'},
+      {a:'<path d="M116 120 V104" stroke="var(--sage)" stroke-width="4" stroke-linecap="round"/><circle cx="116" cy="95" r="6" fill="var(--rose)"/><circle cx="109" cy="101" r="6" fill="var(--rose)"/><circle cx="123" cy="101" r="6" fill="var(--rose)"/><circle cx="116" cy="101" r="4.5" fill="var(--ochre)"/>'},
+      {a:'<ellipse cx="175" cy="116" rx="22" ry="13" fill="#7d9c63"/>'},
+      {a:'<rect x="232" y="96" width="42" height="24" fill="var(--clay)"/><path d="M228 96 L253 78 L278 96 Z" fill="#8a4b34"/><rect x="246" y="103" width="13" height="17" fill="#f4e9d8"/>'},
+      {a:'<ellipse cx="225" cy="36" rx="22" ry="11" fill="#fbf6ec"/><ellipse cx="241" cy="31" rx="14" ry="9" fill="#fbf6ec"/>', amb:'w-cloud'},
+      {a:'<path d="M118 52 q7 -7 14 0 q7 -7 14 0" stroke="var(--plum)" stroke-width="3.4" fill="none" stroke-linecap="round"/>', amb:'w-bird'},
+    ]},
+  { sky:["#BCDFEA","#EAD9AE"],
+    base:`<rect x="0" y="94" width="320" height="28" fill="#79b0c2"/>
+      <path d="M0 96 Q40 90 80 96 Q120 102 160 96 Q200 90 240 96 Q280 102 320 96 V104 H0 Z" fill="#8cc0cf"/>
+      <rect x="0" y="120" width="320" height="30" fill="#e6d2a0"/><path d="M0 120 H320" stroke="#d3bd86" stroke-width="2"/>`,
+    cells:[
+      {a:'<path d="M62 120 Q57 96 66 80" stroke="#9a7a4a" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M66 80 Q44 72 34 84 M66 80 Q88 72 98 84 M66 80 Q58 60 74 56" stroke="var(--sage)" stroke-width="6" fill="none" stroke-linecap="round"/>'},
+      {a:'<rect x="104" y="100" width="38" height="20" fill="#d8b878"/><rect x="104" y="92" width="9" height="9" fill="#d8b878"/><rect x="133" y="92" width="9" height="9" fill="#d8b878"/><path d="M118 92 L123 83 L128 92 Z" fill="var(--clay)"/>'},
+      {a:'<circle cx="180" cy="110" r="13" fill="var(--rose)"/><path d="M167 110 A13 13 0 0 0 193 110 Z" fill="#fbf6ec"/>'},
+      {a:'<path d="M252 120 Q238 104 252 95 Q266 104 252 120 Z" fill="#e8a0a8"/><path d="M252 95 V119 M245 101 L252 117 M259 101 L252 117" stroke="#c97f88" stroke-width="1.6"/>'},
+      {a:'<path d="M218 44 q8 -8 16 0 q8 -8 16 0" stroke="#fbf6ec" stroke-width="3.6" fill="none" stroke-linecap="round"/>', amb:'w-bird'},
+      {a:'<path d="M276 110 L306 110 L300 120 L282 120 Z" fill="var(--clay)"/><path d="M291 110 V84 L308 106 Z" fill="#fbf6ec"/>', amb:'w-cloud'},
+    ]},
+  { sky:["#C7D8C9","#DDE4C9"],
+    base:`<path d="M0 96 Q80 78 160 94 Q240 110 320 90 V150 H0 Z" fill="#9db58e" opacity=".7"/>
+      <path d="M0 112 Q90 98 180 110 Q250 122 320 108 V150 H0 Z" fill="#86a576"/>
+      <rect x="0" y="120" width="320" height="30" fill="#a7b98f"/><path d="M0 120 H320" stroke="#93a87c" stroke-width="2"/>`,
+    cells:[
+      {a:'<path d="M60 120 V112" stroke="#6b4f33" stroke-width="6"/><path d="M60 112 L42 112 L60 70 L78 112 Z" fill="#4d7050"/><path d="M60 94 L46 94 L60 66 L74 94 Z" fill="#5d8a5c"/>'},
+      {a:'<path d="M111 120 V104 Q111 100 116 100 Q121 100 121 104 V120 Z" fill="#efe6d0"/><path d="M99 104 Q99 89 116 89 Q133 89 133 104 Z" fill="var(--clay)"/><circle cx="109" cy="97" r="3" fill="#fff"/><circle cx="124" cy="99" r="2.5" fill="#fff"/>'},
+      {a:'<rect x="156" y="110" width="44" height="12" rx="6" fill="#7a5a3a"/><circle cx="198" cy="116" r="6" fill="#9a7a55"/>'},
+      {a:'<ellipse cx="252" cy="115" rx="14" ry="10" fill="#D87642"/><circle cx="252" cy="101" r="9" fill="#D87642"/><path d="M245 95 L243 85 L251 93 Z M259 95 L261 85 L253 93 Z" fill="#D87642"/><circle cx="249" cy="101" r="1.7" fill="#34302A"/><circle cx="255" cy="101" r="1.7" fill="#34302A"/>'},
+      {a:'<path d="M220 120 Q208 108 220 92 Q225 104 228 98 Q238 112 226 120 Z" fill="var(--ochre)"/><path d="M211 122 H231" stroke="#7a5a3a" stroke-width="3" stroke-linecap="round"/>'},
+      {a:'<path d="M270 50 q7 -7 14 0 q7 -7 14 0" stroke="#5d7a52" stroke-width="3.4" fill="none" stroke-linecap="round"/>', amb:'w-bird'},
+    ]},
+  { sky:["#D6E4EE","#EDF1F4"],
+    base:`<path d="M0 104 L70 56 L130 104 Z" fill="#aebfce"/><path d="M120 104 L200 48 L280 104 Z" fill="#9fb2c4"/>
+      <rect x="0" y="118" width="320" height="32" fill="#f1f4f6"/><path d="M0 118 H320" stroke="#d6dee4" stroke-width="2"/>`,
+    cells:[
+      {a:'<circle cx="60" cy="112" r="13" fill="#fbf9f4"/><circle cx="60" cy="93" r="9" fill="#fbf9f4"/><circle cx="57" cy="91" r="1.6" fill="#34302A"/><circle cx="63" cy="91" r="1.6" fill="#34302A"/><path d="M60 95 L66 96" stroke="var(--ochre)" stroke-width="2.4" stroke-linecap="round"/>'},
+      {a:'<path d="M116 120 V112" stroke="#6b4f33" stroke-width="5"/><path d="M116 114 L101 114 L116 80 L131 114 Z" fill="#6f8f72"/><path d="M116 98 L105 98 L116 82 L127 98 Z" fill="#fbf9f4" opacity=".9"/>'},
+      {a:'<path d="M152 120 Q152 96 178 96 Q204 96 204 120 Z" fill="#eef3f6"/><path d="M170 120 Q170 107 178 107 Q186 107 186 120 Z" fill="#bcccd6"/><g stroke="#cdd9e0" stroke-width="1.4"><path d="M157 108 H199 M168 99 V108 M188 99 V108"/></g>'},
+      {a:'<path d="M236 109 L268 109 L264 117 L240 117 Z" fill="var(--clay)"/><path d="M233 120 Q236 115 241 117 L267 117 Q272 115 271 120" stroke="#9aa6ae" stroke-width="2.6" fill="none" stroke-linecap="round"/>'},
+      {a:'<ellipse cx="225" cy="36" rx="22" ry="11" fill="#fbf9f4"/><ellipse cx="241" cy="31" rx="14" ry="9" fill="#fbf9f4"/>', amb:'w-cloud'},
+      {a:'<ellipse cx="290" cy="112" rx="11" ry="14" fill="#3a3f52"/><ellipse cx="290" cy="115" rx="7" ry="10" fill="#fbf9f4"/><circle cx="287" cy="103" r="1.6" fill="#fbf9f4"/><circle cx="293" cy="103" r="1.6" fill="#fbf9f4"/><path d="M288 107 L292 107 L290 110 Z" fill="var(--ochre)"/>'},
+    ]},
+  { sky:["#2D3252","#474C6A"],
+    base:`<path d="M0 118 Q90 104 180 116 Q250 126 320 112 V150 H0 Z" fill="#3a3f5e"/>
+      <path d="M0 120 H320" stroke="#2c3050" stroke-width="2"/>`,
+    cells:[
+      {a:'<path d="M60 120 V92 Q60 76 66 70 Q72 76 72 92 V120 Z" fill="#e7e2ee"/><path d="M60 110 L50 122 L60 116 Z M72 110 L82 122 L72 116 Z" fill="var(--clay)"/><circle cx="66" cy="90" r="5" fill="var(--sky)"/>'},
+      {a:'<circle cx="118" cy="50" r="16" fill="#F1EBD6"/><circle cx="113" cy="46" r="4" fill="#ddd6bf"/><circle cx="123" cy="56" r="3" fill="#ddd6bf"/>'},
+      {a:'<circle cx="180" cy="58" r="14" fill="var(--plum)"/><ellipse cx="180" cy="58" rx="24" ry="7" fill="none" stroke="var(--ochre)" stroke-width="2.6"/>'},
+      {a:'<circle cx="244" cy="48" r="5" fill="var(--ochre)"/><path d="M244 48 L218 36" stroke="#F1EBD6" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".7"/>', amb:'w-bird'},
+      {a:'<rect x="250" y="100" width="14" height="10" rx="2" fill="#cfc6dd"/><rect x="238" y="102" width="10" height="6" fill="var(--sky)"/><rect x="266" y="102" width="10" height="6" fill="var(--sky)"/><path d="M257 100 V92" stroke="#cfc6dd" stroke-width="2"/>'},
+      {a:'<path d="M292 96 l4 9 10 1 -7 7 2 10 -9 -5 -9 5 2 -10 -7 -7 10 -1 z" fill="var(--ochre)"/>'},
+    ]},
+];
+const WORLD_NAMES = {
+  nl:["Buddy's weide","Buddy's strand","Buddy's bos","Buddy's bergen","Buddy's sterrenhemel"],
+  en:["Buddy's Meadow","Buddy's Beach","Buddy's Forest","Buddy's Mountains","Buddy's Starry Sky"],
+  es:["La pradera de Buddy","La playa de Buddy","El bosque de Buddy","Las montañas de Buddy","El cielo de Buddy"],
+};
+// Which world the child is in, how many milestones are lit, and the next.
+function worldInfo(stars) {
+  const n = WORLDS.length;
+  let idx = Math.floor(stars / WORLD_SPAN);
+  if (idx >= n) idx = n - 1;
+  const base = idx * WORLD_SPAN, local = stars - base;
+  const unlocked = WORLD_GATES.map(g => local >= g);
+  let next = null;
+  for (const g of WORLD_GATES) { if (local < g) { next = base + g; break; } }
+  if (next === null && idx < n - 1) next = base + WORLD_SPAN;
+  return { idx, base, world: WORLDS[idx], unlocked, next,
+           allDone: idx === n - 1 && local >= WORLD_GATES[WORLD_GATES.length - 1] };
+}
+const worldName = () => (WORLD_NAMES[LC()] || WORLD_NAMES.en)[worldInfo(S.stars).idx];
 function worldScene(stars, seen) {
-  const seenN = seen || 0, tod = worldTOD(), night = tod === "night";
-  const SKY = { dawn:["#F3DABE","#EFE6D0"], day:["#CFE2EA","#E9F0DF"],
-                dusk:["#E7BE94","#DBC2A4"], night:["#2D3252","#474C6A"] };
-  const sky = SKY[tod];
-  const hillFar  = night ? "#3B3F62" : "#cdd9bc";
-  const hillNear = night ? "#454A6C" : "#bccaa6";
-  const ground   = night ? "#4E5378" : "#d2ddb6";
-  const groundLn = night ? "#3a3f5e" : "#bbc79e";
-  // Each milestone is a <g class="we">; locked = hidden, just-unlocked
-  // (need > previously-seen) gets "new" so it pops in once.
-  const cell = (need, inner, amb) => {
-    const lock = stars < need, isNew = !lock && need > seenN;
-    const body = amb ? `<g class="${amb}">${inner}</g>` : inner;
+  const inf = worldInfo(stars), W = inf.world, base = inf.base;
+  const night = worldTOD() === "night", space = inf.idx === WORLDS.length - 1;
+  const seenN = seen || 0;
+  const cellHTML = W.cells.map((c, k) => {
+    const need = base + WORLD_GATES[k];
+    const lock = !inf.unlocked[k], isNew = !lock && need > seenN;
+    const body = c.amb ? `<g class="${c.amb}">${c.a}</g>` : c.a;
     return `<g class="we${lock ? " lock" : ""}${isNew ? " new" : ""}">${body}</g>`;
-  };
-  let celest;
-  if (night) {
-    celest = `<g class="w-sun"><circle cx="268" cy="34" r="14" fill="#F1EBD6"/>
-      <circle cx="262" cy="30" r="11.5" fill="${sky[0]}"/></g>`;
-  } else {
-    const sx = tod === "dawn" ? 46 : tod === "dusk" ? 278 : 62;
-    const sy = tod === "day" ? 30 : 44;
-    const sc = tod === "dusk" ? "#E8954C" : "var(--ochre)";
-    celest = `<g class="w-sun"><circle cx="${sx}" cy="${sy}" r="16" fill="${sc}"/></g>`;
-  }
-  const stardots = night
-    ? [[44,30],[96,22],[150,38],[206,26],[244,52],[120,58]]
-        .map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.5" fill="#F1EBD6" opacity=".85"/>`).join("")
+  }).join("");
+  const stardots = (night || space)
+    ? [[44,30],[96,22],[150,38],[206,26],[244,52],[120,58],[286,40]]
+        .map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.5" fill="#F1EBD6" opacity=".8"/>`).join("")
     : "";
-  // Buddy lives in the scene and follows the day: awake by day, asleep at
-  // night with a soft "z z z".
+  const celest = space ? "" : (night
+    ? `<g class="w-sun"><circle cx="268" cy="32" r="13" fill="#F1EBD6"/><circle cx="262" cy="28" r="11" fill="${W.sky[0]}"/></g>`
+    : `<g class="w-sun"><circle cx="62" cy="36" r="16" fill="var(--ochre)"/></g>`);
   const buddy = Buddy(night ? "rest" : "warm", 42).replace("<svg ", '<svg x="34" y="74" ');
   const zzz = night
-    ? `<g fill="#F1EBD6" opacity=".8" font-family="inherit" font-weight="700">
-         <text x="74" y="86" font-size="9">z</text>
-         <text x="82" y="78" font-size="11">z</text>
+    ? `<g fill="#F1EBD6" opacity=".8" font-weight="700">
+         <text x="74" y="86" font-size="9">z</text><text x="82" y="78" font-size="11">z</text>
          <text x="91" y="69" font-size="13">z</text></g>`
     : "";
+  const dark = (night && !space) ? '<rect width="320" height="150" fill="#1b2040" opacity=".5"/>' : "";
   return `<svg viewBox="0 0 320 150" width="100%" aria-hidden="true">
     <defs><linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/>
+      <stop offset="0" stop-color="${W.sky[0]}"/><stop offset="1" stop-color="${W.sky[1]}"/>
     </linearGradient></defs>
     <rect width="320" height="150" fill="url(#wsky)"/>
-    ${stardots}
-    ${celest}
-    <path d="M0 100 Q70 80 150 96 Q230 110 320 92 V150 H0 Z" fill="${hillFar}" opacity=".75"/>
-    <path d="M0 114 Q90 98 180 112 Q250 124 320 110 V150 H0 Z" fill="${hillNear}"/>
-    <rect x="0" y="120" width="320" height="30" fill="${ground}"/>
-    <path d="M0 120 H320" stroke="${groundLn}" stroke-width="2"/>
-    ${cell(2,  '<path d="M64 120 V94" stroke="#7a5a3a" stroke-width="6" stroke-linecap="round"/><circle cx="64" cy="80" r="20" fill="var(--sage)"/>')}
-    ${cell(4,  '<path d="M112 120 V102" stroke="var(--sage)" stroke-width="4" stroke-linecap="round"/><circle cx="112" cy="93" r="6" fill="var(--rose)"/><circle cx="105" cy="99" r="6" fill="var(--rose)"/><circle cx="119" cy="99" r="6" fill="var(--rose)"/><circle cx="112" cy="99" r="4.5" fill="var(--ochre)"/>')}
-    ${cell(7,  '<rect x="150" y="92" width="46" height="28" fill="var(--clay)"/><path d="M146 92 L173 72 L200 92 Z" fill="#8a4b34"/><rect x="166" y="100" width="14" height="20" fill="#f4e9d8"/>')}
-    ${cell(11, '<ellipse cx="232" cy="34" rx="24" ry="12" fill="#fbf6ec"/><ellipse cx="250" cy="29" rx="15" ry="10" fill="#fbf6ec"/>', 'w-cloud')}
-    ${cell(16, `<path d="M118 50 q7 -7 14 0 q7 -7 14 0" stroke="${night ? "#cfc6dd" : "var(--plum)"}" stroke-width="3.4" fill="none" stroke-linecap="round"/>`, 'w-bird')}
-    ${cell(24, '<path d="M252 120 V86" stroke="#9a9a8a" stroke-width="2.4"/><path d="M246 92 Q255 66 264 92 L264 116 H246 Z" fill="var(--plum)"/><path d="M253 116 Q255 102 257 116 Z" fill="var(--ochre)"/>')}
-    ${cell(36, '<path d="M292 60 l4 8 8 1 -6 6 1.5 8 -7.5 -4 -7.5 4 1.5 -8 -6 -6 8 -1 z" fill="var(--ochre)"/>')}
+    ${space ? stardots : ""}
+    ${night && !space ? "" : celest}
+    ${W.base}
+    ${cellHTML}
     ${buddy}
+    ${dark}
+    ${night && !space ? stardots + celest : ""}
     ${zzz}
   </svg>`;
 }
@@ -2553,12 +2612,16 @@ function Home(mode) {
     s.append(top);
 
     const prevSeen = S.worldSeenStars || 0;
-    const nextStep = WORLD_STEPS.find(x => x > S.stars);
-    const hint = nextStep ? t("worldNext")(nextStep - S.stars) : t("worldDone");
+    const inf = worldInfo(S.stars);
+    const hint = inf.allDone ? t("worldDone")
+      : inf.next ? t("worldNext")(inf.next - S.stars) : t("worldTitle");
+    // Just arrived in a new world (the milestones below this one's base
+    // were already seen)? Announce the journey.
+    const arrived = prevSeen < inf.base && S.stars >= inf.base && inf.idx > 0;
     const world = el("div", { cls: "card", css: "margin:6px auto 0;max-width:680px;width:calc(100% - 40px);padding:0;overflow:hidden" });
     world.innerHTML = worldScene(S.stars, prevSeen) +
       `<div style="text-align:center;padding:7px 12px 9px">
-         <div class="t-label">${t("worldTitle")}</div>
+         <div class="t-label">${arrived ? t("worldNew")(worldName()) : worldName()}</div>
          <div class="t-body muted" style="font-size:13px;margin-top:1px">${hint}</div>
        </div>`;
     s.append(world);
