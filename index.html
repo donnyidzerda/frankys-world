@@ -2955,6 +2955,9 @@ function makeEngine(stage, opts = {}) {
   // Forgiving coverage score (0..1). Never blocks - only scales warmth.
   function score() {
     if (!gp.length) return 1;
+    // Guard: a 0-sized canvas (layout not settled yet) would make
+    // getImageData throw and could leave the step stuck. Never block.
+    if (!cv.width || !cv.height) return 0;
     const img = ctx.getImageData(0, 0, cv.width, cv.height).data;
     const tol = Math.round(L2P(cfg.tol) * DPR), step = Math.max(3, Math.round(tol / 4));
     const tmp = document.createElementNS(SVGNS, "path");
@@ -3173,7 +3176,9 @@ function DrawScreen(id) {
 /* ----- 14. Completion -------------------------------------------------- */
 function WinScreen({ D, stars, blob }) {
   const s = el("div", { cls: "screen", css: "align-items:center;justify-content:flex-start;text-align:center;padding:24px;gap:14px;overflow-y:auto" });
-  const url = URL.createObjectURL(blob);
+  // Guard: a missing blob (e.g. a not-yet-sized canvas) must not crash
+  // the whole celebration screen.
+  const url = (blob instanceof Blob) ? URL.createObjectURL(blob) : "";
   s.append(el("div", { cls: "t-display", textContent: t("winTitle")(S.name) }));
   const starsRow = el("div", { css: "display:flex;gap:6px",
     html: Array.from({ length: 3 }, (_, k) =>
