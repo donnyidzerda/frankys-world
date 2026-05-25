@@ -4,3 +4,10 @@ compatibility_date = "2025-01-01"
 
 # The OpenAI key is NOT stored here. It is set once as an encrypted secret:
 #   npx wrangler secret put OPENAI_API_KEY
+
+# Cross-device sync uses a KV namespace. Create it once with:
+#   npx wrangler kv namespace create SCRIBBLE_SYNC
+# That command prints an id="..." line; paste the id below, then deploy.
+[[kv_namespaces]]
+binding = "SYNC"
+id = "3b9f3a10b9ef4c5284054795d1199a37"

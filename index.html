@@ -322,6 +322,7 @@ const defaultState = () => ({
   caseMode: "upper", drawDiff: 1, writeDiff: 1, sayName: "", worldSeenStars: 0,
   readBox: {}, readIntro: 1, readProd: {},
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", buddyLevel: 1,
+  syncId: null, syncTs: 0,             // cross-device sync (set when linked)
   settings: { muted: false, voice: true, slowVoice: false,
     sound: true, haptics: true, contrast: false, calm: false,
     foundations: false },
@@ -365,12 +366,155 @@ function load() {
 }
 function save() {
   if (!S.id) return;
+  S.syncTs = Date.now();                 // mark this profile's local edit time
   localStorage.setItem(pKey(S.id), JSON.stringify(S));
   const idx = loadIdx() || { active: S.id, ids: [], legacyPid: null };
   if (!idx.ids.includes(S.id)) idx.ids.push(S.id);
   idx.active = S.id;
   saveIdx(idx);
+  Sync.schedulePush();                   // debounced cloud push (if linked)
 }
+
+/* -------------------------------------------------------------------------
+   Cross-device sync. Per-profile pair-code: every child gets their own
+   sync-id; family devices that hold the same id mirror that child's state.
+   No accounts, no email. Server is our existing Cloudflare Worker + KV.
+   Conflict policy: last-write-wins on the client's `syncTs` timestamp.
+   Fields that are device-local (gallery PNG blobs) are NOT synced - only
+   the learning state (stars, readBox, completed, etc.).
+   ------------------------------------------------------------------------- */
+const SYNC_URL = () => ttsUrl() + "/sync";    // shares the TTS Worker host
+// Fields we exclude from the cloud blob (kept device-local).
+const SYNC_OMIT = new Set(["syncId", "syncTs"]);
+function syncSnapshot(s) {
+  const out = {};
+  for (const k in s) if (!SYNC_OMIT.has(k)) out[k] = s[k];
+  return out;
+}
+function syncApply(remote) {
+  if (!remote || typeof remote !== "object") return;
+  // Preserve local sync metadata; overwrite the rest. Same profile id stays.
+  const keepId = S.id, keepSyncId = S.syncId;
+  for (const k in remote) if (!SYNC_OMIT.has(k)) S[k] = remote[k];
+  S.id = keepId; S.syncId = keepSyncId;
+}
+const Sync = (() => {
+  let pushTimer = 0, pulling = false, pushing = false;
+  let lastPull = 0, lastErr = "";
+  const linked = () => !!(S && S.syncId);
+  const online = () => navigator.onLine !== false;
+  async function call(path, opts) {
+    const r = await fetch(SYNC_URL() + path, opts);
+    if (!r.ok && r.status !== 409) {
+      lastErr = "http_" + r.status;
+      const e = new Error(lastErr); e.status = r.status;
+      try { e.body = await r.json(); } catch {}
+      throw e;
+    }
+    return r;
+  }
+  async function pull() {
+    if (!linked() || !online() || pulling) return false;
+    pulling = true;
+    try {
+      const r = await call("/get?id=" + encodeURIComponent(S.syncId));
+      const data = await r.json();
+      lastPull = Date.now(); lastErr = "";
+      if (!data.json || !data.ts) return false;
+      // Remote wins only when it is strictly newer than our last local save.
+      if ((S.syncTs || 0) >= data.ts) return false;
+      syncApply(data.json);
+      S.syncTs = data.ts;
+      localStorage.setItem(pKey(S.id), JSON.stringify(S));
+      applyFlags && applyFlags();
+      window.dispatchEvent(new CustomEvent("sync:applied"));
+      return true;
+    } catch (e) { lastErr = e.message || "pull_err"; return false; }
+    finally { pulling = false; }
+  }
+  async function push() {
+    if (!linked() || !online() || pushing || !S.id) return false;
+    pushing = true;
+    try {
+      const ts = S.syncTs || Date.now();
+      const r = await call("/put", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: S.syncId, ts, json: syncSnapshot(S) }),
+      });
+      if (r.status === 409) {
+        // Server is newer - pull and let the user keep going. Their next
+        // edit will push again with a fresher ts and likely win.
+        await pull();
+        return false;
+      }
+      lastErr = "";
+      return true;
+    } catch (e) { lastErr = e.message || "push_err"; return false; }
+    finally { pushing = false; }
+  }
+  function schedulePush() {
+    if (!linked()) return;
+    clearTimeout(pushTimer);
+    // Debounce: a flurry of saves during a session becomes one PUT.
+    pushTimer = setTimeout(push, 1500);
+  }
+  // Sign up a brand-new profile for sync. Returns the pair-code to display.
+  async function create() {
+    if (!online()) throw new Error("offline");
+    const r = await call("/new", { method: "POST" });
+    const { id, code } = await r.json();
+    S.syncId = id; save();              // save() triggers initial push
+    return code;
+  }
+  // Mint another code for an already-linked profile (add another device).
+  async function newCode() {
+    if (!linked() || !online()) throw new Error("not_linked");
+    const r = await call("/code", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: S.syncId }) });
+    const { code } = await r.json(); return code;
+  }
+  // Redeem a pair-code on this device. Replaces the active profile's state
+  // with whatever the cloud has (the whole point of pairing).
+  async function pair(code) {
+    if (!online()) throw new Error("offline");
+    const r = await call("/pair", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: String(code).replace(/\D/g, "") }) });
+    const data = await r.json();
+    if (!S.id) {                         // no active profile yet
+      const fresh = defaultState();
+      fresh.id = genId(); fresh.onboarded = true;
+      S = fresh;
+    }
+    S.syncId = data.id;
+    if (data.json) {
+      syncApply(data.json);
+      S.syncTs = data.ts || Date.now();
+    }
+    localStorage.setItem(pKey(S.id), JSON.stringify(S));
+    const idx = loadIdx() || { active: S.id, ids: [], legacyPid: null };
+    if (!idx.ids.includes(S.id)) idx.ids.push(S.id);
+    idx.active = S.id; saveIdx(idx);
+    return data;
+  }
+  function unlink() {
+    if (!S || !S.syncId) return;
+    delete S.syncId;
+    save();
+  }
+  // Periodic pull every 60s and on visibility/online events. Cheap: GETs
+  // are tiny and KV is fast. Cache stays warm.
+  let timer = 0;
+  function start() {
+    if (timer) return;
+    timer = setInterval(() => pull(), 60_000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
+    window.addEventListener("online", () => { pull(); push(); });
+  }
+  return { start, create, pair, newCode, unlink, pull, push, schedulePush,
+           linked, status: () => ({ linked: linked(), lastPull, lastErr }) };
+})();
 // Lightweight list for the picker (id, name, age) read from snapshots.
 function profileList() {
   const idx = loadIdx(); if (!idx) return [];
@@ -1231,6 +1375,17 @@ const I18N_X = {
     statStreak:"dagen", statStars:"sterren", statStickers:"stickers",
     writeHero:"Verder oefenen", writeHeroSub:"Buddy heeft een letter voor je klaar",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
+    syncTitle:"Voortgang over apparaten", syncOn:"Aan", syncLast:"Laatste sync", syncNever:"nog nooit",
+    syncLinkedHint:"De voortgang van dit kind wordt automatisch gedeeld met andere gekoppelde apparaten.",
+    syncIntro:"Koppel iPad, iPhone en oma's tablet zodat sterren en sticker overal hetzelfde zijn.",
+    syncStart:"Sync aanzetten", syncPair:"Code invullen",
+    syncAddDevice:"Apparaat toevoegen", syncStop:"Sync stoppen",
+    syncCodeTitle:"Je code", syncCodeHint:"Vul deze code in op het andere apparaat.",
+    syncCodeExpiry:"De code is 15 minuten geldig.",
+    syncPairTitle:"Code invullen", syncPairHint:"Tik de 6 cijfers van het andere apparaat in.",
+    syncPairGo:"Koppel", syncPairError:"Code klopt niet of is verlopen.",
+    syncError:"Geen verbinding. Probeer het zo nog eens.",
+    done:"Klaar",
   },
   en: {
     pgTitle:"Just for grown-ups", pgQ:(a,b)=>`What is ${a} + ${b}?`,
@@ -1280,6 +1435,17 @@ const I18N_X = {
     statStreak:"days", statStars:"stars", statStickers:"stickers",
     writeHero:"Keep practising", writeHeroSub:"Buddy has a letter ready for you",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
+    syncTitle:"Progress across devices", syncOn:"On", syncLast:"Last sync", syncNever:"never yet",
+    syncLinkedHint:"This child's progress is shared automatically with linked devices.",
+    syncIntro:"Link iPad, iPhone and grandma's tablet so stars and stickers stay in step.",
+    syncStart:"Turn on sync", syncPair:"Enter code",
+    syncAddDevice:"Add device", syncStop:"Stop sync",
+    syncCodeTitle:"Your code", syncCodeHint:"Enter this code on the other device.",
+    syncCodeExpiry:"The code is valid for 15 minutes.",
+    syncPairTitle:"Enter code", syncPairHint:"Tap in the 6 digits from the other device.",
+    syncPairGo:"Pair", syncPairError:"That code doesn't work or has expired.",
+    syncError:"No connection. Try again in a moment.",
+    done:"Done",
   },
   es: {
     pgTitle:"Solo para adultos", pgQ:(a,b)=>`¿Cuánto es ${a} + ${b}?`,
@@ -1329,6 +1495,17 @@ const I18N_X = {
     statStreak:"días", statStars:"estrellas", statStickers:"pegatinas",
     writeHero:"Seguir practicando", writeHeroSub:"Buddy tiene una letra para ti",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
+    syncTitle:"Progreso entre dispositivos", syncOn:"Activado", syncLast:"Última sincronía", syncNever:"todavía no",
+    syncLinkedHint:"El progreso de este niño se comparte automáticamente entre los dispositivos vinculados.",
+    syncIntro:"Vincula iPad, iPhone y la tablet de la abuela para que las estrellas y pegatinas vayan juntas.",
+    syncStart:"Activar sincronía", syncPair:"Introducir código",
+    syncAddDevice:"Añadir dispositivo", syncStop:"Detener sincronía",
+    syncCodeTitle:"Tu código", syncCodeHint:"Introduce este código en el otro dispositivo.",
+    syncCodeExpiry:"El código es válido 15 minutos.",
+    syncPairTitle:"Introducir código", syncPairHint:"Teclea los 6 dígitos del otro dispositivo.",
+    syncPairGo:"Vincular", syncPairError:"Ese código no funciona o ha caducado.",
+    syncError:"Sin conexión. Inténtalo en un momento.",
+    done:"Listo",
   },
 };
 for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
@@ -2513,7 +2690,9 @@ function applyFlags() {
   const h = new Date().getHours();
   document.body.classList.toggle("evening", h >= 18 || h < 6);
 }
+let _currentScreen = "home";
 function go(screen, data) {
+  _currentScreen = screen || "home";
   applyFlags(); APP.innerHTML = "";
   ({ splash:Splash, home:Home, draw:DrawScreen, win:WinScreen,
      gallery:GalleryScreen, stickers:StickerScreen, free:FreeDraw,
@@ -3670,6 +3849,108 @@ function Settings() {
   prof.append(reset);
   wrap.append(prof);
 
+  // ---- Cross-device sync card ------------------------------------------
+  // Links one child profile across the family's devices via a 6-digit
+  // pair-code. No accounts, no email. The cloud only sees an opaque blob.
+  const syncCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:12px" });
+  syncCard.append(el("div", { cls: "t-label", textContent: t("syncTitle") }));
+  if (Sync.linked()) {
+    // Linked state: show status + actions.
+    const st = Sync.status();
+    const when = st.lastPull
+      ? new Date(st.lastPull).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : t("syncNever");
+    syncCard.append(el("div", { cls: "t-body",
+      html: `<span style="color:var(--sage);font-weight:700">● ${t("syncOn")}</span> · ${t("syncLast")} ${when}` }));
+    syncCard.append(el("div", { cls: "t-body muted", textContent: t("syncLinkedHint") }));
+
+    const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap" });
+    const addBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:160px",
+      html: ic("share", 18) + `<span>${t("syncAddDevice")}</span>` });
+    addBtn.onclick = async () => {
+      Sound.fx.tap();
+      try {
+        await Sync.push();                       // make sure cloud is current
+        const code = await Sync.newCode();
+        showCode(code);
+      } catch { alert(t("syncError")); }
+    };
+    const stopBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:160px",
+      html: ic("eraser", 18) + `<span>${t("syncStop")}</span>` });
+    stopBtn.onclick = () => parentGate(() => {
+      Sync.unlink(); Sound.fx.tap(); Settings();
+    });
+    row.append(addBtn, stopBtn);
+    syncCard.append(row);
+  } else {
+    syncCard.append(el("div", { cls: "t-body muted", textContent: t("syncIntro") }));
+
+    const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap" });
+    const startBtn = el("button", { cls: "btn btn-go", css: "flex:1;min-width:160px",
+      html: ic("share", 18, "#fff") + `<span>${t("syncStart")}</span>` });
+    startBtn.onclick = async () => {
+      Sound.fx.tap();
+      try {
+        const code = await Sync.create();
+        showCode(code);
+      } catch { alert(t("syncError")); }
+    };
+    const pairBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:160px",
+      html: ic("next", 18) + `<span>${t("syncPair")}</span>` });
+    pairBtn.onclick = () => showPairDialog();
+    row.append(startBtn, pairBtn);
+    syncCard.append(row);
+  }
+  wrap.append(syncCard);
+
+  // Shows a freshly-minted pair-code, large enough to read aloud.
+  function showCode(code) {
+    const pretty = String(code).replace(/(\d{3})(\d{3})/, "$1-$2");
+    const ov = el("div", { css: "position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.6);backdrop-filter:blur(4px);padding:24px" });
+    const c = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:14px;text-align:center" });
+    c.append(
+      el("div", { cls: "t-title", textContent: t("syncCodeTitle") }),
+      el("div", { cls: "t-body muted", textContent: t("syncCodeHint") }),
+      el("div", { css: "font:900 44px/1 -apple-system,system-ui;letter-spacing:6px;color:var(--clay);padding:18px;background:var(--surface-2);border-radius:14px;user-select:all", textContent: pretty }),
+      el("div", { cls: "t-body muted", textContent: t("syncCodeExpiry") }));
+    const ok = el("button", { cls: "btn btn-go", html: ic("check", 18, "#fff") + `<span>${t("done")}</span>` });
+    ok.onclick = () => { ov.remove(); Settings(); };
+    c.append(ok);
+    ov.append(c); APP.append(ov);
+  }
+  function showPairDialog() {
+    const ov = el("div", { css: "position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.6);backdrop-filter:blur(4px);padding:24px" });
+    const c = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:14px;text-align:center" });
+    c.append(
+      el("div", { cls: "t-title", textContent: t("syncPairTitle") }),
+      el("div", { cls: "t-body muted", textContent: t("syncPairHint") }));
+    const inp = el("input", { type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxLength: 7, placeholder: "123-456",
+      css: "font:900 28px/1 -apple-system,system-ui;letter-spacing:4px;text-align:center;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
+    c.append(inp);
+    const row = el("div", { css: "display:flex;gap:10px" });
+    const cancel = el("button", { cls: "btn btn-quiet", css: "flex:1", html: `<span>${t("cancel")}</span>` });
+    cancel.onclick = () => ov.remove();
+    const ok = el("button", { cls: "btn btn-go", css: "flex:1", html: ic("check", 18, "#fff") + `<span>${t("syncPairGo")}</span>` });
+    ok.onclick = async () => {
+      const code = inp.value.replace(/\D/g, "");
+      if (code.length !== 6) { inp.style.borderColor = "var(--clay)"; return; }
+      ok.disabled = true; ok.textContent = "...";
+      try {
+        await Sync.pair(code);
+        ov.remove(); Sound.fx.step(); Settings();
+      } catch (e) {
+        ok.disabled = false;
+        ok.innerHTML = ic("check", 18, "#fff") + `<span>${t("syncPairGo")}</span>`;
+        inp.style.borderColor = "var(--clay)";
+        alert(t("syncPairError"));
+      }
+    };
+    row.append(cancel, ok);
+    c.append(row);
+    ov.append(c); APP.append(ov);
+    setTimeout(() => inp.focus(), 50);
+  }
+
   // Share with another family + offline printable parent sheet.
   const shareCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;gap:10px;flex-wrap:wrap" });
   const shareBtn = el("button", { cls: "btn btn-quiet", css: "flex:1",
@@ -3746,6 +4027,19 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("./sw.js").catch(() => {}));
 }
+
+/* ----- 20. Start cross-device sync ------------------------------------- */
+// One initial pull (if this profile is linked) so a device that was
+// offline picks up the latest learning state before the child plays.
+// Then the periodic timer + visibility/online listeners take over.
+Sync.start ? Sync.start() : null;
+if (Sync.linked()) Sync.pull();
+window.addEventListener("sync:applied", () => {
+  // Refresh only safe screens: home/settings. Mid-activity refresh would
+  // yank the child out of a drawing or reading session, so leave those.
+  if (_currentScreen === "home") go("home");
+  else if (_currentScreen === "settings") go("settings");
+});
 </script>
 </body>
 </html>

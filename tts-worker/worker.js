@@ -11,15 +11,119 @@
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
+
+/* -------------------------------------------------------------------------
+   Cross-device sync (KV-backed). No accounts: every child profile gets a
+   long random sync-id (stored locally on each paired device) and a short
+   6-digit pair-code that expires after 15 minutes or first use. The Worker
+   only ever sees opaque JSON blobs keyed by sync-id - no email, no auth.
+   Conflict policy: last-write-wins by client timestamp.
+   ------------------------------------------------------------------------- */
+const J = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
+  });
+
+const newId = () => {
+  // 16 random bytes -> 32-char hex. Unguessable, never displayed to a child.
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
+  return [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+};
+const newCode = () => {
+  // 6 random digits. Short enough to read aloud to grandma.
+  const b = new Uint32Array(1); crypto.getRandomValues(b);
+  return String(b[0] % 1_000_000).padStart(6, "0");
+};
+
+async function handleSync(req, env, parts) {
+  if (!env.SYNC) return J({ error: "sync_not_configured" }, 500);
+  const sub = parts[1] || "";
+
+  // POST /sync/new  -> { id, code }
+  // Create a fresh blank profile slot and a short pair-code that aliases
+  // to it. Code is one-shot, dies after 15 minutes.
+  if (sub === "new" && req.method === "POST") {
+    const id = newId();
+    let code = newCode();
+    // Vanishingly unlikely collision; retry up to 5 times anyway.
+    for (let i = 0; i < 5 && await env.SYNC.get("pair:" + code); i++) code = newCode();
+    await env.SYNC.put("id:" + id, JSON.stringify({ json: null, ts: 0 }));
+    await env.SYNC.put("pair:" + code, id, { expirationTtl: 900 });   // 15 min
+    return J({ id, code });
+  }
+
+  // POST /sync/code  { id }  -> { code }
+  // Mint another pair-code for an already-linked profile (so a third
+  // device can be added later from a device that already has the id).
+  if (sub === "code" && req.method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const id = String(body.id || "");
+    if (!/^[a-f0-9]{32}$/.test(id)) return J({ error: "bad_id" }, 400);
+    if (!(await env.SYNC.get("id:" + id))) return J({ error: "unknown" }, 404);
+    let code = newCode();
+    for (let i = 0; i < 5 && await env.SYNC.get("pair:" + code); i++) code = newCode();
+    await env.SYNC.put("pair:" + code, id, { expirationTtl: 900 });
+    return J({ code });
+  }
+
+  // POST /sync/pair  { code }  -> { id, json, ts }
+  // Redeem a pair-code on a new device. Burns the code on success.
+  if (sub === "pair" && req.method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const code = String(body.code || "").replace(/\D/g, "");
+    if (code.length !== 6) return J({ error: "bad_code" }, 400);
+    const id = await env.SYNC.get("pair:" + code);
+    if (!id) return J({ error: "expired" }, 404);
+    const raw = await env.SYNC.get("id:" + id);
+    if (!raw) return J({ error: "missing" }, 404);
+    await env.SYNC.delete("pair:" + code);   // one-shot
+    const data = JSON.parse(raw);
+    return J({ id, json: data.json, ts: data.ts });
+  }
+
+  // GET /sync/get?id=...  -> { json, ts }
+  if (sub === "get" && req.method === "GET") {
+    const id = new URL(req.url).searchParams.get("id") || "";
+    if (!/^[a-f0-9]{32}$/.test(id)) return J({ error: "bad_id" }, 400);
+    const raw = await env.SYNC.get("id:" + id);
+    if (!raw) return J({ error: "unknown" }, 404);
+    return J(JSON.parse(raw));
+  }
+
+  // PUT /sync/put  { id, json, ts }  -> { ts } | 409 if stale
+  if (sub === "put" && req.method === "PUT") {
+    const body = await req.json().catch(() => ({}));
+    const id = String(body.id || "");
+    const ts = Number(body.ts) || Date.now();
+    if (!/^[a-f0-9]{32}$/.test(id)) return J({ error: "bad_id" }, 400);
+    if (!body.json || typeof body.json !== "object") return J({ error: "bad_json" }, 400);
+    const blob = JSON.stringify(body.json);
+    if (blob.length > 50_000) return J({ error: "too_big" }, 413);   // 50 KB cap
+    const cur = await env.SYNC.get("id:" + id);
+    if (!cur) return J({ error: "unknown" }, 404);
+    const prev = JSON.parse(cur);
+    if (prev.ts && ts < prev.ts - 1) {
+      // Client is older than server; client should pull, merge, retry.
+      return J({ error: "stale", ts: prev.ts }, 409);
+    }
+    await env.SYNC.put("id:" + id, JSON.stringify({ json: body.json, ts }));
+    return J({ ts });
+  }
+
+  return J({ error: "not_found" }, 404);
+}
 
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
     const { pathname, searchParams } = new URL(req.url);
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts[0] === "sync") return handleSync(req, env, parts);
     if (pathname !== "/tts") return new Response("ok", { headers: CORS });
 
     // Keep requests tiny and abuse-resistant: short text only.
