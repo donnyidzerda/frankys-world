@@ -1,12 +1,12 @@
 /* =========================================================================
-   Scribble Heroes - Service Worker (PWA 2.0)
+   Franky's World - Service Worker (PWA 2.0)
    Strategy:
      - App shell + same-origin assets: cache-first (instant, offline-proof)
      - Cross-origin CDNs (Tailwind, confetti): stale-while-revalidate
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'scribble-heroes-v60';
+const CACHE = 'frankys-world-v61';
 
 // Everything needed to boot fully offline after the first visit.
 const APP_SHELL = [

@@ -1,4 +1,4 @@
-# Scribble Heroes - realistic voice proxy
+# Franky's World - realistic voice proxy
 
 A tiny Cloudflare Worker that turns text into a warm, child-friendly voice
 with OpenAI `gpt-4o-mini-tts`. It exists so the OpenAI API key is **never**

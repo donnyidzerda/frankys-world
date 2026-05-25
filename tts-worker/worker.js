@@ -1,5 +1,5 @@
 /* =========================================================================
-   Scribble Heroes - TTS proxy (Cloudflare Worker)
+   Franky's World - TTS proxy (Cloudflare Worker)
 
    Holds the OpenAI API key as an encrypted secret (NEVER in the app or
    the repo) and turns short text into a warm, gentle child-friendly MP3
@@ -131,7 +131,7 @@ export default {
     if (!text) return new Response("missing text", { status: 400, headers: CORS });
     const slow = searchParams.get("s") === "1";
     // Mode: "teach" = letter sounds / words / reading (must be exact and
-    // accent-free); "chat" = Buddy's warm everyday speech (praise, etc.).
+    // accent-free); "chat" = Franky's warm everyday speech (praise, etc.).
     const teach = searchParams.get("m") === "teach";
     const LANGS = { nl: "Dutch", en: "English", es: "Spanish" };
     const lang = LANGS[(searchParams.get("l") || "en").slice(0, 2)] || "English";
@@ -198,7 +198,7 @@ export default {
         " Articulate each word a little more deliberately than usual so " +
         "the child clearly hears every individual sound.";
     } else {
-      // CHATTER MODE - Buddy's warm everyday voice. Dutch keeps a light,
+      // CHATTER MODE - Franky's warm everyday voice. Dutch keeps a light,
       // friendly Amsterdam accent for personality (never on teaching).
       const accentTouch = lang === "Dutch"
         ? "Accent: a light, warm and friendly Amsterdam (Mokums) accent - " +
