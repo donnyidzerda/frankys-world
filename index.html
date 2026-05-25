@@ -580,7 +580,7 @@ async function realisticSpeak(text, teach) {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v6");
+    _ttsCache = _ttsCache || await caches.open("tts-v7");
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase
@@ -1140,12 +1140,21 @@ const SOUND = {
   en:{ A:"apple",B:"ball",C:"cat",D:"dog",E:"egg",F:"fish",G:"goat",H:"house",I:"igloo",J:"jam",K:"kite",L:"lamp",M:"moon",N:"nose",O:"orange",P:"pen",Q:"queen",R:"rose",S:"sun",T:"top",U:"umbrella",V:"van",W:"web",X:"xylophone",Y:"yoyo",Z:"zebra" },
   es:{ A:"árbol",B:"bola",C:"casa",D:"dado",E:"elefante",F:"foca",G:"gato",H:"hueso",I:"iglú",J:"jirafa",K:"koala",L:"luna",M:"mano",N:"nube",O:"oso",P:"pato",Q:"queso",R:"rosa",S:"sol",T:"taza",U:"uva",V:"vaca",W:"wifi",X:"xilófono",Y:"yoyo",Z:"zapato" },
 };
+// Plofklanken (stop consonants): clipping is more honest than stretching.
+// "bbbbal" forces TTS to insert a schwa ("buh"), exactly what Montessori
+// teachers avoid. NL has fricative g (stretchable); EN/ES g is a stop.
+const PLOSIVES = { nl:"bdkpt", en:"bdgkpt", es:"bdgkpt" };
+const isPlosive = c => (PLOSIVES[LC()] || PLOSIVES.en).includes(String(c).toLowerCase());
 function phonics(L) {
   const w = (SOUND[LC()] || SOUND.en)[L] || L.toLowerCase();
   const f = w[0];
-  const stretch = f + f + f + w.slice(1);   // e.g. "mmmaan", "aaappel"
   const dl = S.caseMode === "lower" ? L.toLowerCase() : L;
-  return { tip: `${dl}  -  ${w}`, say: `${stretch}. ${w}.` };
+  // Plofklank: clipped twice with a pause, then the word. No schwa.
+  // Other sounds: stretch for fonemic clarity (e.g. "mmmaan", "aaappel").
+  const say = isPlosive(L)
+    ? `${f}. ${f}. ${w}.`
+    : `${f + f + f + w.slice(1)}. ${w}.`;
+  return { tip: `${dl}  -  ${w}`, say };
 }
 
 function stepText(D, i, stp) {
@@ -1204,7 +1213,7 @@ const I18N_X = {
     sheetFooter:"Houd sessies kort. Ga ernaast zitten en benoem wat je ziet. Geen advertenties, geen account, werkt offline.",
     readTitle:"Lezen met Buddy", readSub:n=>`Je kent al ${n} klanken. Tik om te oefenen!`,
     readListen:"Luister naar Buddy", readWhichLetter:"Welke letter hoor je?",
-    readWhichWord:"Welk woord hoor je?", readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
+    readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
     echoPrompt:"Nu jij. Zeg de klank.", echoHold:"Houd vast en zeg het",
     echoSay:c=>`Nu jij. Houd de knop vast en zeg ${c}.`,
     echoJudge:"Hoe ging het?", echoGood:"Dat ging goed", echoRetry:"Nog een keer",
@@ -1253,7 +1262,7 @@ const I18N_X = {
     sheetFooter:"Keep sessions short. Sit alongside and describe what you see. No ads, no account, works offline.",
     readTitle:"Reading with Buddy", readSub:n=>`You know ${n} sounds. Tap to practise!`,
     readListen:"Listen to Buddy", readWhichLetter:"Which letter do you hear?",
-    readWhichWord:"Which word do you hear?", readAgain:"Again", readNext:"Next", readMore:"Read more",
+    readAgain:"Again", readNext:"Next", readMore:"Read more",
     echoPrompt:"Your turn. Say the sound.", echoHold:"Hold and say it",
     echoSay:c=>`Your turn. Hold the button and say ${c}.`,
     echoJudge:"How did it go?", echoGood:"That went well", echoRetry:"Once more",
@@ -1302,7 +1311,7 @@ const I18N_X = {
     sheetFooter:"Sesiones cortas. Siéntate al lado y describe lo que ves. Sin anuncios, sin cuenta, funciona sin conexión.",
     readTitle:"Leer con Buddy", readSub:n=>`Ya conoces ${n} sonidos. ¡Toca para practicar!`,
     readListen:"Escucha a Buddy", readWhichLetter:"¿Qué letra escuchas?",
-    readWhichWord:"¿Qué palabra escuchas?", readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
+    readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
     echoPrompt:"Ahora tú. Di el sonido.", echoHold:"Mantén y dilo",
     echoSay:c=>`Ahora tú. Mantén el botón y di ${c}.`,
     echoJudge:"¿Cómo fue?", echoGood:"Salió bien", echoRetry:"Otra vez",
@@ -1937,7 +1946,7 @@ const WORLDS = [
       {a:'<ellipse cx="225" cy="36" rx="22" ry="11" fill="#fbf9f4"/><ellipse cx="241" cy="31" rx="14" ry="9" fill="#fbf9f4"/>', amb:'w-cloud'},
       {a:'<ellipse cx="290" cy="112" rx="11" ry="14" fill="#3a3f52"/><ellipse cx="290" cy="115" rx="7" ry="10" fill="#fbf9f4"/><circle cx="287" cy="103" r="1.6" fill="#fbf9f4"/><circle cx="293" cy="103" r="1.6" fill="#fbf9f4"/><path d="M288 107 L292 107 L290 110 Z" fill="var(--ochre)"/>'},
     ]},
-  { sky:["#2D3252","#474C6A"],
+  { sky:["#2D3252","#474C6A"], space:true,
     base:`<path d="M0 118 Q90 104 180 116 Q250 126 320 112 V150 H0 Z" fill="#3a3f5e"/>
       <path d="M0 120 H320" stroke="#2c3050" stroke-width="2"/>`,
     cells:[
@@ -1948,11 +1957,34 @@ const WORLDS = [
       {a:'<rect x="250" y="100" width="14" height="10" rx="2" fill="#cfc6dd"/><rect x="238" y="102" width="10" height="6" fill="var(--sky)"/><rect x="266" y="102" width="10" height="6" fill="var(--sky)"/><path d="M257 100 V92" stroke="#cfc6dd" stroke-width="2"/>'},
       {a:'<path d="M292 96 l4 9 10 1 -7 7 2 10 -9 -5 -9 5 2 -10 -7 -7 10 -1 z" fill="var(--ochre)"/>'},
     ]},
+  // 6th world: Buddy's diepzee. After gazing at the stars, Buddy dives in.
+  // No sky-sun (we're underwater), no night-dimming (it's already a quiet
+  // blue), bubbles drift instead of stars. Seafloor sand replaces grass.
+  { sky:["#0E3A5C","#1E6A8A"], under:true,
+    base:`<path d="M0 116 Q60 108 130 116 Q210 124 320 114 V150 H0 Z" fill="#d6c896"/>
+      <path d="M0 122 Q80 116 170 122 Q240 128 320 120 V150 H0 Z" fill="#c2b074"/>
+      <ellipse cx="48" cy="130" rx="14" ry="3" fill="#a89255" opacity=".6"/>
+      <ellipse cx="220" cy="134" rx="18" ry="3" fill="#a89255" opacity=".6"/>
+      <path d="M0 116 H320" stroke="#b6a366" stroke-width="1.5"/>`,
+    cells:[
+      // 1. Coral reef - orange branching
+      {a:'<path d="M60 120 Q60 100 54 92 M60 120 Q60 102 66 94 M60 120 Q60 108 50 102 M60 120 Q60 108 70 104" stroke="#e07a5f" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="54" cy="90" r="4" fill="#e07a5f"/><circle cx="66" cy="92" r="3.5" fill="#e07a5f"/><circle cx="70" cy="102" r="3" fill="#e07a5f"/>'},
+      // 2. Seaweed - swaying strand
+      {a:'<path d="M116 120 Q112 104 118 90 Q124 76 116 60" stroke="#5d8a5c" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M122 120 Q126 106 120 92 Q116 80 124 66" stroke="#6f9e6e" stroke-width="4" fill="none" stroke-linecap="round"/>', amb:'w-cloud'},
+      // 3. Fish school - three little fish
+      {a:'<g fill="#f6c14a"><path d="M168 56 q8 -5 16 0 q-8 5 -16 0 z M186 56 l5 -3 v6 z"/><path d="M156 70 q7 -4 14 0 q-7 4 -14 0 z M170 70 l4 -2.5 v5 z"/><path d="M180 80 q8 -5 16 0 q-8 5 -16 0 z M198 80 l5 -3 v6 z"/></g><circle cx="172" cy="55" r="1" fill="#34302A"/><circle cx="160" cy="69" r="1" fill="#34302A"/><circle cx="184" cy="79" r="1" fill="#34302A"/>', amb:'w-bird'},
+      // 4. Jellyfish - translucent dome with tendrils
+      {a:'<path d="M240 70 a16 14 0 0 1 32 0 Z" fill="#e7c8f0" opacity=".85"/><path d="M240 70 a16 14 0 0 1 32 0" fill="none" stroke="#c89cd6" stroke-width="1.4"/><path d="M244 70 q0 14 -3 22 M252 70 q1 16 -1 26 M260 70 q-1 16 1 26 M268 70 q0 14 3 22" stroke="#c89cd6" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".8"/>', amb:'w-cloud'},
+      // 5. Whale - friendly blue
+      {a:'<path d="M180 110 q22 -18 60 -10 q14 4 22 12 q-12 8 -28 8 q-32 0 -54 -10 Z" fill="#5b8fb0"/><path d="M262 112 l10 -8 v18 Z" fill="#5b8fb0"/><circle cx="200" cy="106" r="1.8" fill="#34302A"/><path d="M196 112 q6 4 12 0" stroke="#34302A" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="232" cy="92" r="2" fill="#cde5f0" opacity=".8"/><circle cx="238" cy="86" r="1.4" fill="#cde5f0" opacity=".8"/>', amb:'w-bird'},
+      // 6. Treasure chest with sparkle
+      {a:'<rect x="280" y="108" width="28" height="14" rx="2" fill="#a06a3a"/><path d="M280 108 q14 -10 28 0" fill="#b8804a" stroke="#7a4f28" stroke-width="1.4"/><rect x="292" y="114" width="4" height="5" fill="var(--ochre)"/><circle cx="278" cy="100" r="1.5" fill="#F1EBD6"/><circle cx="312" cy="94" r="1.2" fill="#F1EBD6"/><circle cx="302" cy="88" r="1" fill="#F1EBD6"/>'},
+    ]},
 ];
 const WORLD_NAMES = {
-  nl:["Buddy's weide","Buddy's strand","Buddy's bos","Buddy's bergen","Buddy's sterrenhemel"],
-  en:["Buddy's Meadow","Buddy's Beach","Buddy's Forest","Buddy's Mountains","Buddy's Starry Sky"],
-  es:["La pradera de Buddy","La playa de Buddy","El bosque de Buddy","Las montañas de Buddy","El cielo de Buddy"],
+  nl:["Buddy's weide","Buddy's strand","Buddy's bos","Buddy's bergen","Buddy's sterrenhemel","Buddy's diepzee"],
+  en:["Buddy's Meadow","Buddy's Beach","Buddy's Forest","Buddy's Mountains","Buddy's Starry Sky","Buddy's Deep Sea"],
+  es:["La pradera de Buddy","La playa de Buddy","El bosque de Buddy","Las montañas de Buddy","El cielo de Buddy","El fondo del mar de Buddy"],
 };
 // Which world the child is in, how many milestones are lit, and the next.
 function worldInfo(stars) {
@@ -1970,7 +2002,10 @@ function worldInfo(stars) {
 const worldName = () => (WORLD_NAMES[LC()] || WORLD_NAMES.en)[worldInfo(S.stars).idx];
 function worldScene(stars, seen) {
   const inf = worldInfo(stars), W = inf.world, base = inf.base;
-  const night = worldTOD() === "night", space = inf.idx === WORLDS.length - 1;
+  const night = worldTOD() === "night";
+  const space = !!W.space, under = !!W.under;
+  const noCelest = space || under;     // both skip the terrestrial sun/moon
+  const sleepy = night && !under;      // underwater stays quietly awake
   const seenN = seen || 0;
   const cellHTML = W.cells.map((c, k) => {
     const need = base + WORLD_GATES[k];
@@ -1978,32 +2013,44 @@ function worldScene(stars, seen) {
     const body = c.amb ? `<g class="${c.amb}">${c.a}</g>` : c.a;
     return `<g class="we${lock ? " lock" : ""}${isNew ? " new" : ""}">${body}</g>`;
   }).join("");
-  const stardots = (night || space)
+  const stardots = (sleepy || space)
     ? [[44,30],[96,22],[150,38],[206,26],[244,52],[120,58],[286,40]]
         .map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.5" fill="#F1EBD6" opacity=".8"/>`).join("")
     : "";
-  const celest = space ? "" : (night
+  // Underwater: drifting bubbles instead of stardots.
+  const bubbles = under
+    ? [[40,118,2.4],[88,128,1.8],[150,130,2.2],[210,124,2],[266,134,2.6],[300,128,1.6]]
+        .map(([x,y,r]) => `<circle class="w-cloud" cx="${x}" cy="${y}" r="${r}" fill="#cde5f0" opacity=".7"/>`).join("")
+    : "";
+  const celest = noCelest ? "" : (night
     ? `<g class="w-sun"><circle cx="268" cy="32" r="13" fill="#F1EBD6"/><circle cx="262" cy="28" r="11" fill="${W.sky[0]}"/></g>`
     : `<g class="w-sun"><circle cx="62" cy="36" r="16" fill="var(--ochre)"/></g>`);
-  const buddy = Buddy(night ? "rest" : "warm", 42).replace("<svg ", '<svg x="34" y="74" ');
-  const zzz = night
+  // Diepzee: shimmer of light through the water surface.
+  const waterLight = under
+    ? `<path d="M0 0 H320 V18 Q160 28 0 18 Z" fill="#cde5f0" opacity=".18"/>
+       <path d="M30 6 q20 8 40 0 M120 6 q20 8 40 0 M210 6 q20 8 40 0" stroke="#cde5f0" stroke-width="1" fill="none" opacity=".5"/>`
+    : "";
+  const buddy = Buddy(sleepy ? "rest" : "warm", 42).replace("<svg ", '<svg x="34" y="74" ');
+  const zzz = sleepy
     ? `<g fill="#F1EBD6" opacity=".8" font-weight="700">
          <text x="74" y="86" font-size="9">z</text><text x="82" y="78" font-size="11">z</text>
          <text x="91" y="69" font-size="13">z</text></g>`
     : "";
-  const dark = (night && !space) ? '<rect width="320" height="150" fill="#1b2040" opacity=".5"/>' : "";
+  const dark = (night && !space && !under) ? '<rect width="320" height="150" fill="#1b2040" opacity=".5"/>' : "";
   return `<svg viewBox="0 0 320 150" width="100%" aria-hidden="true">
     <defs><linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${W.sky[0]}"/><stop offset="1" stop-color="${W.sky[1]}"/>
     </linearGradient></defs>
     <rect width="320" height="150" fill="url(#wsky)"/>
     ${space ? stardots : ""}
-    ${night && !space ? "" : celest}
+    ${waterLight}
+    ${bubbles}
+    ${sleepy ? "" : celest}
     ${W.base}
     ${cellHTML}
     ${buddy}
     ${dark}
-    ${night && !space ? stardots + celest : ""}
+    ${sleepy ? stardots + celest : ""}
     ${zzz}
   </svg>`;
 }
@@ -2106,10 +2153,16 @@ function buildReadSession() {
   return items.slice(0, 9);
 }
 function rdAdvance() {
-  // Introduce the next sound once every introduced sound is solid
-  // (box >= 2). Words become decodable automatically as sounds add up.
-  const allOk = rdIntro().every(c => rdBox("s:" + c) >= 2);
-  if (allOk && S.readIntro < RD().sounds.length) S.readIntro++;
+  // Finer gate (Hoven): one weak sound shouldn't block the whole alphabet.
+  // Introduce the next sound as soon as the MOST RECENTLY introduced one is
+  // solid (box >= 2). Older weak letters stay in spaced rotation via the
+  // bySound sort in buildReadSession, which always picks the least-mastered
+  // first. So progress on strong sounds keeps moving while weak ones get
+  // extra at-bats - the Mentava way.
+  const intro = rdIntro();
+  const top = intro[intro.length - 1];
+  const ready = top && rdBox("s:" + top) >= 2;
+  if (ready && S.readIntro < RD().sounds.length) S.readIntro++;
 }
 // Render letters/words in the lowercase letterforms (reading is lowercase).
 function lowerArt(str, size) {
@@ -2123,15 +2176,19 @@ function lowerArt(str, size) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${
     paths.map(d => `<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}</svg>`;
 }
-// Blend model: stretched sound of each letter, then the word.
+// Blend model: each letter's sound (stretched if it stretches, clipped if
+// it's a plofklank), then the whole word.
 const blendSay = w => [...w].map(c => {
-  const kw = (SOUND[LC()] || SOUND.en)[c.toUpperCase()] || c; return kw[0] + kw[0] + kw[0];
+  const kw = (SOUND[LC()] || SOUND.en)[c.toUpperCase()] || c;
+  const f = kw[0];
+  return isPlosive(c) ? f : f + f + f;
 }).join(" ") + ". " + w + ".";
 
 function ReadScreen() {
   _rdAdvanced = new Set();          // fresh spacing window for this session
   const session = buildReadSession();
   let i = 0, busy = false, finished = false;   // interaction locks
+  let wrongStreak = 0;                          // adaptive fatigue counter
   const s = el("div", { cls: "screen" });
   const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:14px 18px 6px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
@@ -2161,10 +2218,14 @@ function ReadScreen() {
     if (busy) return;
     busy = true;
     choices.style.pointerEvents = "none";
-    if (ok) { Sound.fx.step(); buzz(20); if (key) rdBump(key, true); }
-    else { Sound.fx.soft(); buzz(12); if (key) rdBump(key, false); }
+    if (ok) { Sound.fx.step(); buzz(20); if (key) rdBump(key, true); wrongStreak = 0; }
+    else { Sound.fx.soft(); buzz(12); if (key) rdBump(key, false); wrongStreak++; }
     i++; prog.firstChild.style.width = (i / session.length) * 100 + "%";
-    setTimeout(() => i >= session.length ? finish() : showItem(), ok ? 700 : 1500);
+    // Adaptive length (Mentava): if the child has done at least 5 items and
+    // just missed twice in a row, they are tiring - end on a high note rather
+    // than grinding through 4 more failing items.
+    const tired = wrongStreak >= 2 && i >= 5;
+    setTimeout(() => (i >= session.length || tired) ? finish() : showItem(), ok ? 700 : 1500);
   }
   function tile(inner, on) {
     const b = el("button", { cls: "card", css: "padding:16px 20px;min-width:96px;background:var(--surface)" });
@@ -2177,7 +2238,7 @@ function ReadScreen() {
   function echoItem(it) {
     const L = it.s.toUpperCase();
     const kw = (SOUND[LC()] || SOUND.en)[L] || it.s;
-    const stretched = kw[0] + kw[0] + kw[0];
+    const stretched = isPlosive(it.s) ? kw[0] : kw[0] + kw[0] + kw[0];
     promptEl.textContent = t("echoPrompt");
     showEl.innerHTML = lowerArt(it.s, 120);
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
@@ -2255,7 +2316,8 @@ function ReadScreen() {
         Sound.fx.tap(); buzz(10);
         lt.classList.add("rc-ok");
         const kw = (SOUND[LC()] || SOUND.en)[ch.toUpperCase()] || ch;
-        speak(kw[0] + kw[0] + kw[0], true);     // the pure stretched sound
+        const f = kw[0];
+        speak(isPlosive(ch) ? f : f + f + f, true);    // clipped if plosive
         tapped.add(idx);
         if (tapped.size === w.length) setTimeout(showBlend, 750);
       };
