@@ -711,7 +711,16 @@ function unlockAudio() {
 // current language and it will be spoken (and cached) correctly. Tune by
 // ear on a real device. Word-boundary, case-insensitive. Example:
 //   nl: { "tas": "tas" }   // (respell only if a word is actually wrong)
-const PRONOUNCE = { nl: {}, en: {}, es: {} };
+// Franky is an English name (sounds like "Frenkie"). Dutch and Spanish TTS
+// would otherwise read it letter-by-letter ("frahn-kee"). Respell so the
+// dog's name sounds the same in every language the app speaks.
+// Word-level lookup: the regex below splits on apostrophes too, so
+// "Franky's" is matched as "Franky" + "s" and respelled to "Frenkie's".
+const PRONOUNCE = {
+  nl: { franky: "frenkie" },
+  en: {},
+  es: { franky: "frenki" },
+};
 function applyPronounce(text) {
   const map = PRONOUNCE[LC()];
   if (!map) return text;
@@ -728,7 +737,7 @@ async function realisticSpeak(text, teach) {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v7");
+    _ttsCache = _ttsCache || await caches.open("tts-v8");
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase

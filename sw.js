@@ -6,7 +6,7 @@
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'frankys-world-v61';
+const CACHE = 'frankys-world-v62';
 
 // Everything needed to boot fully offline after the first visit.
 const APP_SHELL = [
