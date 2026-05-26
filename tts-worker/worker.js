@@ -140,6 +140,49 @@ export default {
       return new Response("server not configured", { status: 500, headers: CORS });
     }
 
+    // CHATTER MODE (teach=false) goes to ElevenLabs with the cloned voice of
+    // the child's mother. Real-mama-voice praise is wildly more motivating
+    // than a generic warm TTS. TEACH MODE stays on OpenAI gpt-4o-mini-tts:
+    // its instruction-following is unmatched for the exact phoneme control
+    // needed for stretched plosive-free letter sounds.
+    if (!teach && env.ELEVENLABS_API_KEY) {
+      const voiceId = "NR28ewDldNdNH9MMUJP2";   // mother's cloned voice
+      try {
+        const r = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+          {
+            method: "POST",
+            headers: {
+              "xi-api-key": env.ELEVENLABS_API_KEY,
+              "Content-Type": "application/json",
+              "Accept": "audio/mpeg",
+            },
+            body: JSON.stringify({
+              text,
+              model_id: "eleven_multilingual_v2",
+              voice_settings: {
+                stability: 0.45,        // warm but not overly steady (kids tone)
+                similarity_boost: 0.8,  // hew close to the cloned voice
+                style: 0.3,             // a touch of expressiveness
+                use_speaker_boost: true,
+              },
+            }),
+          });
+        if (r.ok) {
+          return new Response(r.body, {
+            headers: {
+              ...CORS,
+              "Content-Type": "audio/mpeg",
+              "Cache-Control": "public, max-age=31536000, immutable",
+            },
+          });
+        }
+        // Fall through to OpenAI on any ElevenLabs failure so the child
+        // never goes silent. (Log via response in dev only - server-side
+        // logs would be nicer but Workers print to wrangler tail.)
+      } catch { /* fall through to OpenAI */ }
+    }
+
     const voice =
       "Voice: a warm, kind, calm preschool teacher speaking to a small " +
       "child aged one to five. Tone: gentle, encouraging, unhurried, and " +
