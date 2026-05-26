@@ -716,8 +716,32 @@ function unlockAudio() {
 // dog's name sounds the same in every language the app speaks.
 // Word-level lookup: the regex below splits on apostrophes too, so
 // "Franky's" is matched as "Franky" + "s" and respelled to "Frenkie's".
+// Dutch words spelled like English ones ("slang", "man", "pen") confuse
+// the multilingual model into English phonemes. Respell with "ah" to
+// force the Dutch /ɑ/ vowel; add more as we hear them.
 const PRONOUNCE = {
-  nl: { franky: "frenkie" },
+  nl: {
+    franky: "frenkie",
+    slang: "slahng",      // /slɑŋ/ not English /slæŋ/
+    man: "mahn",
+    tas: "tahs",
+    kat: "kaht",
+    dak: "dahk",
+    pan: "pahn",
+    lat: "laht",
+    bal: "bahl",
+    nat: "naht",
+    sap: "sahp",
+    tak: "tahk",
+    kar: "kahr",
+    map: "mahp",
+    lat: "laht",
+    wak: "wahk",
+    laf: "lahf",
+    zak: "zahk",
+    jas: "jahs",
+    gat: "gaht",
+  },
   en: {},
   es: { franky: "frenki" },
 };
@@ -737,7 +761,7 @@ async function realisticSpeak(text, teach) {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v13");
+    _ttsCache = _ttsCache || await caches.open("tts-v14");
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase

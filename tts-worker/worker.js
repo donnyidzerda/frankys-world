@@ -171,6 +171,10 @@ export default {
             body: JSON.stringify({
               text,
               model_id: "eleven_multilingual_v2",
+              // Hard language hint - on short ambiguous words ("slang",
+              // "man", "tas") the auto-detect leans English. Forcing nl/en/es
+              // here helps the multilingual model pick the right phonemes.
+              language_code: (searchParams.get("l") || "en").slice(0, 2),
               voice_settings: settings,
             }),
           });
