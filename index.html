@@ -737,7 +737,7 @@ async function realisticSpeak(text, teach) {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v8");
+    _ttsCache = _ttsCache || await caches.open("tts-v9");
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase
@@ -1085,10 +1085,10 @@ const I18N = {
     drawAgain:"Opnieuw", nextDrawing:"Volgende", home:"Home", share:"Delen",
     wholeWordTip:"Het hele woord",
     wholeWordSay:w=>`Nu het hele woord. Je schrijft ${w}. Het lukt jou!`,
-    praiseOk:["Wat mooi, {n}!","Kijk eens, helemaal zelf gedaan. Knap hoor!","Mooie lijnen, {n}. Goed bezig!"],
-    praiseSoft:["Elke streep is goed, {n}. We gaan verder.","Er is geen verkeerde manier om te tekenen. Door!","Mooi gedaan. We gaan verder."],
-    winPraise:["Heel knap, {n}. Je hebt goed doorgezet en iets van jezelf gemaakt.","Kijk wat je gemaakt hebt, {n}. Met je eigen handen en je eigen ideeën. Trots op je!","Goed gedaan, {n}. Tekenen kost geduld, en dat had jij vandaag."],
-    encourage:["Goed zo. Ga door.","Ik zie je lijn groeien.","Rustig aan. Mooi.","Je werkt echt hard.","Goed. Neem de tijd."],
+    praiseOk:["Wat mooi, {n}!","Kijk eens, helemaal zelf gedaan. Knap hoor!","Mooie lijnen, {n}. Goed bezig!","Franky kwispelt voor je, {n}!","Franky vindt 'm mooi!","Franky lacht, {n}!"],
+    praiseSoft:["Elke streep is goed, {n}. We gaan verder.","Er is geen verkeerde manier om te tekenen. Door!","Mooi gedaan. We gaan verder.","Franky zit naast je. Gewoon doorgaan.","Franky vindt elke streep goed, {n}."],
+    winPraise:["Heel knap, {n}. Je hebt goed doorgezet en iets van jezelf gemaakt.","Kijk wat je gemaakt hebt, {n}. Met je eigen handen en je eigen ideeën. Trots op je!","Goed gedaan, {n}. Tekenen kost geduld, en dat had jij vandaag.","Franky is trots op je, {n}!","Wauw {n}, Franky springt blij op en neer!","Franky lacht van oor tot oor. Knap, {n}."],
+    encourage:["Goed zo. Ga door.","Ik zie je lijn groeien.","Rustig aan. Mooi.","Je werkt echt hard.","Goed. Neem de tijd.","Franky kijkt mee. Lekker doorgaan.","Franky vindt het al mooi worden."],
     note:`<div class="t-title" style="margin-bottom:10px">Waarom dit werkt</div>
       <p class="t-body">Franky's World draait om het <b>proces, niet het resultaat</b>.
       De app verbetert of beoordeelt de tekening nooit. Franky reageert warm op
@@ -1139,10 +1139,10 @@ const I18N = {
     drawAgain:"Draw again", nextDrawing:"Next drawing", home:"Home", share:"Share",
     wholeWordTip:"The whole word",
     wholeWordSay:w=>`Now the whole word. You are writing ${w}. You can do it!`,
-    praiseOk:["That looks wonderful, {n}.","You drew that all by yourself. Well done.","Look at the marks you made, {n}. Really good work."],
-    praiseSoft:["Every mark you make is good, {n}. Let's keep going.","There's no wrong way to draw. On to the next part.","I like how you did that. Let's carry on."],
-    winPraise:["That's really good work, {n}. You stayed with it the whole way, and you made something all your own.","Look what you made, {n}. You used your own hands and your own ideas. I'm proud of you.","Well done, {n}. Drawing takes patience, and you had plenty of it today."],
-    encourage:["That's it. Keep going.","I see your line growing.","Nice and slow. Lovely.","You're really working hard.","Good. Take all the time you need."],
+    praiseOk:["That looks wonderful, {n}.","You drew that all by yourself. Well done.","Look at the marks you made, {n}. Really good work.","Franky is wagging his tail for you, {n}!","Franky thinks it's lovely!","Franky is smiling at you, {n}."],
+    praiseSoft:["Every mark you make is good, {n}. Let's keep going.","There's no wrong way to draw. On to the next part.","I like how you did that. Let's carry on.","Franky is right beside you. Just keep going.","Franky likes every line, {n}."],
+    winPraise:["That's really good work, {n}. You stayed with it the whole way, and you made something all your own.","Look what you made, {n}. You used your own hands and your own ideas. I'm proud of you.","Well done, {n}. Drawing takes patience, and you had plenty of it today.","Franky is so proud of you, {n}!","Wow {n}, Franky is bouncing up and down!","Franky is grinning ear to ear. Great work, {n}."],
+    encourage:["That's it. Keep going.","I see your line growing.","Nice and slow. Lovely.","You're really working hard.","Good. Take all the time you need.","Franky is watching. Keep at it.","Franky already loves how it looks."],
     note:`<div class="t-title" style="margin-bottom:10px">Why this works</div>
       <p class="t-body">Franky's World follows a <b>process-over-product</b> approach.
       The app never corrects or scores the drawing. Franky responds warmly to
@@ -1193,10 +1193,10 @@ const I18N = {
     drawAgain:"Otra vez", nextDrawing:"Siguiente dibujo", home:"Inicio", share:"Compartir",
     wholeWordTip:"La palabra entera",
     wholeWordSay:w=>`Ahora la palabra entera. Estás escribiendo ${w}. ¡Tú puedes!`,
-    praiseOk:["¡Qué bonito, {n}!","Lo hiciste tú solito. ¡Muy bien!","Mira esas líneas, {n}. ¡Buen trabajo!"],
-    praiseSoft:["Cada trazo está bien, {n}. Seguimos.","No hay una forma incorrecta de dibujar. ¡Adelante!","Me gusta cómo lo hiciste. Seguimos."],
-    winPraise:["Muy buen trabajo, {n}. No te rendiste y creaste algo tuyo.","Mira lo que hiciste, {n}. Con tus manos y tus ideas. ¡Estoy orgulloso!","Bien hecho, {n}. Dibujar requiere paciencia, y hoy tú la tuviste."],
-    encourage:["Eso es. Sigue así.","Veo tu línea crecer.","Despacito. Qué bien.","Estás trabajando mucho.","Bien. Tómate tu tiempo."],
+    praiseOk:["¡Qué bonito, {n}!","Lo hiciste tú solito. ¡Muy bien!","Mira esas líneas, {n}. ¡Buen trabajo!","¡Franky mueve la cola por ti, {n}!","¡A Franky le encanta!","Franky te sonríe, {n}."],
+    praiseSoft:["Cada trazo está bien, {n}. Seguimos.","No hay una forma incorrecta de dibujar. ¡Adelante!","Me gusta cómo lo hiciste. Seguimos.","Franky está a tu lado. Sigue así.","A Franky le gusta cada línea, {n}."],
+    winPraise:["Muy buen trabajo, {n}. No te rendiste y creaste algo tuyo.","Mira lo que hiciste, {n}. Con tus manos y tus ideas. ¡Estoy orgulloso!","Bien hecho, {n}. Dibujar requiere paciencia, y hoy tú la tuviste.","¡Franky está muy orgulloso de ti, {n}!","¡Mira {n}, Franky salta de alegría!","Franky sonríe de oreja a oreja. ¡Bien hecho, {n}!"],
+    encourage:["Eso es. Sigue así.","Veo tu línea crecer.","Despacito. Qué bien.","Estás trabajando mucho.","Bien. Tómate tu tiempo.","Franky te mira. Sigue.","A Franky ya le gusta cómo va."],
     note:`<div class="t-title" style="margin-bottom:10px">Por qué funciona</div>
       <p class="t-body">Franky's World sigue un enfoque de <b>proceso, no resultado</b>.
       La app nunca corrige ni califica el dibujo. Franky responde con cariño a
