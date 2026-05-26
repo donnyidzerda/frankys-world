@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Franky's World" />
 <title>Franky's World</title>
 <link rel="manifest" href="./manifest.webmanifest" />
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%23F5EFE2'/%3E%3Cpath d='M138 220 Q108 110 130 60 Q190 60 220 130 Z' fill='%235E6066'/%3E%3Cpath d='M374 220 Q404 110 382 60 Q322 60 292 130 Z' fill='%235E6066'/%3E%3Ccircle cx='256' cy='280' r='168' fill='%238A8C92'/%3E%3Cellipse cx='256' cy='340' rx='94' ry='66' fill='%23B5B7BD' opacity='0.7'/%3E%3Ccircle cx='200' cy='268' r='24' fill='%23D9A24A'/%3E%3Ccircle cx='312' cy='268' r='24' fill='%23D9A24A'/%3E%3Ccircle cx='200' cy='268' r='13' fill='%237A5520'/%3E%3Ccircle cx='312' cy='268' r='13' fill='%237A5520'/%3E%3Ccircle cx='200' cy='268' r='7' fill='%23222'/%3E%3Ccircle cx='312' cy='268' r='7' fill='%23222'/%3E%3Cellipse cx='256' cy='322' rx='28' ry='17' fill='%23222'/%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%23F5EFE2'/%3E%3Cpath d='M138 220 Q108 110 130 60 Q190 60 220 130 Z' fill='%235E6066'/%3E%3Cpath d='M374 220 Q404 110 382 60 Q322 60 292 130 Z' fill='%235E6066'/%3E%3Ccircle cx='256' cy='280' r='168' fill='%236D6F75'/%3E%3Cellipse cx='256' cy='340' rx='94' ry='66' fill='%238E9097' opacity='0.7'/%3E%3Ccircle cx='200' cy='268' r='24' fill='%23D9A24A'/%3E%3Ccircle cx='312' cy='268' r='24' fill='%23D9A24A'/%3E%3Ccircle cx='200' cy='268' r='13' fill='%237A5520'/%3E%3Ccircle cx='312' cy='268' r='13' fill='%237A5520'/%3E%3Ccircle cx='200' cy='268' r='7' fill='%23222'/%3E%3Ccircle cx='312' cy='268' r='7' fill='%23222'/%3E%3Cellipse cx='256' cy='322' rx='28' ry='17' fill='%23222'/%3E%3C/svg%3E" />
 
 <!-- Tailwind v4 browser build + canvas-confetti. Both cached offline by the service worker. -->
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -796,9 +796,10 @@ const buzz = p => { if (S.settings.haptics && navigator.vibrate) try { navigator
    short stub tail. viewBox 200x230. */
 function Franky(mood = "warm", size = 140) {
   const I = "#34302A";
-  const FUR = "#8A8C92";          // cool medium grey (blue-brindle base)
-  const FUR_DK = "#5E6066";       // ear and brindle-stripe shadow
-  const BELLY = "#B5B7BD";        // slightly paler belly (NOT cream-white)
+  const FUR = "#6D6F75";          // cool dark grey (blue-brindle base)
+  const FUR_DK = "#4A4C52";       // ear and brindle-stripe shadow
+  const BELLY = "#8E9097";        // a touch lighter than body, not white
+  const BLAZE = "#FBF6E8";        // small white chest spot (1/3 of width)
   const AMBER = "#D9A24A";        // Franky's honey-gold iris
   const AMBER_DK = "#7A5520";     // amber inner ring / pupil halo
   const PINK = "#F0B5B5";
@@ -832,8 +833,10 @@ function Franky(mood = "warm", size = 140) {
 
     <!-- stocky low body: a rounded brick, wider than tall -->
     <rect x="36" y="158" width="128" height="68" rx="32" fill="${FUR}"/>
-    <!-- pale-grey belly (Franky has no white blaze, just a lighter underside) -->
-    <ellipse cx="100" cy="208" rx="38" ry="22" fill="${BELLY}"/>
+    <!-- subtle paler underside -->
+    <ellipse cx="100" cy="210" rx="42" ry="18" fill="${BELLY}"/>
+    <!-- small white chest spot (~1/3 of chest width, Franky's real marking) -->
+    <ellipse cx="100" cy="200" rx="20" ry="14" fill="${BLAZE}"/>
 
     <!-- back paws peeking out from under the body -->
     <ellipse cx="62" cy="224" rx="18" ry="8" fill="${BELLY}"/>
