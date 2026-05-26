@@ -2829,15 +2829,25 @@ function Splash() {
   });
   setAge(2);
 
-  // Quick family profiles - one tap; age is computed from the birthday so
-  // it stays correct as the children grow.
-  const profRow = el("div", { css: "display:flex;gap:10px" });
-  const prof = (nm, y, m, d) => {
-    const b = el("button", { cls: "btn btn-primary t-head", css: "flex:1", textContent: nm });
-    b.onclick = () => { Sound.fx.tap(); buzz(12); input.value = nm; setAge(ageOf(y, m, d)); };
+  // Quick-pick buttons for the kids who already play on THIS device.
+  // A brand-new device (e.g. shared via the URL with another family) sees
+  // no buttons at all - so a cousin's family never finds Lucy/Josh names
+  // sitting there as defaults. For the known kids of this family the age
+  // is still recomputed from their birthday so it stays correct as they
+  // grow.
+  const profRow = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap" });
+  const BIRTHDAYS = { lucy: [2022, 11, 30], josh: [2024, 12, 16] };
+  const prof = (nm, age) => {
+    const b = el("button", { cls: "btn btn-primary t-head", css: "flex:1;min-width:120px", textContent: nm });
+    b.onclick = () => { Sound.fx.tap(); buzz(12); input.value = nm; setAge(age); };
     return b;
   };
-  profRow.append(prof("Lucy", 2022, 11, 30), prof("Josh", 2024, 12, 16));
+  const onDevice = profileList();
+  onDevice.forEach(p => {
+    const bd = BIRTHDAYS[p.name.toLowerCase()];
+    const a = bd ? ageOf(bd[0], bd[1], bd[2]) : (p.age || 2);
+    profRow.append(prof(p.name, a));
+  });
 
   const start = el("button", { cls: "btn btn-go t-head", css: "margin-top:2px",
     html: `${t("start")} ${ic("next", 22, "#fff")}` });
@@ -2846,9 +2856,16 @@ function Splash() {
     createProfile(nm, age, S.lang);   // new profile (or switch if name exists)
     Sound.fx.win(); buzz([18, 30]); maybeInstall(); go("home");
   };
+  // Only show the quick-pick row + its label when this device actually
+  // has profiles. A brand-new install (cousin's phone) goes straight to
+  // the name input - no Lucy/Josh ghosts on someone else's splash.
+  if (onDevice.length) {
+    card.append(
+      el("div", { cls: "t-label", textContent: t("whoPlaying") }),
+      profRow,
+    );
+  }
   card.append(
-    el("div", { cls: "t-label", textContent: t("whoPlaying") }),
-    profRow,
     el("div", { cls: "t-label", textContent: t("orType") }),
     input,
     el("div", { cls: "t-label", textContent: t("howOld") }),
