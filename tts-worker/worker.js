@@ -153,12 +153,13 @@ export default {
     if (env.ELEVENLABS_API_KEY) {
       const voiceId = "NR28ewDldNdNH9MMUJP2";   // Loïs - mother's cloned voice
       try {
-        // Teach mode: steadier + slower so stretched phonemes don't drift
-        // into expressiveness and a 3-year-old has time to track each
-        // sound. Chat mode: warmer, expressive, near-natural pace.
+        // Voice cloning needs expression to sound LIKE the cloned speaker.
+        // Earlier teach-mode settings (stability 0.7, style 0.1, speed 0.8)
+        // killed Loïs's voice character - she sounded robotic and flat.
+        // Keep teach close to chat: only mildly steadier and a touch slower.
         const settings = teach
-          ? { stability: 0.7,  similarity_boost: 0.85, style: 0.1, use_speaker_boost: true, speed: slow ? 0.7  : 0.8  }
-          : { stability: 0.45, similarity_boost: 0.8,  style: 0.3, use_speaker_boost: true, speed: slow ? 0.85 : 0.95 };
+          ? { stability: 0.5,  similarity_boost: 0.85, style: 0.25, use_speaker_boost: true, speed: slow ? 0.85 : 0.92 }
+          : { stability: 0.45, similarity_boost: 0.8,  style: 0.35, use_speaker_boost: true, speed: slow ? 0.9  : 1.0  };
         const r = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
           {
