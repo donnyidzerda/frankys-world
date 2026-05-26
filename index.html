@@ -1424,6 +1424,7 @@ const I18N_X = {
     syncAddDevice:"Apparaat toevoegen", syncStop:"Sync stoppen",
     syncCodeTitle:"Je code", syncCodeHint:"Vul deze code in op het andere apparaat.",
     syncCodeExpiry:"De code is 15 minuten geldig.",
+    syncSplashCta:"Speelt dit kind al op een ander apparaat?",
     syncPairTitle:"Code invullen", syncPairHint:"Tik de 6 cijfers van het andere apparaat in.",
     syncPairGo:"Koppel", syncPairError:"Code klopt niet of is verlopen.",
     syncError:"Geen verbinding. Probeer het zo nog eens.",
@@ -1484,6 +1485,7 @@ const I18N_X = {
     syncAddDevice:"Add device", syncStop:"Stop sync",
     syncCodeTitle:"Your code", syncCodeHint:"Enter this code on the other device.",
     syncCodeExpiry:"The code is valid for 15 minutes.",
+    syncSplashCta:"Already playing on another device?",
     syncPairTitle:"Enter code", syncPairHint:"Tap in the 6 digits from the other device.",
     syncPairGo:"Pair", syncPairError:"That code doesn't work or has expired.",
     syncError:"No connection. Try again in a moment.",
@@ -1544,6 +1546,7 @@ const I18N_X = {
     syncAddDevice:"Añadir dispositivo", syncStop:"Detener sincronía",
     syncCodeTitle:"Tu código", syncCodeHint:"Introduce este código en el otro dispositivo.",
     syncCodeExpiry:"El código es válido 15 minutos.",
+    syncSplashCta:"¿Ya juega en otro dispositivo?",
     syncPairTitle:"Introducir código", syncPairHint:"Teclea los 6 dígitos del otro dispositivo.",
     syncPairGo:"Vincular", syncPairError:"Ese código no funciona o ha caducado.",
     syncError:"Sin conexión. Inténtalo en un momento.",
@@ -2829,9 +2832,59 @@ function Splash() {
     seg,
     start,
   );
+
+  // Already playing on another device? Tap once, type the 6-digit code,
+  // and this device pulls every profile + their progress. No need to
+  // create a profile here first that we'd just overwrite.
+  const haveCode = el("button", {
+    cls: "btn btn-quiet", css: "margin-top:8px;align-self:center",
+    html: ic("share", 16) + `<span>${t("syncSplashCta")}</span>` });
+  haveCode.onclick = () => splashPair();
+  card.append(haveCode);
+
   s.append(card);
   APP.append(s);
   if (!_splashed) { setTimeout(() => speak(t("splashIntro")), 600); _splashed = true; }
+}
+
+// Lean code-entry dialog for the Splash, so a brand-new device can pair
+// before ever creating a placeholder profile. Mirrors Settings.showPairDialog
+// but lives at module scope.
+function splashPair() {
+  const ov = el("div", { css: "position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.6);backdrop-filter:blur(4px);padding:24px" });
+  const c = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:14px;text-align:center" });
+  c.append(
+    el("div", { cls: "t-title", textContent: t("syncPairTitle") }),
+    el("div", { cls: "t-body muted", textContent: t("syncPairHint") }));
+  const inp = el("input", { type: "text", inputmode: "numeric",
+    autocomplete: "one-time-code", maxLength: 7, placeholder: "123-456",
+    css: "font:900 28px/1 -apple-system,system-ui;letter-spacing:4px;text-align:center;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
+  c.append(inp);
+  const row = el("div", { css: "display:flex;gap:10px" });
+  const cancel = el("button", { cls: "btn btn-quiet", css: "flex:1",
+    html: `<span>${t("cancel")}</span>` });
+  cancel.onclick = () => ov.remove();
+  const ok = el("button", { cls: "btn btn-go", css: "flex:1",
+    html: ic("check", 18, "#fff") + `<span>${t("syncPairGo")}</span>` });
+  ok.onclick = async () => {
+    const code = inp.value.replace(/\D/g, "");
+    if (code.length !== 6) { inp.style.borderColor = "var(--clay)"; return; }
+    ok.disabled = true; ok.textContent = "...";
+    try {
+      await Sync.pair(code);
+      ov.remove(); Sound.fx.win(); buzz([18, 30]);
+      applyFlags(); go("home");
+    } catch {
+      ok.disabled = false;
+      ok.innerHTML = ic("check", 18, "#fff") + `<span>${t("syncPairGo")}</span>`;
+      inp.style.borderColor = "var(--clay)";
+      alert(t("syncPairError"));
+    }
+  };
+  row.append(cancel, ok);
+  c.append(row);
+  ov.append(c); APP.append(ov);
+  setTimeout(() => inp.focus(), 50);
 }
 let _install;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); _install = e; });
