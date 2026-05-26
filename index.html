@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Franky's World" />
 <title>Franky's World</title>
 <link rel="manifest" href="./manifest.webmanifest" />
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%23F5EFE2'/%3E%3Cpath d='M138 220 Q108 110 130 60 Q190 60 220 130 Z' fill='%236E7074'/%3E%3Cpath d='M374 220 Q404 110 382 60 Q322 60 292 130 Z' fill='%236E7074'/%3E%3Ccircle cx='256' cy='280' r='168' fill='%238E9094'/%3E%3Cellipse cx='256' cy='340' rx='104' ry='76' fill='%23FBF6E8'/%3E%3Ccircle cx='200' cy='268' r='20' fill='%23222'/%3E%3Ccircle cx='312' cy='268' r='20' fill='%23222'/%3E%3Cellipse cx='256' cy='318' rx='26' ry='16' fill='%23222'/%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='120' fill='%23F5EFE2'/%3E%3Cpath d='M138 220 Q108 110 130 60 Q190 60 220 130 Z' fill='%235E6066'/%3E%3Cpath d='M374 220 Q404 110 382 60 Q322 60 292 130 Z' fill='%235E6066'/%3E%3Ccircle cx='256' cy='280' r='168' fill='%238A8C92'/%3E%3Cellipse cx='256' cy='340' rx='94' ry='66' fill='%23B5B7BD' opacity='0.7'/%3E%3Ccircle cx='200' cy='268' r='24' fill='%23D9A24A'/%3E%3Ccircle cx='312' cy='268' r='24' fill='%23D9A24A'/%3E%3Ccircle cx='200' cy='268' r='13' fill='%237A5520'/%3E%3Ccircle cx='312' cy='268' r='13' fill='%237A5520'/%3E%3Ccircle cx='200' cy='268' r='7' fill='%23222'/%3E%3Ccircle cx='312' cy='268' r='7' fill='%23222'/%3E%3Cellipse cx='256' cy='322' rx='28' ry='17' fill='%23222'/%3E%3C/svg%3E" />
 
 <!-- Tailwind v4 browser build + canvas-confetti. Both cached offline by the service worker. -->
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -789,13 +789,19 @@ function speak(text, teach) {
 /* ----- 5. Haptics ------------------------------------------------------- */
 const buzz = p => { if (S.settings.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
 
-/* ----- 6. Franky - a chunky grey French bulldog; Lucy's favourite hond ---
-   Brachycephalic anatomy: blocky square head wider than tall, broad
-   bat-ears, very flat snub face with prominent black nose, prominent
-   round forward-facing eyes, low stocky body, short stub tail, cream
-   chest blaze. viewBox 200x230. */
+/* ----- 6. Franky - a blue-brindle French bulldog; Lucy's favourite hond -
+   Painted from photos: brindle coat with darker streaks over cool grey,
+   amber honey-gold eyes (his hallmark), classic bat-ears, very flat snub
+   face with dark wrinkled nose, prominent round eyes, low stocky body,
+   short stub tail. viewBox 200x230. */
 function Franky(mood = "warm", size = 140) {
-  const I = "#34302A", FUR = "#8E9094", FUR_DK = "#6E7074", PINK = "#F0B5B5";
+  const I = "#34302A";
+  const FUR = "#8A8C92";          // cool medium grey (blue-brindle base)
+  const FUR_DK = "#5E6066";       // ear and brindle-stripe shadow
+  const BELLY = "#B5B7BD";        // slightly paler belly (NOT cream-white)
+  const AMBER = "#D9A24A";        // Franky's honey-gold iris
+  const AMBER_DK = "#7A5520";     // amber inner ring / pupil halo
+  const PINK = "#F0B5B5";
   // Frenchie underbite: tiny stubby mouth, pink tongue peeks on happy.
   const mouth = {
     warm:  `<path d="M90 152 Q100 158 110 152" stroke="${I}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
@@ -805,29 +811,36 @@ function Franky(mood = "warm", size = 140) {
     rest:  `<path d="M92 154 H108" stroke="${I}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
   };
   const eyeR = mood === "wow" ? 10 : 8.5;
+  // Brindle: subtle darker streaks scattered on body and head. Few enough
+  // to read as pattern, not so many they look like a tiger or stripe noise.
+  const brindle =
+    `<path d="M60 165 q10 -6 22 -2" stroke="${FUR_DK}" stroke-width="3" fill="none" stroke-linecap="round" opacity=".35"/>
+     <path d="M84 182 q12 -5 24 -1" stroke="${FUR_DK}" stroke-width="3" fill="none" stroke-linecap="round" opacity=".35"/>
+     <path d="M118 168 q10 -6 22 -2" stroke="${FUR_DK}" stroke-width="3" fill="none" stroke-linecap="round" opacity=".3"/>
+     <path d="M52 95 q10 -8 18 -4" stroke="${FUR_DK}" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".3"/>
+     <path d="M130 95 q10 -8 18 -4" stroke="${FUR_DK}" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".3" transform="scale(-1 1) translate(-280 0)"/>`;
   // Body language: on happy / wow moods Franky lifts his right paw to wave.
   const wave = mood === "happy" || mood === "wow";
   const armR = wave
     ? `<ellipse cx="166" cy="138" rx="14" ry="22" fill="${FUR}" transform="rotate(38 166 138)"/>
-       <ellipse cx="178" cy="118" rx="11" ry="9.5" fill="var(--cream)"/>`
+       <ellipse cx="178" cy="118" rx="11" ry="9.5" fill="${BELLY}"/>`
     : `<ellipse cx="156" cy="190" rx="16" ry="22" fill="${FUR}" transform="rotate(18 156 190)"/>
-       <ellipse cx="162" cy="208" rx="11" ry="9" fill="var(--cream)"/>`;
+       <ellipse cx="162" cy="208" rx="11" ry="9" fill="${BELLY}"/>`;
   return `<svg viewBox="0 0 200 230" width="${size}" height="${size * 1.15}" aria-hidden="true">
     <!-- short stub Frenchie tail behind the body -->
     <ellipse cx="30" cy="178" rx="13" ry="7" fill="${FUR_DK}" transform="rotate(-12 30 178)"/>
 
     <!-- stocky low body: a rounded brick, wider than tall -->
     <rect x="36" y="158" width="128" height="68" rx="32" fill="${FUR}"/>
-    <!-- cream chest blaze (narrow and central, classic Frenchie marking) -->
-    <ellipse cx="100" cy="208" rx="34" ry="22" fill="var(--cream)"/>
-    <path d="M100 158 Q92 188 100 210 Q108 188 100 158 Z" fill="var(--cream)"/>
+    <!-- pale-grey belly (Franky has no white blaze, just a lighter underside) -->
+    <ellipse cx="100" cy="208" rx="38" ry="22" fill="${BELLY}"/>
 
     <!-- back paws peeking out from under the body -->
-    <ellipse cx="62" cy="224" rx="18" ry="8" fill="var(--cream)"/>
-    <ellipse cx="138" cy="224" rx="18" ry="8" fill="var(--cream)"/>
+    <ellipse cx="62" cy="224" rx="18" ry="8" fill="${BELLY}"/>
+    <ellipse cx="138" cy="224" rx="18" ry="8" fill="${BELLY}"/>
     <!-- front legs / paws -->
     <ellipse cx="44" cy="190" rx="16" ry="22" fill="${FUR}" transform="rotate(-18 44 190)"/>
-    <ellipse cx="38" cy="208" rx="11" ry="9" fill="var(--cream)"/>
+    <ellipse cx="38" cy="208" rx="11" ry="9" fill="${BELLY}"/>
     ${armR}
 
     <!-- BIG BAT-EARS: broad base, rounded tip, leaning slightly outward.
@@ -841,6 +854,9 @@ function Franky(mood = "warm", size = 140) {
     <!-- HEAD: blocky and wide (brachycephalic), wider than tall -->
     <rect x="32" y="58" width="136" height="110" rx="54" fill="${FUR}"/>
 
+    <!-- brindle streaks across body + head -->
+    ${brindle}
+
     <!-- FOREHEAD WRINKLES (the Frenchie hallmark) -->
     <path d="M76 76 Q100 70 124 76" stroke="${FUR_DK}" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".55"/>
     <path d="M82 86 Q100 81 118 86" stroke="${FUR_DK}" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".4"/>
@@ -849,14 +865,18 @@ function Franky(mood = "warm", size = 140) {
     <path d="M60 116 Q72 122 86 116" stroke="${FUR_DK}" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/>
     <path d="M114 116 Q128 122 140 116" stroke="${FUR_DK}" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/>
 
-    <!-- BIG ROUND PROMINENT EYES, set forward, slight white highlight -->
-    <circle cx="72" cy="108" r="${eyeR}" fill="${I}"/>
-    <circle cx="128" cy="108" r="${eyeR}" fill="${I}"/>
-    <circle cx="74.5" cy="105" r="2.2" fill="#fff"/>
-    <circle cx="130.5" cy="105" r="2.2" fill="#fff"/>
+    <!-- BIG ROUND AMBER EYES (Franky's hallmark) - honey iris, black pupil -->
+    <circle cx="72" cy="108" r="${eyeR}" fill="${AMBER}"/>
+    <circle cx="128" cy="108" r="${eyeR}" fill="${AMBER}"/>
+    <circle cx="72" cy="108" r="${eyeR * 0.55}" fill="${AMBER_DK}"/>
+    <circle cx="128" cy="108" r="${eyeR * 0.55}" fill="${AMBER_DK}"/>
+    <circle cx="72" cy="108" r="${eyeR * 0.32}" fill="${I}"/>
+    <circle cx="128" cy="108" r="${eyeR * 0.32}" fill="${I}"/>
+    <circle cx="74.2" cy="105.4" r="1.8" fill="#fff"/>
+    <circle cx="130.2" cy="105.4" r="1.8" fill="#fff"/>
 
-    <!-- SNUB SNOUT: a small cream patch around the muzzle/mouth area -->
-    <ellipse cx="100" cy="146" rx="28" ry="18" fill="var(--cream)"/>
+    <!-- SNUB SNOUT: a small slightly-paler patch around the muzzle area -->
+    <ellipse cx="100" cy="146" rx="28" ry="18" fill="${BELLY}" opacity=".7"/>
 
     <!-- FLAT BLACK NOSE - the Frenchie signature, big and pushed-in -->
     <ellipse cx="100" cy="134" rx="15" ry="10" fill="${I}"/>
