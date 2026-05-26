@@ -140,14 +140,24 @@ export default {
       return new Response("server not configured", { status: 500, headers: CORS });
     }
 
-    // CHATTER MODE (teach=false) goes to ElevenLabs with the cloned voice of
-    // the child's mother. Real-mama-voice praise is wildly more motivating
-    // than a generic warm TTS. TEACH MODE stays on OpenAI gpt-4o-mini-tts:
-    // its instruction-following is unmatched for the exact phoneme control
-    // needed for stretched plosive-free letter sounds.
-    if (!teach && env.ELEVENLABS_API_KEY) {
-      const voiceId = "NR28ewDldNdNH9MMUJP2";   // mother's cloned voice
+    // DEFAULT: every line - chat AND teach - speaks through ElevenLabs with
+    // Loïs's cloned voice (the children's mother). Hearing mama for praise
+    // AND for letter sounds is the strongest possible recognition + motivation
+    // anchor for a toddler. OpenAI remains as automatic fallback: if Eleven
+    // is rate-limited, down, or returns any error, we silently retry on
+    // OpenAI so the child never goes silent.
+    // TEACH-MODE CAVEAT: stretched phonemes ("mmmaaan", "ssss") may pick up
+    // a small schwa in a cloned voice that OpenAI's instruction-following
+    // can suppress. Listen for it; if a letter sounds wrong, fall back to
+    // teach=OpenAI for that subset via PRONOUNCE or a per-route override.
+    if (env.ELEVENLABS_API_KEY) {
+      const voiceId = "NR28ewDldNdNH9MMUJP2";   // Loïs - mother's cloned voice
       try {
+        // Teach mode gets steadier settings so stretched phonemes don't
+        // drift into expressiveness. Chat mode gets warmer, more expressive.
+        const settings = teach
+          ? { stability: 0.7, similarity_boost: 0.85, style: 0.1, use_speaker_boost: true }
+          : { stability: 0.45, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true };
         const r = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
           {
@@ -160,12 +170,7 @@ export default {
             body: JSON.stringify({
               text,
               model_id: "eleven_multilingual_v2",
-              voice_settings: {
-                stability: 0.45,        // warm but not overly steady (kids tone)
-                similarity_boost: 0.8,  // hew close to the cloned voice
-                style: 0.3,             // a touch of expressiveness
-                use_speaker_boost: true,
-              },
+              voice_settings: settings,
             }),
           });
         if (r.ok) {
@@ -177,9 +182,7 @@ export default {
             },
           });
         }
-        // Fall through to OpenAI on any ElevenLabs failure so the child
-        // never goes silent. (Log via response in dev only - server-side
-        // logs would be nicer but Workers print to wrangler tail.)
+        // Fall through to OpenAI on any ElevenLabs failure.
       } catch { /* fall through to OpenAI */ }
     }
 
