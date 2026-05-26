@@ -737,7 +737,7 @@ async function realisticSpeak(text, teach) {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v12");
+    _ttsCache = _ttsCache || await caches.open("tts-v13");
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase
@@ -1360,11 +1360,14 @@ function phonics(L) {
   const w = (SOUND[LC()] || SOUND.en)[L] || L.toLowerCase();
   const f = w[0];
   const dl = S.caseMode === "lower" ? L.toLowerCase() : L;
-  // Plofklank: clipped twice with a pause, then the word. No schwa.
-  // Other sounds: stretch for fonemic clarity (e.g. "mmmaan", "aaappel").
+  // Plosives ("plofklanken") get clipped twice with a pause, then the word.
+  // Fricatives/vowels get a stretched pure sound, period, then the word -
+  // never concatenated. Earlier "ssslang. slang." ran into one word for
+  // cloned voices ("sleng sleng"). Splitting with a period gives the model
+  // a hard boundary so the stretched sound and the real word stay distinct.
   const say = isPlosive(L)
     ? `${f}. ${f}. ${w}.`
-    : `${f + f + f + w.slice(1)}. ${w}.`;
+    : `${f + f + f}. ${w}.`;
   return { tip: `${dl}  -  ${w}`, say };
 }
 
@@ -2440,7 +2443,7 @@ const blendSay = w => [...w].map(c => {
   const kw = (SOUND[LC()] || SOUND.en)[c.toUpperCase()] || c;
   const f = kw[0];
   return isPlosive(c) ? f : f + f + f;
-}).join(" ") + ". " + w + ".";
+}).join(". ") + ". " + w + ".";
 
 function ReadScreen() {
   _rdAdvanced = new Set();          // fresh spacing window for this session

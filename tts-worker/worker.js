@@ -153,11 +153,12 @@ export default {
     if (env.ELEVENLABS_API_KEY) {
       const voiceId = "NR28ewDldNdNH9MMUJP2";   // Loïs - mother's cloned voice
       try {
-        // Teach mode gets steadier settings so stretched phonemes don't
-        // drift into expressiveness. Chat mode gets warmer, more expressive.
+        // Teach mode: steadier + slower so stretched phonemes don't drift
+        // into expressiveness and a 3-year-old has time to track each
+        // sound. Chat mode: warmer, expressive, near-natural pace.
         const settings = teach
-          ? { stability: 0.7, similarity_boost: 0.85, style: 0.1, use_speaker_boost: true }
-          : { stability: 0.45, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true };
+          ? { stability: 0.7,  similarity_boost: 0.85, style: 0.1, use_speaker_boost: true, speed: slow ? 0.7  : 0.8  }
+          : { stability: 0.45, similarity_boost: 0.8,  style: 0.3, use_speaker_boost: true, speed: slow ? 0.85 : 0.95 };
         const r = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
           {
