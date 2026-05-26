@@ -737,7 +737,7 @@ async function realisticSpeak(text, teach) {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v9");
+    _ttsCache = _ttsCache || await caches.open("tts-v10");
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase
@@ -1058,7 +1058,7 @@ const I18N = {
     howOld:"Hoe oud ben je?", start:"Start", language:"Taal",
     splashIntro:"Hallo, ik ben Franky. Ben jij Lucy of Josh? Tik op je naam om te beginnen.",
     hello:n=>`Hallo, ${n}`, whatDraw:"Waar wil je beginnen?",
-    buddyHome:n=>`Hoi ${n}, waar wil je beginnen?`,
+    buddyHome:n=>`Hey ${n}, welkom in Franky's wereld! Leer lezen, schrijven en tekenen met Franky.`,
     nDraw:"Tekenen", nHome:"Start", nGallery:"Mijn werk", nStickers:"Stickers", nGrown:"Ouders",
     pill_read:"Lezen", pillSub_read:"Klanken en woordjes met Franky",
     pill_write:"Schrijven", pillSub_write:"Letters, cijfers en vormen natrekken",
@@ -1112,7 +1112,7 @@ const I18N = {
     howOld:"How old are you?", start:"Start", language:"Language",
     splashIntro:"Hello, I'm Franky. Are you Lucy, or Josh? Tap your name to begin.",
     hello:n=>`Hello, ${n}`, whatDraw:"Where would you like to start?",
-    buddyHome:n=>`Hi ${n}, where would you like to start?`,
+    buddyHome:n=>`Hey ${n}, welcome to Franky's World! Learn to read, write and draw with Franky.`,
     nDraw:"Draw", nHome:"Home", nGallery:"Gallery", nStickers:"Stickers", nGrown:"Grown-ups",
     pill_read:"Reading", pillSub_read:"Sounds and words with Franky",
     pill_write:"Writing", pillSub_write:"Trace letters, numbers and shapes",
@@ -1166,7 +1166,7 @@ const I18N = {
     howOld:"¿Cuántos años tienes?", start:"Empezar", language:"Idioma",
     splashIntro:"Hola, soy Franky. ¿Eres Lucy o Josh? Toca tu nombre para empezar.",
     hello:n=>`Hola, ${n}`, whatDraw:"¿Por dónde quieres empezar?",
-    buddyHome:n=>`Hola ${n}, ¿por dónde quieres empezar?`,
+    buddyHome:n=>`¡Hola ${n}, bienvenido al mundo de Franky! Aprende a leer, escribir y dibujar con Franky.`,
     nDraw:"Dibujar", nHome:"Inicio", nGallery:"Galería", nStickers:"Pegatinas", nGrown:"Adultos",
     pill_read:"Leer", pillSub_read:"Sonidos y palabras con Franky",
     pill_write:"Escribir", pillSub_write:"Trazar letras, números y formas",
@@ -1230,6 +1230,7 @@ const STEP_T = {
     monster:[["Een zacht rond lijf","Teken een zacht, rond, mollig lijf."],["Eén groot oog","Geef hem één groot, vriendelijk oog."],["Twee zwaaiende armen","Twee golvende armen, om hallo te zwaaien."],["Een beetje haar","En een beetje haar bovenop."]],
     horse:[["Een lange kop","Teken een lange paardenkop."],["Twee puntige oren","Twee puntige oren, boven op de kop."],["Ogen en neus","Twee ogen, en twee kleine neusgaten."]],
     dog:[["Een rond hoofd","Maak een rond hoofd voor de hond."],["Twee flaporen","Twee zachte flaporen."],["Ogen en een neus","Twee ogen en een knopneusje."]],
+    franky:[["Franky's grote hoofd","Teken een groot rond hoofd voor Franky."],["Twee vleermuisoren","Twee grote vleermuisoren, omhoog."],["Ogen en een snuit","Twee amberkleurige ogen en een klein zwart neusje."]],
     rabbit:[["Een rond hoofd","Teken een rond hoofdje."],["Twee lange oren","Twee lange oren, recht omhoog."],["Ogen en een neus","Twee ogen en een klein neusje."]],
     bird:[["Een rond lijfje","Teken een rond, mollig vogellijfje."],["Een vleugel en staart","Een vleugel op de zij, en een staart."],["Een oog en een snavel","Een helder oog en een snaveltje."]],
     butterfly:[["Twee bovenvleugels","Twee grote vleugels bovenaan."],["Twee ondervleugels","En twee vleugels onderaan."],["Lijfje en voelsprieten","Een lijfje in het midden, en twee voelsprieten."]],
@@ -1267,6 +1268,7 @@ const STEP_T = {
     monster:[["Un cuerpo blandito","Dibuja un cuerpo blandito y redondo."],["Un ojo grande","Dale un ojo grande y amable."],["Dos brazos ondulados","Dos brazos ondulados, para saludar."],["Un poco de pelo","Y un poco de pelo arriba."]],
     horse:[["Una cabeza larga","Dibuja una cabeza larga de caballo."],["Dos orejas puntiagudas","Dos orejas puntiagudas, arriba."],["Ojos y nariz","Dos ojos, y dos orificios de la nariz."]],
     dog:[["Una cabeza redonda","Haz una cabeza redonda para el perro."],["Dos orejas caídas","Dos orejas suaves y caídas."],["Ojos y una nariz","Dos ojos y una naricita."]],
+    franky:[["La cabezota de Franky","Dibuja una cabezota redonda para Franky."],["Dos orejas de murciélago","Dos grandes orejas de murciélago, hacia arriba."],["Ojos y un hocico","Dos ojos color ámbar y una pequeña nariz negra."]],
     rabbit:[["Una cabeza redonda","Dibuja una cabecita redonda."],["Dos orejas largas","Dos orejas largas, hacia arriba."],["Ojos y una nariz","Dos ojos y una nariz pequeña."]],
     bird:[["Un cuerpo redondo","Dibuja un cuerpo redondo y regordete."],["Un ala y una cola","Un ala al lado, y una cola."],["Un ojo y un pico","Un ojo brillante y un piquito."]],
     butterfly:[["Dos alas de arriba","Dos alas grandes arriba."],["Dos alas de abajo","Y dos alas abajo."],["Cuerpo y antenas","Un cuerpo en el medio, y dos antenas."]],
@@ -1931,6 +1933,17 @@ const DRAWINGS = [
       d:[ C(475,400,42), C(525,565,34), C(445,520,24) ] },
     { tip:"Some stars", icon:"star", say:"And some twinkly stars.",
       d:[ "M690 320 V382","M659 351 H721","M715 600 V652","M689 626 H741" ] },
+  ]},
+  // Drawing Franky himself - the mascot. Three big shapes a 3-year-old
+  // can trace: round head, two bat-ears, then the face features. Accent
+  // colour matches his fur, so the home card reads as "draw your hond".
+  { id:"franky", name:"Franky", category:"animals", accent:"#6D6F75", steps:[
+    { tip:"Franky's big head", icon:"star", say:"Draw a big round head for Franky.",
+      d:[ C(500, 540, 215) ] },
+    { tip:"Two big bat-ears", icon:"play", say:"Two big bat-ears, pointing up.",
+      d:[ "M360 390 L290 220 L460 320 Z", "M640 390 L710 220 L540 320 Z" ] },
+    { tip:"Eyes and a snub nose", icon:"star", say:"Two amber eyes and a little black nose.",
+      d:[ C(420, 510, 32), C(580, 510, 32), C(500, 640, 36) ] },
   ]},
 ];
 
