@@ -761,7 +761,7 @@ async function realisticSpeak(text, teach) {
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
       "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v15");
+    _ttsCache = _ttsCache || await caches.open("tts-v16");
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase
@@ -1080,7 +1080,7 @@ const I18N = {
     madeBy:"Gemaakt door papa, voor Lucy & Josh",
     whoPlaying:"Wie speelt er?", orType:"of typ een naam", typeName:"Typ een naam",
     howOld:"Hoe oud ben je?", start:"Start", language:"Taal",
-    splashIntro:"Hallo, ik ben Franky. Ben jij Lucy of Josh? Tik op je naam om te beginnen.",
+    splashIntro:"Hallo, ik ben Franky. Hoe heet jij? Tik op je naam of typ 'm hieronder.",
     hello:n=>`Hallo, ${n}`, whatDraw:"Waar wil je beginnen?",
     buddyHome:n=>`Hey ${n}, welkom in Franky's wereld! Leer lezen, schrijven en tekenen met Franky.`,
     nDraw:"Tekenen", nHome:"Start", nGallery:"Mijn werk", nStickers:"Stickers", nGrown:"Ouders",
@@ -1134,7 +1134,7 @@ const I18N = {
     madeBy:"Made by Papa, for Lucy & Josh",
     whoPlaying:"Who is playing?", orType:"or type a name", typeName:"Type a name",
     howOld:"How old are you?", start:"Start", language:"Language",
-    splashIntro:"Hello, I'm Franky. Are you Lucy, or Josh? Tap your name to begin.",
+    splashIntro:"Hello, I'm Franky. What's your name? Tap it below or type it in.",
     hello:n=>`Hello, ${n}`, whatDraw:"Where would you like to start?",
     buddyHome:n=>`Hey ${n}, welcome to Franky's World! Learn to read, write and draw with Franky.`,
     nDraw:"Draw", nHome:"Home", nGallery:"Gallery", nStickers:"Stickers", nGrown:"Grown-ups",
@@ -1188,7 +1188,7 @@ const I18N = {
     madeBy:"Hecho por papá, para Lucy & Josh",
     whoPlaying:"¿Quién juega?", orType:"o escribe un nombre", typeName:"Escribe un nombre",
     howOld:"¿Cuántos años tienes?", start:"Empezar", language:"Idioma",
-    splashIntro:"Hola, soy Franky. ¿Eres Lucy o Josh? Toca tu nombre para empezar.",
+    splashIntro:"Hola, soy Franky. ¿Cómo te llamas? Toca tu nombre o escríbelo aquí.",
     hello:n=>`Hola, ${n}`, whatDraw:"¿Por dónde quieres empezar?",
     buddyHome:n=>`¡Hola ${n}, bienvenido al mundo de Franky! Aprende a leer, escribir y dibujar con Franky.`,
     nDraw:"Dibujar", nHome:"Inicio", nGallery:"Galería", nStickers:"Pegatinas", nGrown:"Adultos",
@@ -2905,8 +2905,11 @@ function Splash() {
       profRow,
     );
   }
+  // "Of typ een naam" only makes sense as an alternative to the quick-pick
+  // buttons. On a fresh device there are no quick-picks, so the label
+  // becomes the primary "Typ een naam" question instead.
   card.append(
-    el("div", { cls: "t-label", textContent: t("orType") }),
+    el("div", { cls: "t-label", textContent: onDevice.length ? t("orType") : t("typeName") }),
     input,
     el("div", { cls: "t-label", textContent: t("howOld") }),
     seg,
