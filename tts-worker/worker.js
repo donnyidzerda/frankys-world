@@ -39,9 +39,132 @@ const newCode = () => {
   return String(b[0] % 1_000_000).padStart(6, "0");
 };
 
+/* -------------------------------------------------------------------------
+   Grow-only merge. A child's learning state is naturally monotonic - stars
+   only climb, mastery boxes only climb, the completed/sticker sets only
+   grow. So we merge field-by-field instead of last-write-wins on the whole
+   blob: numbers take the max, count-maps take per-key max, sets union, and
+   only true profile metadata (name, age, settings...) uses LWW by timestamp.
+   This is conflict-free: four devices can edit offline and reconcile with
+   zero progress lost. MUST stay mirrored with mergeState() in index.html.
+   ------------------------------------------------------------------------- */
+const SYNC_MAXNUM = ["stars", "worldSeenStars", "readIntro", "frankyLevel", "buddyLevel"];
+const SYNC_MAXMAP = ["readBox", "readProd", "completed"];
+const SYNC_UNION  = ["stickers"];
+const SYNC_KEEP   = new Set(["syncId", "syncTs", "id"]);   // never merged from remote
+function mergeState(local, remote, localTs, remoteTs) {
+  local = local || {}; remote = remote || {};
+  const remoteNewer = (remoteTs || 0) > (localTs || 0);
+  const out = {};
+  const keys = new Set([...Object.keys(local), ...Object.keys(remote)]);
+  for (const k of keys) {
+    if (SYNC_KEEP.has(k)) { out[k] = local[k]; continue; }
+    const lv = local[k], rv = remote[k];
+    if (SYNC_MAXNUM.includes(k)) {
+      out[k] = Math.max(+lv || 0, +rv || 0);
+    } else if (SYNC_MAXMAP.includes(k)) {
+      const m = Object.assign({}, lv || {});
+      const r = rv || {};
+      for (const kk in r) m[kk] = Math.max(+m[kk] || 0, +r[kk] || 0);
+      out[k] = m;
+    } else if (SYNC_UNION.includes(k)) {
+      out[k] = [...new Set([
+        ...(Array.isArray(lv) ? lv : []),
+        ...(Array.isArray(rv) ? rv : []),
+      ])];
+    } else {
+      // LWW: newer timestamp wins; undefined side yields to the other.
+      if (rv === undefined) out[k] = lv;
+      else if (lv === undefined) out[k] = rv;
+      else out[k] = remoteNewer ? rv : lv;
+    }
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------
+   ProfileRoom - one Durable Object per profile (id = syncId). All of a
+   child's devices hold a WebSocket open to their room. An edit on any device
+   is merged into the authoritative state and pushed to every other device
+   in real time. The DO hibernates when idle (WebSocket Hibernation API), so
+   millions of profiles cost nothing until active. State is written through
+   to KV (debounced via alarm) so the pair-code flow keeps returning fresh
+   data and the /get fallback still works when WebSockets are blocked.
+   ------------------------------------------------------------------------- */
+export class ProfileRoom {
+  constructor(state, env) { this.state = state; this.env = env; }
+
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (req.headers.get("Upgrade") !== "websocket") {
+      return new Response("expected websocket", { status: 426 });
+    }
+    const id = url.searchParams.get("id") || "";
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.state.acceptWebSocket(server);          // hibernatable
+    if (id) await this.state.storage.put("kvid", id);
+
+    // Load (or lazily seed from KV) and send the current snapshot.
+    let cur = await this.state.storage.get("state");
+    if (!cur) {
+      let seed = null;
+      try {
+        const raw = id && await this.env.SYNC.get("id:" + id);
+        if (raw) { const d = JSON.parse(raw); seed = { state: d.json || {}, ts: d.ts || 0 }; }
+      } catch {}
+      cur = seed || { state: {}, ts: 0 };
+      await this.state.storage.put("state", cur);
+    }
+    try { server.send(JSON.stringify({ type: "snapshot", state: cur.state, ts: cur.ts })); } catch {}
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, raw) {
+    let m; try { m = JSON.parse(raw); } catch { return; }
+    if (m.type === "ping") { try { ws.send('{"type":"pong"}'); } catch {} return; }
+    if (m.type !== "patch" || !m.state || typeof m.state !== "object") return;
+
+    const cur = (await this.state.storage.get("state")) || { state: {}, ts: 0 };
+    const merged = mergeState(cur.state, m.state, cur.ts, m.ts);
+    const ts = Math.max(cur.ts || 0, m.ts || 0);
+    await this.state.storage.put("state", { state: merged, ts });
+
+    // Broadcast merged state to every connected device (sender included -
+    // the merge is idempotent, and the ack lets a client confirm its push).
+    const out = JSON.stringify({ type: "sync", state: merged, ts });
+    for (const s of this.state.getWebSockets()) { try { s.send(out); } catch {} }
+
+    // Debounced write-through to KV so pairing + /get stay fresh.
+    const a = await this.state.storage.getAlarm();
+    if (a == null) this.state.storage.setAlarm(Date.now() + 5000);
+  }
+
+  async webSocketClose(ws) { try { ws.close(); } catch {} }
+  async webSocketError() {}
+
+  async alarm() {
+    const cur = await this.state.storage.get("state");
+    const id = await this.state.storage.get("kvid");
+    if (cur && id) {
+      try { await this.env.SYNC.put("id:" + id, JSON.stringify({ json: cur.state, ts: cur.ts })); } catch {}
+    }
+  }
+}
+
 async function handleSync(req, env, parts) {
   if (!env.SYNC) return J({ error: "sync_not_configured" }, 500);
   const sub = parts[1] || "";
+
+  // GET /sync/ws?id=...  (WebSocket upgrade) -> routed to the profile's
+  // Durable Object for real-time, push-based sync.
+  if (sub === "ws") {
+    if (!env.PROFILE) return J({ error: "realtime_not_configured" }, 500);
+    const id = new URL(req.url).searchParams.get("id") || "";
+    if (!/^[a-f0-9]{32}$/.test(id)) return J({ error: "bad_id" }, 400);
+    const stub = env.PROFILE.get(env.PROFILE.idFromName(id));
+    return stub.fetch(req);
+  }
 
   // POST /sync/new  -> { id, code }
   // Create a fresh blank profile slot and a short pair-code that aliases

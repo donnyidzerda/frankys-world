@@ -395,12 +395,54 @@ function syncSnapshot(s) {
   for (const k in s) if (!SYNC_OMIT.has(k)) out[k] = s[k];
   return out;
 }
-function syncApply(remote) {
-  if (!remote || typeof remote !== "object") return;
-  // Preserve local sync metadata; overwrite the rest. Same profile id stays.
-  const keepId = S.id, keepSyncId = S.syncId;
-  for (const k in remote) if (!SYNC_OMIT.has(k)) S[k] = remote[k];
-  S.id = keepId; S.syncId = keepSyncId;
+// Grow-only merge - MUST stay mirrored with mergeState() in tts-worker.
+// Monotonic learning state (stars, mastery boxes, completed, stickers)
+// merges conflict-free: max for counters, per-key max for count-maps, union
+// for sets. Only true profile metadata uses last-write-wins by timestamp.
+const SYNC_MAXNUM = ["stars", "worldSeenStars", "readIntro", "frankyLevel", "buddyLevel"];
+const SYNC_MAXMAP = ["readBox", "readProd", "completed"];
+const SYNC_UNION  = ["stickers"];
+const SYNC_KEEP   = new Set(["syncId", "syncTs", "id"]);
+function mergeState(local, remote, localTs, remoteTs) {
+  local = local || {}; remote = remote || {};
+  const remoteNewer = (remoteTs || 0) > (localTs || 0);
+  const out = {};
+  const keys = new Set([...Object.keys(local), ...Object.keys(remote)]);
+  for (const k of keys) {
+    if (SYNC_KEEP.has(k)) { out[k] = local[k]; continue; }
+    const lv = local[k], rv = remote[k];
+    if (SYNC_MAXNUM.includes(k)) {
+      out[k] = Math.max(+lv || 0, +rv || 0);
+    } else if (SYNC_MAXMAP.includes(k)) {
+      const m = Object.assign({}, lv || {});
+      const r = rv || {};
+      for (const kk in r) m[kk] = Math.max(+m[kk] || 0, +r[kk] || 0);
+      out[k] = m;
+    } else if (SYNC_UNION.includes(k)) {
+      out[k] = [...new Set([
+        ...(Array.isArray(lv) ? lv : []),
+        ...(Array.isArray(rv) ? rv : []),
+      ])];
+    } else {
+      if (rv === undefined) out[k] = lv;
+      else if (lv === undefined) out[k] = rv;
+      else out[k] = remoteNewer ? rv : lv;
+    }
+  }
+  return out;
+}
+// Merge a remote snapshot into the active profile. Returns true if our
+// synced state actually changed (so the UI only refreshes when needed).
+function syncApply(remote, remoteTs) {
+  if (!remote || typeof remote !== "object") return false;
+  const before = JSON.stringify(syncSnapshot(S));
+  const merged = mergeState(S, remote, S.syncTs, remoteTs);
+  merged.id = S.id; merged.syncId = S.syncId;
+  merged.syncTs = Math.max(S.syncTs || 0, remoteTs || 0);
+  merged.settings = Object.assign(defaultState().settings, merged.settings || {});
+  S = merged;
+  localStorage.setItem(pKey(S.id), JSON.stringify(S));
+  return JSON.stringify(syncSnapshot(S)) !== before;
 }
 const Sync = (() => {
   let pushTimer = 0, pulling = false, pushing = false;
@@ -417,6 +459,64 @@ const Sync = (() => {
     }
     return r;
   }
+  // Apply a remote snapshot (from WS or the KV fallback) with grow-only
+  // merge, persist, refresh the UI when something actually changed.
+  function ingest(json, ts) {
+    if (!json) return false;
+    const changed = syncApply(json, ts);
+    applyFlags && applyFlags();
+    if (changed) window.dispatchEvent(new CustomEvent("sync:applied"));
+    return changed;
+  }
+
+  /* ---- real-time transport: one WebSocket to the profile's DO ---------- */
+  let ws = null, wsBackoff = 1000, wsTimer = 0, pingTimer = 0, wantOpen = false;
+  const wsOpen = () => ws && ws.readyState === 1;
+  function wsAddr() {
+    return SYNC_URL().replace(/^http/, "ws") + "/ws?id=" + encodeURIComponent(S.syncId);
+  }
+  function connectWS() {
+    if (!linked() || !online()) return;
+    wantOpen = true;
+    if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+    try { ws = new WebSocket(wsAddr()); } catch { scheduleReconnect(); return; }
+    ws.onopen = () => {
+      wsBackoff = 1000; lastErr = "";
+      // Push any local-only progress so the server merges it in; the DO
+      // replies with the unified snapshot. Then keep the socket warm.
+      sendPatch();
+      clearInterval(pingTimer);
+      pingTimer = setInterval(() => { if (wsOpen()) try { ws.send('{"type":"ping"}'); } catch {} }, 25000);
+    };
+    ws.onmessage = (e) => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.type === "snapshot" || m.type === "sync") {
+        lastPull = Date.now();
+        ingest(m.state, m.ts);
+      }
+    };
+    ws.onclose = () => { clearInterval(pingTimer); if (wantOpen) scheduleReconnect(); };
+    ws.onerror = () => { try { ws.close(); } catch {} };
+  }
+  function scheduleReconnect() {
+    clearTimeout(wsTimer);
+    wsTimer = setTimeout(connectWS, wsBackoff);
+    wsBackoff = Math.min(wsBackoff * 2, 30000);   // exp backoff, cap 30s
+  }
+  function closeWS() {
+    wantOpen = false; clearInterval(pingTimer); clearTimeout(wsTimer);
+    if (ws) try { ws.close(); } catch {}
+    ws = null;
+  }
+  function sendPatch() {
+    if (!wsOpen()) return false;
+    try {
+      ws.send(JSON.stringify({ type: "patch", state: syncSnapshot(S), ts: S.syncTs || Date.now() }));
+      return true;
+    } catch { return false; }
+  }
+
+  /* ---- KV fallback (used only when the WebSocket can't connect) -------- */
   async function pull() {
     if (!linked() || !online() || pulling) return false;
     pulling = true;
@@ -424,15 +524,7 @@ const Sync = (() => {
       const r = await call("/get?id=" + encodeURIComponent(S.syncId));
       const data = await r.json();
       lastPull = Date.now(); lastErr = "";
-      if (!data.json || !data.ts) return false;
-      // Remote wins only when it is strictly newer than our last local save.
-      if ((S.syncTs || 0) >= data.ts) return false;
-      syncApply(data.json);
-      S.syncTs = data.ts;
-      localStorage.setItem(pKey(S.id), JSON.stringify(S));
-      applyFlags && applyFlags();
-      window.dispatchEvent(new CustomEvent("sync:applied"));
-      return true;
+      return ingest(data.json, data.ts || 0);
     } catch (e) { lastErr = e.message || "pull_err"; return false; }
     finally { pulling = false; }
   }
@@ -440,27 +532,25 @@ const Sync = (() => {
     if (!linked() || !online() || pushing || !S.id) return false;
     pushing = true;
     try {
-      const ts = S.syncTs || Date.now();
       const r = await call("/put", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: S.syncId, ts, json: syncSnapshot(S) }),
+        body: JSON.stringify({ id: S.syncId, ts: S.syncTs || Date.now(), json: syncSnapshot(S) }),
       });
-      if (r.status === 409) {
-        // Server is newer - pull and let the user keep going. Their next
-        // edit will push again with a fresher ts and likely win.
-        await pull();
-        return false;
-      }
+      if (r.status === 409) { await pull(); return false; }
       lastErr = "";
       return true;
     } catch (e) { lastErr = e.message || "push_err"; return false; }
     finally { pushing = false; }
   }
+  // Called by save(). Real-time path: push instantly over the socket (tiny
+  // debounce to coalesce a burst). If the socket is down, fall back to the
+  // debounced KV PUT so an offline edit still lands when connectivity returns.
   function schedulePush() {
     if (!linked()) return;
     clearTimeout(pushTimer);
-    // Debounce: a flurry of saves during a session becomes one PUT.
-    pushTimer = setTimeout(push, 1500);
+    pushTimer = setTimeout(() => {
+      if (!sendPatch()) { connectWS(); push(); }
+    }, 400);
   }
   // Sign up a brand-new profile for sync. Returns the pair-code to display.
   async function create() {
@@ -468,6 +558,7 @@ const Sync = (() => {
     const r = await call("/new", { method: "POST" });
     const { id, code } = await r.json();
     S.syncId = id; save();              // save() triggers initial push
+    connectWS();                        // open the live socket for this profile
     return code;
   }
   // Mint another code for an already-linked profile (add another device).
@@ -492,32 +583,37 @@ const Sync = (() => {
       S = fresh;
     }
     S.syncId = data.id;
-    if (data.json) {
-      syncApply(data.json);
-      S.syncTs = data.ts || Date.now();
-    }
+    if (data.json) syncApply(data.json, data.ts || Date.now());
+    else S.syncTs = Math.max(S.syncTs || 0, data.ts || 0);
     localStorage.setItem(pKey(S.id), JSON.stringify(S));
     const idx = loadIdx() || { active: S.id, ids: [], legacyPid: null };
     if (!idx.ids.includes(S.id)) idx.ids.push(S.id);
     idx.active = S.id; saveIdx(idx);
+    connectWS();                        // go live on the freshly-paired profile
     return data;
   }
   function unlink() {
     if (!S || !S.syncId) return;
+    closeWS();
     delete S.syncId;
     save();
   }
-  // Periodic pull every 60s and on visibility/online events. Cheap: GETs
-  // are tiny and KV is fast. Cache stays warm.
+  // Open the live socket and keep it healthy. WebSocket is the real-time
+  // path; a slow background pull stays as a safety net for the rare case
+  // the socket is wedged (it's a no-op merge when nothing changed).
   let timer = 0;
   function start() {
     if (timer) return;
-    timer = setInterval(() => pull(), 60_000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
-    window.addEventListener("online", () => { pull(); push(); });
+    connectWS();
+    timer = setInterval(() => { if (!wsOpen()) { connectWS(); pull(); } }, 120_000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) { if (!wsOpen()) connectWS(); else sendPatch(); }
+    });
+    window.addEventListener("online", () => { connectWS(); });
+    window.addEventListener("offline", () => { /* socket will reconnect later */ });
   }
   return { start, create, pair, newCode, unlink, pull, push, schedulePush,
-           linked, status: () => ({ linked: linked(), lastPull, lastErr }) };
+           connectWS, linked, status: () => ({ linked: linked(), lastPull, lastErr, live: wsOpen() }) };
 })();
 // Lightweight list for the picker (id, name, age) read from snapshots.
 function profileList() {
@@ -4219,8 +4315,7 @@ if ("serviceWorker" in navigator) {
 // One initial pull (if this profile is linked) so a device that was
 // offline picks up the latest learning state before the child plays.
 // Then the periodic timer + visibility/online listeners take over.
-Sync.start ? Sync.start() : null;
-if (Sync.linked()) Sync.pull();
+Sync.start ? Sync.start() : null;   // opens the live WebSocket if linked
 window.addEventListener("sync:applied", () => {
   // Refresh only safe screens: home/settings. Mid-activity refresh would
   // yank the child out of a drawing or reading session, so leave those.

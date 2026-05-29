@@ -11,3 +11,13 @@ compatibility_date = "2025-01-01"
 [[kv_namespaces]]
 binding = "SYNC"
 id = "3b9f3a10b9ef4c5284054795d1199a37"
+
+# Real-time sync: one Durable Object per profile, holding a WebSocket to
+# every device. SQLite-backed class so it runs on the free plan too.
+[[durable_objects.bindings]]
+name = "PROFILE"
+class_name = "ProfileRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ProfileRoom"]
