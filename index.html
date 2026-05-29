@@ -2446,7 +2446,7 @@ function worldScene(stars, seen) {
          <text x="91" y="69" font-size="13">z</text></g>`
     : "";
   const dark = (night && !space && !under) ? '<rect width="320" height="150" fill="#1b2040" opacity=".5"/>' : "";
-  return `<svg viewBox="0 0 320 150" width="100%" preserveAspectRatio="xMidYMax slice" style="display:block;width:100%;height:22vh;max-height:230px" aria-hidden="true">
+  return `<svg viewBox="0 0 320 150" width="100%" style="display:block;width:100%;height:auto" aria-hidden="true">
     <defs><linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${W.sky[0]}"/><stop offset="1" stop-color="${W.sky[1]}"/>
     </linearGradient></defs>
@@ -3397,7 +3397,11 @@ function Home(mode) {
     // Just arrived in a new world (the milestones below this one's base
     // were already seen)? Announce the journey.
     const arrived = prevSeen < inf.base && S.stars >= inf.base && inf.idx > 0;
-    const world = el("div", { cls: "card", css: "margin:6px auto 0;max-width:680px;width:calc(100% - 40px);padding:0;overflow:hidden" });
+    // Cap the world card narrower than the pillars so its natural height
+    // (width x 150/320) stays modest on desktop - the whole scene shows,
+    // uncropped, and the 3 pillars stay above the fold. On phones it just
+    // uses the available width.
+    const world = el("div", { cls: "card", css: "margin:6px auto 0;max-width:440px;width:calc(100% - 40px);padding:0;overflow:hidden" });
     world.innerHTML = worldScene(S.stars, prevSeen) +
       `<div style="text-align:center;padding:7px 12px 9px">
          <div class="t-label">${arrived ? t("worldNew")(worldName()) : worldName()}</div>
