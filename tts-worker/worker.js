@@ -176,6 +176,10 @@ export default {
               // "man", "tas") the auto-detect leans English. Forcing nl/en/es
               // here helps the multilingual model pick the right phonemes.
               language_code: (searchParams.get("l") || "en").slice(0, 2),
+              // Fixed seed: same text + settings => same audio every render.
+              // Removes ElevenLabs' per-call randomness so a regenerated
+              // phrase sounds identical to its cached version (consistency).
+              seed: 4242,
               voice_settings: settings,
             }),
           });

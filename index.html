@@ -689,6 +689,10 @@ if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = () => {}; }
 // cached, so it's spoken once then replays free and offline forever.
 const TTS_PROXY_URL = "https://scribble-tts.donny-idzerda.workers.dev";
 const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY_URL; } catch { return TTS_PROXY_URL; } };
+// Single source of truth for TTS audio versioning. Rides in the request
+// URL (busts Cloudflare edge cache) AND names the browser Cache Storage
+// bucket. Bump on ANY voice change: worker settings, PRONOUNCE, phrasing.
+const TTS_REV = 17;
 let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
 // iOS Safari blocks programmatic audio until an <audio> element has been
 // started inside a real user gesture. We unlock ONE shared element on the
@@ -758,10 +762,15 @@ async function realisticSpeak(text, teach) {
   if (!base || !("caches" in window)) return false;
   try {
     text = applyPronounce(text);
+    // TTS_REV: bump whenever the WORKER voice settings change. It rides in
+    // the URL so it busts BOTH the browser cache AND the Cloudflare edge
+    // cache (which is immutable+1yr and keyed on the full URL). Without it,
+    // changing voice_settings has no effect on already-spoken phrases - the
+    // edge keeps replaying stale audio and the voice sounds inconsistent.
     const key = base.replace(/\/$/, "") + "/tts?s=" + (S.settings.slowVoice ? 1 : 0) +
       "&m=" + (teach ? "teach" : "chat") +
-      "&l=" + LC() + "&t=" + encodeURIComponent(text);
-    _ttsCache = _ttsCache || await caches.open("tts-v16");
+      "&l=" + LC() + "&v=" + TTS_REV + "&t=" + encodeURIComponent(text);
+    _ttsCache = _ttsCache || await caches.open("tts-v" + TTS_REV);
     let res = await _ttsCache.match(key);
     if (!res) {
       // Cache miss: only then do we need the network. A cached phrase
