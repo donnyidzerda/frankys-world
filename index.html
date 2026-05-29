@@ -161,6 +161,19 @@
   @keyframes wsun{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.07)} }
   @keyframes wcloud{ from{transform:translateX(-7px)} to{transform:translateX(11px)} }
   @keyframes wbird{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+  /* Decode slide hint: a dot sweeps left-to-right under the word, showing
+     the child to drag across the letters as the sounds blend. */
+  @keyframes wsweepdot{ 0%{left:0;opacity:0} 12%{opacity:1} 88%{opacity:1} 100%{left:100%;opacity:0} }
+  .sweeprail{ position:relative; height:8px; margin:6px auto 0; max-width:320px; }
+  .sweeprail i{ position:absolute; top:0; width:14px; height:14px; margin-left:-7px;
+    border-radius:50%; background:var(--ochre); box-shadow:0 0 0 4px rgba(217,162,74,.25);
+    animation:wsweepdot 1.5s ease-in-out 2; }
+  /* Short-viewport (landscape phone): tighten the reading stage so the mic
+     and choices stay on-screen without scrolling. */
+  @media (max-height:560px){
+    .screen .cap{ gap:8px !important; padding-top:6px !important; padding-bottom:6px !important; }
+    .micbtn{ transform:scale(.82); }
+  }
 
   /* Speech bubble (Franky) - soft, paper-like, no harsh outline */
   .bubble{ position:relative; background:var(--surface); color:var(--ink);
@@ -327,7 +340,7 @@ const defaultState = () => ({
   syncId: null, syncTs: 0,             // cross-device sync (set when linked)
   settings: { muted: false, voice: true, slowVoice: false,
     sound: true, haptics: true, contrast: false, calm: false,
-    foundations: false },
+    foundations: false, listen: true },   // listen = speech-recognition verify
 });
 function loadIdx() {
   try { const i = JSON.parse(localStorage.getItem(IDX_KEY)); if (i && i.ids) return i; } catch {}
@@ -1207,7 +1220,7 @@ const I18N = {
     settingsTitle:"Voor volwassenen",
     setMuted:"Alles uit (geluid)", setVoice:"Stem van Franky",
     setSlow:"Langzamer en duidelijker praten", setSound:"Geluidseffecten",
-    setHaptics:"Lichte trilling", setContrast:"Hoog contrast",
+    setHaptics:"Lichte trilling", setListen:"Franky luistert mee (lezen)", setContrast:"Hoog contrast",
     setCalm:"Rustige modus (minder beweging en geluid)",
     artist:"Kunstenaar", ageSetting:"Leeftijd", reset:"Alles wissen",
     resetConfirm:"De naam, sterren, stickers en alle bewaarde tekeningen wissen?",
@@ -1261,7 +1274,7 @@ const I18N = {
     settingsTitle:"For Grown-ups",
     setMuted:"Mute all sound", setVoice:"Franky's voice",
     setSlow:"Slower, clearer speech", setSound:"Sound effects",
-    setHaptics:"Gentle vibration", setContrast:"High-contrast mode",
+    setHaptics:"Gentle vibration", setListen:"Franky listens along (reading)", setContrast:"High-contrast mode",
     setCalm:"Calm mode (less motion and sound)",
     artist:"Artist", ageSetting:"Age setting", reset:"Reset everything",
     resetConfirm:"Erase the name, stars, stickers and all saved drawings?",
@@ -1315,7 +1328,7 @@ const I18N = {
     settingsTitle:"Para adultos",
     setMuted:"Silenciar todo", setVoice:"La voz de Franky",
     setSlow:"Hablar más despacio y claro", setSound:"Efectos de sonido",
-    setHaptics:"Vibración suave", setContrast:"Alto contraste",
+    setHaptics:"Vibración suave", setListen:"Franky escucha (lectura)", setContrast:"Alto contraste",
     setCalm:"Modo tranquilo (menos movimiento y sonido)",
     artist:"Artista", ageSetting:"Edad", reset:"Borrar todo",
     resetConfirm:"¿Borrar el nombre, las estrellas, las pegatinas y todos los dibujos?",
@@ -1558,7 +1571,7 @@ const I18N_X = {
     readTitle:"Lezen met Franky", readSub:n=>`Je kent al ${n} klanken. Tik om te oefenen!`,
     readListen:"Luister naar Franky", readWhichLetter:"Welke letter hoor je?",
     readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
-    echoPrompt:"Nu jij. Zeg de klank.", echoHold:"Houd vast en zeg het",
+    echoPrompt:"Nu jij. Zeg de klank.", echoHold:"Houd vast en zeg het", echoTap:"Tik en zeg het", echoTapStop:"Tik als je klaar bent",
     echoSay:c=>`Nu jij. Houd de knop vast en zeg ${c}.`,
     echoJudge:"Hoe ging het?", echoGood:"Dat ging goed", echoRetry:"Nog een keer",
     decodePrompt:"Lees het woord", decodeBlend:"Nu het hele woord",
@@ -1625,7 +1638,7 @@ const I18N_X = {
     readTitle:"Reading with Franky", readSub:n=>`You know ${n} sounds. Tap to practise!`,
     readListen:"Listen to Franky", readWhichLetter:"Which letter do you hear?",
     readAgain:"Again", readNext:"Next", readMore:"Read more",
-    echoPrompt:"Your turn. Say the sound.", echoHold:"Hold and say it",
+    echoPrompt:"Your turn. Say the sound.", echoHold:"Hold and say it", echoTap:"Tap and say it", echoTapStop:"Tap when you're done",
     echoSay:c=>`Your turn. Hold the button and say ${c}.`,
     echoJudge:"How did it go?", echoGood:"That went well", echoRetry:"Once more",
     decodePrompt:"Read the word", decodeBlend:"Now the whole word",
@@ -1692,7 +1705,7 @@ const I18N_X = {
     readTitle:"Leer con Franky", readSub:n=>`Ya conoces ${n} sonidos. ¡Toca para practicar!`,
     readListen:"Escucha a Franky", readWhichLetter:"¿Qué letra escuchas?",
     readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
-    echoPrompt:"Ahora tú. Di el sonido.", echoHold:"Mantén y dilo",
+    echoPrompt:"Ahora tú. Di el sonido.", echoHold:"Mantén y dilo", echoTap:"Toca y dilo", echoTapStop:"Toca cuando termines",
     echoSay:c=>`Ahora tú. Mantén el botón y di ${c}.`,
     echoJudge:"¿Cómo fue?", echoGood:"Salió bien", echoRetry:"Otra vez",
     decodePrompt:"Lee la palabra", decodeBlend:"Ahora la palabra entera",
@@ -2799,6 +2812,32 @@ function ReadScreen() {
   // child holds the mic and says it back, Franky models it once more, and
   // the child self-assesses (Reggio: the child as judge). "Once more"
   // simply restarts - never a wrong answer, only another try.
+  // Tap-to-talk (not hold): a 3-year-old can't reliably press-and-hold.
+  // First tap starts recording (red), second tap (or a 7s safety timeout,
+  // or recognition ending) stops it and fires onStop. label/hint updates.
+  function wireTapMic(mic, hint, onStart, onStop) {
+    let rec = false, used = false, autoT = 0;
+    const setIcon = c => { const sv = mic.querySelector("svg"); if (sv) sv.setAttribute("stroke", c); };
+    function stop() {
+      if (!rec || used) return;
+      used = true; rec = false; clearTimeout(autoT);
+      mic.classList.remove("rec"); setIcon("var(--plum)"); buzz(10);
+      if (hint) hint.textContent = "";
+      onStop && onStop();
+    }
+    mic.onclick = () => {
+      if (used) return;
+      if (!rec) {
+        rec = true; mic.classList.add("rec"); setIcon("var(--cream)"); buzz(14);
+        try { speechSynthesis.cancel(); } catch {}
+        if (_ttsEl) try { _ttsEl.pause(); } catch {}
+        if (hint) hint.textContent = t("echoTapStop");
+        onStart && onStart();
+        autoT = setTimeout(stop, 7000);          // safety auto-stop
+      } else stop();
+    };
+    return { stop };
+  }
   function echoItem(it) {
     const L = it.s.toUpperCase();
     const kw = (SOUND[LC()] || SOUND.en)[L] || it.s;
@@ -2812,31 +2851,15 @@ function ReadScreen() {
     const wrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:12px" });
     const mic = el("button", { cls: "micbtn",
       html: `<span class="mr"></span>` + ic("mic", 50, "var(--plum)") });
-    wrap.append(mic, el("div", { cls: "t-body muted", textContent: t("echoHold") }));
+    const hint = el("div", { cls: "t-body muted", textContent: t("echoTap") });
+    wrap.append(mic, hint);
     choices.append(wrap);
 
-    let held = false, done = false;
-    const setIcon = c => { const sv = mic.querySelector("svg"); if (sv) sv.setAttribute("stroke", c); };
-    function startHold(e) {
-      if (held || done) return;
-      if (e && e.preventDefault) e.preventDefault();
-      held = true;
-      mic.classList.add("rec"); setIcon("var(--cream)"); buzz(14);
-      try { speechSynthesis.cancel(); } catch {}
-      if (_ttsEl) try { _ttsEl.pause(); } catch {}
-    }
-    function endHold() {
-      if (!held || done) return;
-      held = false; done = true;
-      mic.classList.remove("rec"); setIcon("var(--plum)"); buzz(10);
+    wireTapMic(mic, hint, null, () => {
       // Franky models the sound right after the child's attempt.
       setTimeout(() => speak(stretched + ". " + kw + ".", true), 220);
-      setTimeout(showJudge, 1500);
-    }
-    mic.addEventListener("pointerdown", startHold);
-    mic.addEventListener("pointerup", endHold);
-    mic.addEventListener("pointerleave", () => { if (held) endHold(); });
-    mic.addEventListener("pointercancel", () => { if (held) endHold(); });
+      setTimeout(showJudge, 1400);
+    });
 
     function showJudge() {
       promptEl.textContent = t("echoJudge");
@@ -2844,8 +2867,9 @@ function ReadScreen() {
       const jt = (icon, label, col, fn) => {
         const b = el("button", { cls: "card",
           css: "padding:16px 22px;min-width:128px;display:flex;flex-direction:column;align-items:center;gap:8px;background:var(--surface)" });
-        b.innerHTML = `<span style="background:${col};border-radius:14px;padding:10px;display:inline-flex">${ic(icon, 26, "#fff")}</span><span class="t-head">${label}</span>`;
-        b.onclick = fn; return b;
+        b.innerHTML = `<span style="background:${col};border-radius:16px;padding:14px;display:inline-flex">${ic(icon, 34, "#fff")}</span><span class="t-head">${label}</span>`;
+        b.onclick = () => { speak(label, false); fn(); };   // voice it (pre-readers)
+        return b;
       };
       choices.append(
         jt("check", t("echoGood"), "var(--sage)", () => {
@@ -2873,11 +2897,12 @@ function ReadScreen() {
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     const wrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:12px" });
     const mic = el("button", { cls: "micbtn", html: `<span class="mr"></span>` + ic("mic", 50, "var(--plum)") });
-    wrap.append(mic, el("div", { cls: "t-body muted", textContent: t("echoHold") }));
+    const hint = el("div", { cls: "t-body muted", textContent: t("echoTap") });
+    wrap.append(mic, hint);
     choices.append(wrap);
     if (sayIntro) frankySay("happy", sayIntro, true);
-    let held = false, done = false, rec = null;
-    const setIcon = c => { const sv = mic.querySelector("svg"); if (sv) sv.setAttribute("stroke", c); };
+    let rec = null;
+    const useRec = recTarget && recAvailable() && S.settings.listen !== false;
     const pass = () => {
       S.readProd = S.readProd || {};
       S.readProd[bumpKey] = (S.readProd[bumpKey] || 0) + 1;
@@ -2890,42 +2915,30 @@ function ReadScreen() {
       const jt = (icon, label, col, fn) => {
         const b = el("button", { cls: "card",
           css: "padding:16px 22px;min-width:128px;display:flex;flex-direction:column;align-items:center;gap:8px;background:var(--surface)" });
-        b.innerHTML = `<span style="background:${col};border-radius:14px;padding:10px;display:inline-flex">${ic(icon, 26, "#fff")}</span><span class="t-head">${label}</span>`;
-        b.onclick = fn; return b;
+        b.innerHTML = `<span style="background:${col};border-radius:16px;padding:14px;display:inline-flex">${ic(icon, 34, "#fff")}</span><span class="t-head">${label}</span>`;
+        b.onclick = () => { speak(label, false); fn(); };   // voice the choice (pre-readers)
+        return b;
       };
       choices.append(
         jt("check", t("echoGood"), "var(--sage)", pass),
         jt("undo", t("echoRetry"), "var(--ochre)", () => { Sound.fx.tap(); buzz(12); again(); }));
     };
-    const startHold = e => {
-      if (held || done) return;
-      if (e && e.preventDefault) e.preventDefault();
-      held = true; mic.classList.add("rec"); setIcon("var(--cream)"); buzz(14);
-      try { speechSynthesis.cancel(); } catch {}
-      if (_ttsEl) try { _ttsEl.pause(); } catch {}
-      rec = recTarget ? startRecognition() : null;
-    };
-    const endHold = async () => {
-      if (!held || done) return;
-      held = false; done = true;
-      mic.classList.remove("rec"); setIcon("var(--plum)"); buzz(10);
-      let heard = "";
-      if (rec) { try { heard = await rec.stop(); } catch {} }
-      setTimeout(() => speak(modelEcho, true), 220);    // Franky models it
-      const m = recTarget && heard ? recMatch(heard, recTarget) : null;
-      if (recTarget && heard) {                          // log truth for parent
-        S.readHeard = S.readHeard || {};
-        const arr = S.readHeard[bumpKey] || [];
-        arr.push({ ts: Date.now(), heard, ok: m === true });
-        S.readHeard[bumpKey] = arr.slice(-5); save();
-      }
-      if (m === true) { promptEl.textContent = t("echoJudge"); setTimeout(pass, 1300); }
-      else setTimeout(showJudge, 1500);                  // miss/no-API → self-judge
-    };
-    mic.addEventListener("pointerdown", startHold);
-    mic.addEventListener("pointerup", endHold);
-    mic.addEventListener("pointerleave", () => { if (held) endHold(); });
-    mic.addEventListener("pointercancel", () => { if (held) endHold(); });
+    wireTapMic(mic, hint,
+      () => { rec = useRec ? startRecognition() : null; },
+      async () => {
+        let heard = "";
+        if (rec) { try { heard = await rec.stop(); } catch {} }
+        setTimeout(() => speak(modelEcho, true), 220);    // Franky models it
+        const m = useRec && heard ? recMatch(heard, recTarget) : null;
+        if (useRec && heard) {                            // log truth for parent
+          S.readHeard = S.readHeard || {};
+          const arr = S.readHeard[bumpKey] || [];
+          arr.push({ ts: Date.now(), heard, ok: m === true });
+          S.readHeard[bumpKey] = arr.slice(-5); save();
+        }
+        if (m === true) { promptEl.textContent = t("echoJudge"); setTimeout(pass, 1300); }
+        else setTimeout(showJudge, 1500);                 // miss/no-API → self-judge
+      });
   }
 
   // #1 Decode with continuous blending. Child taps OR slides a finger across
@@ -2964,7 +2977,10 @@ function ReadScreen() {
     const stopSlide = () => { sliding = false; };
     row.addEventListener("pointerup", stopSlide);
     row.addEventListener("pointerleave", stopSlide);
-    choices.append(row);
+    const rail = el("div", { cls: "sweeprail", html: "<i></i>" });   // drag-hint sweep
+    const colWrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:0" });
+    colWrap.append(row, rail);
+    choices.append(colWrap);
     replay.onclick = () => { Sound.fx.tap(); speak(blendCont(w), true); };
     frankySay("happy", t("decodeSay"), true);
     setTimeout(() => speak(blendCont(w), true), 500);   // model the slide once
@@ -3379,9 +3395,9 @@ function Home(mode) {
   const s = el("div", { cls: "screen" });
 
   if (!mode) {
-    const top = el("div", { cls: "cap", css: "display:flex;align-items:center;gap:14px;padding:20px 20px 8px" });
-    const who = el("button", { css: "flex:1;display:flex;align-items:center;gap:14px;text-align:left;background:none",
-      html: `<span id="buddy" data-size="76">${Franky("warm", 76)}</span>
+    const top = el("div", { cls: "cap", css: "display:flex;align-items:center;gap:12px;padding:14px 20px 6px" });
+    const who = el("button", { css: "flex:1;display:flex;align-items:center;gap:12px;text-align:left;background:none",
+      html: `<span id="buddy" data-size="56">${Franky("warm", 56)}</span>
         <span><span class="t-title">${t("hello")(S.name)}</span><br>
         <span class="t-body muted">${t("whatDraw")}</span></span>` });
     who.onclick = () => { Sound.fx.tap(); buzz(12); ProfilePicker(); };
@@ -4341,6 +4357,7 @@ function Settings() {
    ["slowVoice", "slow", t("setSlow")],
    ["sound", "sound", t("setSound")],
    ["haptics", "buzz", t("setHaptics")],
+   ["listen", "mic", t("setListen")],
    ["foundations", "calm", t("setFoundations")],
    ["contrast", "contrast", t("setContrast")],
    ["calm", "calm", t("setCalm")]].forEach(([k, icon, label]) => {
