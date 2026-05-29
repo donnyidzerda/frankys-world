@@ -322,6 +322,7 @@ const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: "nl",
   caseMode: "upper", drawDiff: 1, writeDiff: 1, sayName: "", worldSeenStars: 0,
   readBox: {}, readIntro: 1, readProd: {},
+  readLat: {}, readPlaced: false, readHeard: {},   // Hoven: latency, placement, heard-log
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", frankyLevel: 1,
   syncId: null, syncTs: 0,             // cross-device sync (set when linked)
   settings: { muted: false, voice: true, slowVoice: false,
@@ -1563,6 +1564,12 @@ const I18N_X = {
     decodePrompt:"Lees het woord", decodeBlend:"Nu het hele woord",
     decodeSay:"Tik op elke letter en zeg de klank.",
     decodeBlendSay:"Knap! Houd de knop vast en lees nu het hele woord.",
+    sightPrompt:"Onthoud dit woord", sightSay:w=>`Dit woordje is "${w}". Dat onthoud je gewoon.`,
+    sightRead:w=>`Houd vast en zeg "${w}".`,
+    sentPrompt:"Lees de zin", sentSay:"Tik op elk woord, dan lees je de hele zin.",
+    sentRead:"Lees de hele zin", sentReadSay:"Knap! Houd vast en lees nu de hele zin hardop.",
+    probeTitle:"Wat ken je al?", probeSay:"Tik op de klanken die je al kent. Geen zorgen als je er een niet weet.",
+    probeKnow:"Deze ken ik", probeDone:"Klaar",
     rdProgressTitle:"Leesvoortgang",
     rdSummary:(i,T,m,wr,wm)=>`${i} van ${T} klanken in gebruik · ${m} echt beheerst · ${wm} woordjes vast (${wr} al gelezen).`,
     rdSoundsLabel:"Klanken", rdWords:"Woordjes beheerst", rdWordsRead:"al gelezen",
@@ -1624,6 +1631,12 @@ const I18N_X = {
     decodePrompt:"Read the word", decodeBlend:"Now the whole word",
     decodeSay:"Tap each letter and say its sound.",
     decodeBlendSay:"Well done! Hold the button and read the whole word now.",
+    sightPrompt:"Remember this word", sightSay:w=>`This little word is "${w}". You just remember it.`,
+    sightRead:w=>`Hold and say "${w}".`,
+    sentPrompt:"Read the sentence", sentSay:"Tap each word, then read the whole sentence.",
+    sentRead:"Read the whole line", sentReadSay:"Great! Hold and read the whole sentence aloud.",
+    probeTitle:"What do you know?", probeSay:"Tap the sounds you already know. No worries if you don't know one.",
+    probeKnow:"I know this", probeDone:"Done",
     rdProgressTitle:"Reading progress",
     rdSummary:(i,T,m,wr,wm)=>`${i} of ${T} sounds in play · ${m} mastered · ${wm} words solid (${wr} read).`,
     rdSoundsLabel:"Sounds", rdWords:"Words mastered", rdWordsRead:"already read",
@@ -1685,6 +1698,12 @@ const I18N_X = {
     decodePrompt:"Lee la palabra", decodeBlend:"Ahora la palabra entera",
     decodeSay:"Toca cada letra y di su sonido.",
     decodeBlendSay:"¡Bien! Mantén el botón y lee la palabra entera.",
+    sightPrompt:"Recuerda esta palabra", sightSay:w=>`Esta palabrita es "${w}". Solo la recuerdas.`,
+    sightRead:w=>`Mantén y di "${w}".`,
+    sentPrompt:"Lee la frase", sentSay:"Toca cada palabra, luego lee la frase entera.",
+    sentRead:"Lee la frase entera", sentReadSay:"¡Bien! Mantén y lee la frase entera en voz alta.",
+    probeTitle:"¿Qué ya sabes?", probeSay:"Toca los sonidos que ya conoces. No pasa nada si no sabes alguno.",
+    probeKnow:"Este lo sé", probeDone:"Listo",
     rdProgressTitle:"Progreso de lectura",
     rdSummary:(i,T,m,wr,wm)=>`${i} de ${T} sonidos en juego · ${m} dominados · ${wm} palabras firmes (${wr} leídas).`,
     rdSoundsLabel:"Sonidos", rdWords:"Palabras dominadas", rdWordsRead:"ya leídas",
@@ -2493,15 +2512,23 @@ const READING = {
   nl:{ sounds:["s","a","m","n","t","i","p","o","k","e","r","d","l","u",
                "g","b","v","h","z","w","f","j","c","x","y","q"],
        words:["sap","mat","man","tas","pan","nat","tak","pet","pit","kip","pot","tor","rok","dak","lat","pen","kar","mes","sok","map","lip","net","sik",
-              "bus","bos","bal","big","gat","gum","vis","vos","weg","wol","web","zak","hut","jas","duf","laf","wak","gif"] },
+              "bus","bos","bal","big","gat","gum","vis","vos","weg","wol","web","zak","hut","jas","duf","laf","wak","gif"],
+       // High-frequency function words - not early-decodable, taught whole.
+       sight:["de","het","een","ik","is","en","op"],
+       // Decodable sentences: only decodable words + mastered sight words.
+       sentences:["ik zie de man","de kat is nat","ik heb een pen","de bal is rond","ik zie een vis","de pet is op de mat"] },
   en:{ sounds:["s","a","t","p","i","n","m","d","g","o","c","k","e","u","r","h","b","f","l",
                "j","v","w","y","z","x","q"],
        words:["sat","pat","tap","pin","nip","pan","nap","sit","tin","pit","tip","mad","dad","dig","dog","got","cot","cap","cat","pen","ten","net","bed","red","run","fun","sun","hop","big","bag","leg",
-              "jam","jet","van","wet","wig","zip","box","fox","jog","hug","mix","fan","win","yes"] },
+              "jam","jet","van","wet","wig","zip","box","fox","jog","hug","mix","fan","win","yes"],
+       sight:["the","a","is","I","and","to","on"],
+       sentences:["I see the cat","the dog is big","I can run","the pin is on top","a cat and a dog","I see a red hat"] },
   es:{ sounds:["a","m","s","l","p","t","o","n","d","i","r","u","e",
                "b","c","f","g","h","j","v","y","z","k","w","x","q"],
        words:["sol","sal","mar","pan","mes","dos","los","las","mil","sur","red","tos","luna","mapa",
-              "boca","casa","vaca","foca","gota","bota","jugo","beso","hoja","gafa"] },
+              "boca","casa","vaca","foca","gota","bota","jugo","beso","hoja","gafa"],
+       sight:["el","la","es","un","una","y","mi"],
+       sentences:["el sol es","la luna es","mi mama es","el mar es","la casa es mia","un oso y un sol"] },
 };
 const RD = () => READING[LC()] || READING.en;
 const rdBox = k => S.readBox[k] || 0;
@@ -2518,29 +2545,65 @@ const rdBump = (k, ok) => {
 };
 const rdIntro = () => RD().sounds.slice(0, S.readIntro);
 const rdWords = () => RD().words.filter(wd => [...wd].every(c => rdIntro().includes(c)));
+const rdLat = k => (S.readLat && S.readLat[k]) || 0;
+// Hoven #6 ordering: least-mastered first (box asc), then most-effortful
+// first (latency desc) so slow-but-correct items resurface sooner.
+const byNeed = pre => (a, b) =>
+  rdBox(pre + a) - rdBox(pre + b) || rdLat(pre + b) - rdLat(pre + a) || Math.random() - .5;
+// Sight words unlock once enough sounds are in play (so real sentences can
+// follow). Decodable sentences need a body of solid words behind them.
+const rdSight = () => (S.readIntro >= 4 ? (RD().sight || []) : []);
+const rdSentences = () => (RD().sentences || []).filter(sn =>
+  sn.split(" ").every(wd =>
+    [...wd].every(c => rdIntro().includes(c)) ||           // decodable, or
+    ((RD().sight || []).includes(wd) && rdBox("sight:" + wd) >= 1)));  // known sight word
 function buildReadSession() {
   const intro = rdIntro(), top = RD().sounds[S.readIntro - 1], items = [];
+  // #7 shrink passive teach: a sound is shown passively only once ever
+  // (box 0). After that it goes straight to active retrieval.
   if (rdBox("s:" + top) === 0) items.push({ t: "teach", s: top });
-  // Echo: one active-production item per session, for a taught sound that
-  // has had the least production practice. Receptive picks alone overstate
-  // mastery; saying the sound aloud is what anchors the letter-sound link.
+  // Echo: one active-production item, least-practised taught sound.
   const taught = intro.filter(c => rdBox("s:" + c) >= 1);
   if (taught.length) {
     const byProd = [...taught].sort((a, b) =>
       ((S.readProd && S.readProd[a]) || 0) - ((S.readProd && S.readProd[b]) || 0) || Math.random() - .5);
     items.push({ t: "echo", s: byProd[0] });
   }
-  const bySound = [...intro].sort((a, b) => rdBox("s:" + a) - rdBox("s:" + b) || Math.random() - .5);
-  for (let i = 0; i < 5; i++) items.push({ t: "pick", s: bySound[i % bySound.length] });
+  // Push the high-value rungs FIRST (sight, sentence, decode) so a fixed
+  // 10-item session never slices them off in favour of more picks. Picks
+  // then fill whatever room remains - they're the cheap, plentiful tier.
   const masteredS = intro.filter(c => rdBox("s:" + c) >= 2).length;
   const words = rdWords();
+  // #4 sight words: one per session, least-mastered first.
+  const sight = rdSight();
+  if (sight.length) items.push({ t: "sight", w: [...sight].sort(byNeed("sight:"))[0] });
+  // #2 sentences: the next rung, once a body of words is solid.
+  const wMast = words.filter(wd => rdBox("w:" + wd) >= 2).length;
+  const sents = rdSentences();
+  if (wMast >= 6 && sents.length) items.push({ t: "read", sent: [...sents].sort(byNeed("sent:"))[0] });
+  // Decode: the real word-reading task.
   if (masteredS >= 3 && words.length) {
-    // Decode items: the real reading task - see the word, sound it out,
-    // read it aloud. The least-practised words come first.
-    const byWord = [...words].sort((a, b) => rdBox("w:" + a) - rdBox("w:" + b) || Math.random() - .5);
+    const byWord = [...words].sort(byNeed("w:"));
     for (let i = 0; i < 3; i++) items.push({ t: "decode", w: byWord[i % byWord.length] });
   }
-  return items.slice(0, 9);
+  // Picks fill the rest up to a 10-item session.
+  const bySound = [...intro].sort(byNeed("s:"));
+  for (let i = 0; items.length < 10 && bySound.length; i++) items.push({ t: "pick", s: bySound[i % bySound.length] });
+  return interleave(items.slice(0, 10));
+}
+// #8 interleave: never run the same sound/word/sentence back to back, so
+// retrieval is spaced within the session (stronger than blocked practice).
+function interleave(items) {
+  const keyOf = it => it.s || it.w || it.sent || it.t;
+  const out = [], pool = items.slice();
+  let lastKey = null;
+  while (pool.length) {
+    let idx = pool.findIndex(it => keyOf(it) !== lastKey);
+    if (idx < 0) idx = 0;
+    const [it] = pool.splice(idx, 1);
+    out.push(it); lastKey = keyOf(it);
+  }
+  return out;
 }
 function rdAdvance() {
   // Finer gate (Hoven): one weak sound shouldn't block the whole alphabet.
@@ -2573,12 +2636,113 @@ const blendSay = w => [...w].map(c => {
   const f = kw[0];
   return isPlosive(c) ? f : f + f + f;
 }).join(". ") + ". " + w + ".";
+// #1 Continuous blending (Mentava core): the sounds slide together with NO
+// gaps - "ssspaaan" - then the whole word. Teaches blending-as-sliding, not
+// segment-then-assemble. Plosives stay short (can't stretch a /p/).
+const blendCont = w => [...w].map(c => {
+  const kw = (SOUND[LC()] || SOUND.en)[c.toUpperCase()] || c;
+  const f = kw[0];
+  return isPlosive(c) ? f : f + f + f + f;
+}).join("") + ". " + w + ".";
 
+/* ----- #3 speech recognition (Web Speech API) ---------------------------
+   On-device, free, no key. Used to actually verify a child read the word -
+   real ground truth feeding the Leitner boxes instead of a blind self-judge.
+   Toddler speech is hard to recognise, so we are GENEROUS (fuzzy match) and
+   NEVER block progress on a miss - uncertainty counts as a pass and the true
+   transcript is logged for the parent. Falls back to self-judge when the API
+   is missing or permission denied. */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recAvailable = () => !!SpeechRec;
+// Levenshtein for fuzzy toddler-speech matching.
+function lev(a, b) {
+  const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, () => []);
+  for (let i = 0; i <= m; i++) d[i][0] = i;
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[m][n];
+}
+const recNorm = s => (s || "").toLowerCase().replace(/[^a-zà-ÿ ]/g, "").trim();
+// recMatch(transcript, target) -> true if close enough (exact, or Lev<=1 per
+// short word, or target contained in transcript).
+function recMatch(heard, target) {
+  heard = recNorm(heard); target = recNorm(target);
+  if (!heard) return null;                 // got nothing - inconclusive
+  if (heard === target) return true;
+  if (heard.includes(target) || target.includes(heard)) return true;
+  const thresh = target.length <= 4 ? 1 : 2;
+  return lev(heard, target) <= thresh;
+}
+// Start recognition; returns a handle with .stop() -> Promise<transcript|"">.
+function startRecognition() {
+  if (!recAvailable()) return null;
+  let rec;
+  try { rec = new SpeechRec(); } catch { return null; }
+  rec.lang = langTag();
+  rec.interimResults = false; rec.maxAlternatives = 3; rec.continuous = false;
+  let resolveFn, got = "";
+  const done = new Promise(res => { resolveFn = res; });
+  rec.onresult = e => {
+    for (const r of e.results) for (const alt of r) { if (alt.transcript) { got += " " + alt.transcript; } }
+  };
+  rec.onerror = () => {};
+  rec.onend = () => resolveFn(got.trim());
+  try { rec.start(); } catch { return null; }
+  return { stop: () => { try { rec.stop(); } catch {} return done; } };
+}
+
+// #5 Placement probe: one-time, parent-guided. Skip the sounds the child
+// already owns instead of starting everyone at letter 1. Generous - a tap
+// just pre-seeds the Leitner box; the mastery gate self-corrects later.
+function ReadProbe() {
+  const probe = RD().sounds.slice(0, 8);     // high-utility first
+  const known = new Set();
+  const s = el("div", { cls: "screen" });
+  const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:14px 18px 6px" });
+  const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
+  back.onclick = () => { Sound.fx.tap(); go("home"); };
+  head.append(back, el("div", { css: "flex:1", html: `<div class="t-title" style="color:var(--sky)">${t("probeTitle")}</div>` }),
+    muteBtn(), el("div", { id: "buddy", "data-size": 52, html: Franky("happy", 52) }));
+  s.append(head);
+  const stage = el("div", { cls: "cap", css: "flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:10px 18px;text-align:center" });
+  stage.append(el("div", { cls: "t-body muted", css: "max-width:420px", textContent: t("probeSay") }));
+  const grid = el("div", { css: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:520px" });
+  probe.forEach(c => {
+    const b = el("button", { cls: "card", css: "padding:14px 18px;background:var(--surface)" });
+    b.innerHTML = lowerArt(c, 70);
+    b.onclick = () => {
+      Sound.fx.tap(); buzz(10);
+      speak(phonics(c.toUpperCase()).say, true);
+      if (known.has(c)) { known.delete(c); b.classList.remove("rc-ok"); }
+      else { known.add(c); b.classList.add("rc-ok"); }
+    };
+    grid.append(b);
+  });
+  stage.append(grid);
+  const done = el("button", { cls: "btn btn-go t-head", html: ic("check", 20, "#fff") + `<span>${t("probeDone")}</span>` });
+  done.onclick = () => {
+    // Pre-seed each known sound to "solid" (box 2). Open the intro window up
+    // to the furthest contiguous known sound so picks have material.
+    let reach = 1;
+    RD().sounds.forEach((c, i) => {
+      if (known.has(c)) { S.readBox["s:" + c] = Math.max(rdBox("s:" + c), 2); if (i + 1 > reach) reach = i + 1; }
+    });
+    S.readIntro = Math.max(S.readIntro, Math.min(reach, RD().sounds.length));
+    S.readPlaced = true; save();
+    Sound.fx.win(); go("read");
+  };
+  stage.append(done);
+  s.append(stage); APP.append(s);
+  if (!_greeted) { setTimeout(() => speak(t("probeSay"), true), 500); _greeted = true; }
+}
 function ReadScreen() {
+  if (!S.readPlaced) { ReadProbe(); return; }   // #5 one-time placement first
   _rdAdvanced = new Set();          // fresh spacing window for this session
   const session = buildReadSession();
   let i = 0, busy = false, finished = false;   // interaction locks
   let wrongStreak = 0;                          // adaptive fatigue counter
+  let itemShownAt = 0;                          // #6 latency timer
   const s = el("div", { cls: "screen" });
   const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:14px 18px 6px" });
   const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
@@ -2610,6 +2774,16 @@ function ReadScreen() {
     choices.style.pointerEvents = "none";
     if (ok) { Sound.fx.step(); buzz(20); if (key) rdBump(key, true); wrongStreak = 0; }
     else { Sound.fx.soft(); buzz(12); if (key) rdBump(key, false); wrongStreak++; }
+    // #6 latency-aware mastery: track an EMA of correct-response time. A
+    // fast, correct answer on an already-solid item (box>=3) is real
+    // fluency - jump it straight to mastered so it stops being drilled.
+    if (key && itemShownAt) {
+      const dt = Date.now() - itemShownAt;
+      S.readLat = S.readLat || {};
+      const prev = S.readLat[key] || dt;
+      S.readLat[key] = Math.round(prev * 0.6 + dt * 0.4);
+      if (ok && dt < 1500 && rdBox(key) >= 3) S.readBox[key] = 5;
+    }
     i++; prog.firstChild.style.width = (i / session.length) * 100 + "%";
     // Adaptive length (Mentava): if the child has done at least 5 items and
     // just missed twice in a row, they are tiring - end on a high note rather
@@ -2690,66 +2864,27 @@ function ReadScreen() {
   // to hear its sound (turning symbol into sound, in order), then holds the
   // mic and reads the whole word aloud - blending it themselves. Self-judged
   // like Echo: never wrong, just another try.
-  function decodeItem(it) {
-    const w = it.w;
-    promptEl.textContent = t("decodePrompt");
-    showEl.innerHTML = "";
+  // Shared "say it aloud" panel for decode / sight / sentence items. Holds
+  // the mic; if speech recognition is available it verifies the read aloud
+  // (auto-pass on a match) and logs the transcript for the parent; otherwise
+  // it falls back to the child/parent self-judge. Never blocks on a miss.
+  function micPanel({ promptText, sayIntro, modelEcho, recTarget, bumpKey, again }) {
+    promptEl.textContent = promptText;
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
-    let blended = false;
-    const tapped = new Set();
-    const row = el("div", { css: "display:flex;gap:8px;justify-content:center;flex-wrap:wrap" });
-    [...w].forEach((ch, idx) => {
-      const lt = el("button", { cls: "card", css: "padding:8px 12px;background:var(--surface)" });
-      lt.innerHTML = lowerArt(ch, 64);
-      lt.onclick = () => {
-        if (blended) return;
-        Sound.fx.tap(); buzz(10);
-        lt.classList.add("rc-ok");
-        const kw = (SOUND[LC()] || SOUND.en)[ch.toUpperCase()] || ch;
-        const f = kw[0];
-        speak(isPlosive(ch) ? f : f + f + f, true);    // clipped if plosive
-        tapped.add(idx);
-        if (tapped.size === w.length) setTimeout(showBlend, 750);
-      };
-      row.append(lt);
-    });
-    choices.append(row);
-    replay.onclick = () => { Sound.fx.tap(); speak(blendSay(w), true); };
-    frankySay("happy", t("decodeSay"), true);
-
-    function showBlend() {
-      if (blended) return;
-      blended = true;
-      promptEl.textContent = t("decodeBlend");
-      choices.innerHTML = ""; choices.style.pointerEvents = "auto";
-      const wrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:12px" });
-      const mic = el("button", { cls: "micbtn",
-        html: `<span class="mr"></span>` + ic("mic", 50, "var(--plum)") });
-      wrap.append(mic, el("div", { cls: "t-body muted", textContent: t("echoHold") }));
-      choices.append(wrap);
-      frankySay("happy", t("decodeBlendSay"), true);
-      let held = false, done = false;
-      const setIcon = c => { const sv = mic.querySelector("svg"); if (sv) sv.setAttribute("stroke", c); };
-      const startHold = e => {
-        if (held || done) return;
-        if (e && e.preventDefault) e.preventDefault();
-        held = true; mic.classList.add("rec"); setIcon("var(--cream)"); buzz(14);
-        try { speechSynthesis.cancel(); } catch {}
-        if (_ttsEl) try { _ttsEl.pause(); } catch {}
-      };
-      const endHold = () => {
-        if (!held || done) return;
-        held = false; done = true;
-        mic.classList.remove("rec"); setIcon("var(--plum)"); buzz(10);
-        setTimeout(() => speak(w + ". " + w + ".", true), 220);   // Franky models the word
-        setTimeout(showJudge, 1500);
-      };
-      mic.addEventListener("pointerdown", startHold);
-      mic.addEventListener("pointerup", endHold);
-      mic.addEventListener("pointerleave", () => { if (held) endHold(); });
-      mic.addEventListener("pointercancel", () => { if (held) endHold(); });
-    }
-    function showJudge() {
+    const wrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:12px" });
+    const mic = el("button", { cls: "micbtn", html: `<span class="mr"></span>` + ic("mic", 50, "var(--plum)") });
+    wrap.append(mic, el("div", { cls: "t-body muted", textContent: t("echoHold") }));
+    choices.append(wrap);
+    if (sayIntro) frankySay("happy", sayIntro, true);
+    let held = false, done = false, rec = null;
+    const setIcon = c => { const sv = mic.querySelector("svg"); if (sv) sv.setAttribute("stroke", c); };
+    const pass = () => {
+      S.readProd = S.readProd || {};
+      S.readProd[bumpKey] = (S.readProd[bumpKey] || 0) + 1;
+      save();
+      resolve(true, bumpKey);              // resolve does the bump + latency
+    };
+    const showJudge = () => {
       promptEl.textContent = t("echoJudge");
       choices.innerHTML = ""; choices.style.pointerEvents = "auto";
       const jt = (icon, label, col, fn) => {
@@ -2759,24 +2894,144 @@ function ReadScreen() {
         b.onclick = fn; return b;
       };
       choices.append(
-        jt("check", t("echoGood"), "var(--sage)", () => {
-          rdBump("w:" + w, true);
-          S.readProd = S.readProd || {};
-          S.readProd["w:" + w] = (S.readProd["w:" + w] || 0) + 1;
-          save();
-          resolve(true, null);
-        }),
-        jt("undo", t("echoRetry"), "var(--ochre)", () => {
-          Sound.fx.tap(); buzz(12); decodeItem(it);
-        }));
+        jt("check", t("echoGood"), "var(--sage)", pass),
+        jt("undo", t("echoRetry"), "var(--ochre)", () => { Sound.fx.tap(); buzz(12); again(); }));
+    };
+    const startHold = e => {
+      if (held || done) return;
+      if (e && e.preventDefault) e.preventDefault();
+      held = true; mic.classList.add("rec"); setIcon("var(--cream)"); buzz(14);
+      try { speechSynthesis.cancel(); } catch {}
+      if (_ttsEl) try { _ttsEl.pause(); } catch {}
+      rec = recTarget ? startRecognition() : null;
+    };
+    const endHold = async () => {
+      if (!held || done) return;
+      held = false; done = true;
+      mic.classList.remove("rec"); setIcon("var(--plum)"); buzz(10);
+      let heard = "";
+      if (rec) { try { heard = await rec.stop(); } catch {} }
+      setTimeout(() => speak(modelEcho, true), 220);    // Franky models it
+      const m = recTarget && heard ? recMatch(heard, recTarget) : null;
+      if (recTarget && heard) {                          // log truth for parent
+        S.readHeard = S.readHeard || {};
+        const arr = S.readHeard[bumpKey] || [];
+        arr.push({ ts: Date.now(), heard, ok: m === true });
+        S.readHeard[bumpKey] = arr.slice(-5); save();
+      }
+      if (m === true) { promptEl.textContent = t("echoJudge"); setTimeout(pass, 1300); }
+      else setTimeout(showJudge, 1500);                  // miss/no-API → self-judge
+    };
+    mic.addEventListener("pointerdown", startHold);
+    mic.addEventListener("pointerup", endHold);
+    mic.addEventListener("pointerleave", () => { if (held) endHold(); });
+    mic.addEventListener("pointercancel", () => { if (held) endHold(); });
+  }
+
+  // #1 Decode with continuous blending. Child taps OR slides a finger across
+  // the letters left-to-right (each sound fires as it is crossed), then reads
+  // the whole word. The model audio is a continuous slide, not chopped.
+  function decodeItem(it) {
+    const w = it.w;
+    promptEl.textContent = t("decodePrompt");
+    showEl.innerHTML = "";
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    let blended = false, sliding = false;
+    const tapped = new Set(), tiles = {};
+    const row = el("div", { css: "display:flex;gap:8px;justify-content:center;flex-wrap:wrap;touch-action:none" });
+    const fire = idx => {
+      if (blended || idx == null || !tiles[idx] || tiles[idx]._done) return;
+      const tile = tiles[idx]; tile._done = true; tile.classList.add("rc-ok");
+      const ch = w[idx], kw = (SOUND[LC()] || SOUND.en)[ch.toUpperCase()] || ch, f = kw[0];
+      Sound.fx.tap(); buzz(10);
+      speak(isPlosive(ch) ? f : f + f + f, true);
+      tapped.add(idx);
+      if (tapped.size === w.length) setTimeout(showBlend, 700);
+    };
+    [...w].forEach((ch, idx) => {
+      const lt = el("button", { cls: "card", css: "padding:8px 12px;background:var(--surface)" });
+      lt.dataset.li = idx; lt.innerHTML = lowerArt(ch, 64);
+      lt.onclick = () => fire(idx);
+      tiles[idx] = lt; row.append(lt);
+    });
+    const hit = e => {
+      const el2 = document.elementFromPoint(e.clientX, e.clientY);
+      const card = el2 && el2.closest && el2.closest("[data-li]");
+      if (card) fire(+card.dataset.li);
+    };
+    row.addEventListener("pointerdown", e => { sliding = true; hit(e); });
+    row.addEventListener("pointermove", e => { if (sliding) hit(e); });
+    const stopSlide = () => { sliding = false; };
+    row.addEventListener("pointerup", stopSlide);
+    row.addEventListener("pointerleave", stopSlide);
+    choices.append(row);
+    replay.onclick = () => { Sound.fx.tap(); speak(blendCont(w), true); };
+    frankySay("happy", t("decodeSay"), true);
+    setTimeout(() => speak(blendCont(w), true), 500);   // model the slide once
+
+    function showBlend() {
+      if (blended) return;
+      blended = true;
+      micPanel({
+        promptText: t("decodeBlend"), sayIntro: t("decodeBlendSay"),
+        modelEcho: w + ". " + w + ".", recTarget: w, bumpKey: "w:" + w,
+        again: () => decodeItem(it),
+      });
+    }
+  }
+
+  // #4 Sight word: shown whole, said whole, recognised whole (never decoded).
+  function sightItem(it) {
+    const w = it.w;
+    promptEl.textContent = t("sightPrompt");
+    showEl.innerHTML = lowerArt(w, 120);
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    replay.onclick = () => { Sound.fx.tap(); speak(w + ". " + w + ".", true); };
+    frankySay("happy", t("sightSay")(w), true);
+    const go2 = el("button", { cls: "btn btn-go", css: "min-width:120px",
+      html: ic("mic", 20, "#fff") + `<span>${t("readNext")}</span>` });
+    go2.onclick = () => micPanel({
+      promptText: t("sightRead")(w), sayIntro: "", modelEcho: w + ". " + w + ".",
+      recTarget: w, bumpKey: "sight:" + w, again: () => sightItem(it),
+    });
+    choices.append(go2);
+  }
+
+  // #2 Decodable sentence: tap each word to hear it, then read the line aloud.
+  function sentenceItem(it) {
+    const sent = it.sent, words = sent.split(" ");
+    promptEl.textContent = t("sentPrompt");
+    showEl.innerHTML = "";
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    const tapped = new Set();
+    const row = el("div", { css: "display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center" });
+    words.forEach((wd, idx) => {
+      const b = el("button", { cls: "card", css: "padding:8px 12px;background:var(--surface)" });
+      b.innerHTML = lowerArt(wd, 56);
+      b.onclick = () => { Sound.fx.tap(); buzz(10); b.classList.add("rc-ok"); speak(wd + ".", false);
+        tapped.add(idx); if (tapped.size === words.length) setTimeout(showRead, 600); };
+      row.append(b);
+    });
+    choices.append(row);
+    replay.onclick = () => { Sound.fx.tap(); speak(sent + ".", false); };
+    frankySay("happy", t("sentSay"), false);
+    function showRead() {
+      micPanel({
+        promptText: t("sentRead"), sayIntro: t("sentReadSay"),
+        modelEcho: sent + ".", recTarget: sent, bumpKey: "sent:" + sent,
+        again: () => sentenceItem(it),
+      });
     }
   }
   function showItem() {
     const it = session[i];
     busy = false;
+    itemShownAt = Date.now();                 // #6 start the latency clock
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     if (it.t === "echo") { echoItem(it); return; }
     if (it.t === "decode") { decodeItem(it); return; }
+    if (it.t === "sight") { sightItem(it); return; }
+    if (it.t === "read") { sentenceItem(it); return; }
     if (it.t === "teach") {
       const L = it.s.toUpperCase();
       promptEl.textContent = t("readListen");
