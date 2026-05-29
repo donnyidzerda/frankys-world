@@ -1218,6 +1218,7 @@ const I18N = {
     freeIntro:n=>`Dit is jouw plek, ${n}. Teken wat je wilt.`,
     freeSave:n=>`Ik heb het bewaard, ${n}. Goed gedaan!`,
     settingsTitle:"Voor volwassenen",
+    secChild:"Kind", secLearn:"Leren", secSound:"Geluid & comfort", secDevices:"Apparaten", secApp:"App",
     setMuted:"Alles uit (geluid)", setVoice:"Stem van Franky",
     setSlow:"Langzamer en duidelijker praten", setSound:"Geluidseffecten",
     setHaptics:"Lichte trilling", setListen:"Franky luistert mee (lezen)", setContrast:"Hoog contrast",
@@ -1272,6 +1273,7 @@ const I18N = {
     freeIntro:n=>`This is your space, ${n}. Draw whatever you like.`,
     freeSave:n=>`I saved that to your gallery, ${n}. Good work.`,
     settingsTitle:"For Grown-ups",
+    secChild:"Child", secLearn:"Learning", secSound:"Sound & comfort", secDevices:"Devices", secApp:"App",
     setMuted:"Mute all sound", setVoice:"Franky's voice",
     setSlow:"Slower, clearer speech", setSound:"Sound effects",
     setHaptics:"Gentle vibration", setListen:"Franky listens along (reading)", setContrast:"High-contrast mode",
@@ -1326,6 +1328,7 @@ const I18N = {
     freeIntro:n=>`Este es tu espacio, ${n}. Dibuja lo que quieras.`,
     freeSave:n=>`Lo guardé en tu galería, ${n}. ¡Buen trabajo!`,
     settingsTitle:"Para adultos",
+    secChild:"Niño", secLearn:"Aprender", secSound:"Sonido y confort", secDevices:"Dispositivos", secApp:"App",
     setMuted:"Silenciar todo", setVoice:"La voz de Franky",
     setSlow:"Hablar más despacio y claro", setSound:"Efectos de sonido",
     setHaptics:"Vibración suave", setListen:"Franky escucha (lectura)", setContrast:"Alto contraste",
@@ -4292,6 +4295,10 @@ function Settings() {
   const s = el("div", { cls: "screen" });
   s.append(header(t("settingsTitle")));
   const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px" });
+  // Small section divider so the long settings list reads as grouped
+  // chapters instead of one undifferentiated scroll.
+  const sectionLabel = txt => el("div", { cls: "t-label",
+    css: "margin:14px 4px 2px;font-size:12px;letter-spacing:.06em;opacity:.7" , textContent: txt });
 
   // Progress at a glance (moved off the child's Home - this is for you).
   const stat = el("div", { cls: "card", css: "padding:16px 18px;display:flex;justify-content:space-around;align-items:center" });
@@ -4303,7 +4310,6 @@ function Settings() {
     statCell("flame", S.streak, "var(--clay)", t("statStreak")) +
     statCell("star", S.stars, "var(--ochre)", t("statStars")) +
     statCell("sticker", S.stickers.length, "var(--sage)", t("statStickers"));
-  wrap.append(stat);
 
   // Language selector
   const langCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
@@ -4317,7 +4323,6 @@ function Settings() {
     lseg.append(b);
   });
   langCard.append(lseg);
-  wrap.append(langCard);
 
   // Screen time: a written recommendation, not an in-app timer. Pacing the
   // session is the parent's job - they have the device's own controls.
@@ -4325,7 +4330,6 @@ function Settings() {
   limCard.append(
     el("div", { cls: "t-label", textContent: t("setLimit") }),
     el("div", { cls: "t-body muted", css: "font-size:14px", textContent: t("screenTimeNote") }));
-  wrap.append(limCard);
 
   // Profiles
   const profCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
@@ -4333,7 +4337,6 @@ function Settings() {
     el("div", { cls: "t-head", css: "flex:1", textContent: t("profiles") }),
     el("button", { cls: "btn btn-quiet", css: "padding:10px 16px", textContent: t("switchProfile") }));
   profCard.onclick = () => ProfilePicker();
-  wrap.append(profCard);
 
   // Letter case (caps recommended first; lowercase when ready)
   const caseCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
@@ -4347,32 +4350,44 @@ function Settings() {
     caseSeg.append(b);
   });
   caseCard.append(caseSeg);
-  wrap.append(caseCard);
 
   // Reading progress (parent dashboard, read-only)
-  wrap.append(readingDashboard());
+  const dashCard = readingDashboard();
 
-  [["muted", "mute", t("setMuted")],
-   ["voice", "sound", t("setVoice")],
-   ["slowVoice", "slow", t("setSlow")],
-   ["sound", "sound", t("setSound")],
-   ["haptics", "buzz", t("setHaptics")],
-   ["listen", "mic", t("setListen")],
-   ["foundations", "calm", t("setFoundations")],
-   ["contrast", "contrast", t("setContrast")],
-   ["calm", "calm", t("setCalm")]].forEach(([k, icon, label]) => {
-    const row = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
-    const swh = el("div", { cls: "sw" + (S.settings[k] ? " on" : ""), html: "<i></i>" });
-    row.append(el("div", { html: ic(icon, 22, "var(--ink-soft)") }),
-      el("div", { cls: "t-head", css: "flex:1", textContent: label }), swh);
-    row.onclick = () => {
-      S.settings[k] = !S.settings[k]; save(); Sound.fx.tap(); buzz(12);
-      swh.classList.toggle("on", S.settings[k]); applyFlags();
-      if (k === "muted" && S.settings.muted && "speechSynthesis" in window)
-        try { speechSynthesis.cancel(); } catch {}
-    };
-    wrap.append(row);
-  });
+  // One grouped card for all on/off switches, divided into Sound and
+  // Comfort, instead of nine separate full-width cards (huge scroll).
+  const toggleGroup = (groups) => {
+    const card = el("div", { cls: "card", css: "padding:6px 18px;display:flex;flex-direction:column" });
+    groups.forEach((rows, gi) => {
+      rows.forEach(([k, icon, label], ri) => {
+        const first = gi === 0 && ri === 0;
+        const row = el("div", { css: `display:flex;align-items:center;gap:14px;padding:14px 0;${first ? "" : "border-top:1px solid var(--line)"}` });
+        const swh = el("div", { cls: "sw" + (S.settings[k] ? " on" : ""), html: "<i></i>" });
+        row.append(el("div", { html: ic(icon, 22, "var(--ink-soft)") }),
+          el("div", { cls: "t-head", css: "flex:1", textContent: label }), swh);
+        row.onclick = () => {
+          S.settings[k] = !S.settings[k]; save(); Sound.fx.tap(); buzz(12);
+          swh.classList.toggle("on", S.settings[k]); applyFlags();
+          if (k === "muted" && S.settings.muted && "speechSynthesis" in window)
+            try { speechSynthesis.cancel(); } catch {}
+        };
+        card.append(row);
+      });
+    });
+    return card;
+  };
+  const soundCard = toggleGroup([[
+    ["muted", "mute", t("setMuted")],
+    ["voice", "sound", t("setVoice")],
+    ["slowVoice", "slow", t("setSlow")],
+    ["sound", "sound", t("setSound")],
+    ["listen", "mic", t("setListen")],
+  ], [
+    ["haptics", "buzz", t("setHaptics")],
+    ["calm", "calm", t("setCalm")],
+    ["contrast", "contrast", t("setContrast")],
+    ["foundations", "calm", t("setFoundations")],
+  ]]);
 
   const prof = el("div", { cls: "card", css: "padding:18px;display:flex;flex-direction:column;gap:12px" });
   prof.append(el("div", { cls: "t-head", html: `${t("artist")}: <b>${S.name}</b>` }),
@@ -4406,7 +4421,6 @@ function Settings() {
     }
   };
   prof.append(reset);
-  wrap.append(prof);
 
   // ---- Cross-device sync card ------------------------------------------
   // Links one child profile across the family's devices via a 6-digit
@@ -4460,7 +4474,6 @@ function Settings() {
     row.append(startBtn, pairBtn);
     syncCard.append(row);
   }
-  wrap.append(syncCard);
 
   // Shows a freshly-minted pair-code, large enough to read aloud.
   function showCode(code) {
@@ -4545,10 +4558,18 @@ function Settings() {
     w.document.close();
   };
   shareCard.append(shareBtn, sheetBtn);
-  wrap.append(shareCard);
 
   const note = el("div", { cls: "card", css: "padding:20px;line-height:1.6", html: t("note") });
-  wrap.append(note);
+
+  // Ordered, grouped layout: child first, then learning, sound, devices,
+  // and finally app-level bits + the explainer. One clear scroll.
+  wrap.append(
+    sectionLabel(t("secChild")), stat, prof, profCard,
+    sectionLabel(t("secLearn")), caseCard, dashCard,
+    sectionLabel(t("secSound")), soundCard,
+    sectionLabel(t("secDevices")), syncCard,
+    sectionLabel(t("secApp")), langCard, limCard, shareCard, note,
+  );
   s.append(wrap);
   APP.append(s);
 }
