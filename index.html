@@ -2446,7 +2446,7 @@ function worldScene(stars, seen) {
          <text x="91" y="69" font-size="13">z</text></g>`
     : "";
   const dark = (night && !space && !under) ? '<rect width="320" height="150" fill="#1b2040" opacity=".5"/>' : "";
-  return `<svg viewBox="0 0 320 150" width="100%" aria-hidden="true">
+  return `<svg viewBox="0 0 320 150" width="100%" preserveAspectRatio="xMidYMax slice" style="display:block;width:100%;height:22vh;max-height:230px" aria-hidden="true">
     <defs><linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${W.sky[0]}"/><stop offset="1" stop-color="${W.sky[1]}"/>
     </linearGradient></defs>
@@ -3406,10 +3406,10 @@ function Home(mode) {
     s.append(world);
     if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
-    const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:16px 20px 140px;container-type:inline-size" });
+    const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:12px 20px 130px;container-type:inline-size" });
     const pillar = (key, col, fn) => {
       const b = el("button", { cls: "card pop",
-        css: `padding:26px 24px;display:flex;align-items:center;gap:20px;background:${col};color:#fff;width:100%;margin-bottom:16px;min-height:128px` });
+        css: `padding:18px 24px;display:flex;align-items:center;gap:20px;background:${col};color:#fff;width:100%;margin-bottom:12px;min-height:92px` });
       b.innerHTML =
         `<div style="background:rgba(255,255,255,.20);border-radius:22px;padding:13px;display:inline-flex">${pillarScene(key)}</div>
          <div style="text-align:left;flex:1"><div class="t-title">${t("pill_" + key)}</div>
