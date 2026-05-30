@@ -809,7 +809,7 @@ const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY
 // Single source of truth for TTS audio versioning. Rides in the request
 // URL (busts Cloudflare edge cache) AND names the browser Cache Storage
 // bucket. Bump on ANY voice change: worker settings, PRONOUNCE, phrasing.
-const TTS_REV = 17;
+const TTS_REV = 18;
 let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
 // iOS Safari blocks programmatic audio until an <audio> element has been
 // started inside a real user gesture. We unlock ONE shared element on the

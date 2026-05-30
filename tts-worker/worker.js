@@ -263,26 +263,28 @@ export default {
       return new Response("server not configured", { status: 500, headers: CORS });
     }
 
-    // DEFAULT: every line - chat AND teach - speaks through ElevenLabs with
-    // Loïs's cloned voice (the children's mother). Hearing mama for praise
-    // AND for letter sounds is the strongest possible recognition + motivation
-    // anchor for a toddler. OpenAI remains as automatic fallback: if Eleven
-    // is rate-limited, down, or returns any error, we silently retry on
-    // OpenAI so the child never goes silent.
-    // TEACH-MODE CAVEAT: stretched phonemes ("mmmaaan", "ssss") may pick up
-    // a small schwa in a cloned voice that OpenAI's instruction-following
-    // can suppress. Listen for it; if a letter sounds wrong, fall back to
-    // teach=OpenAI for that subset via PRONOUNCE or a per-route override.
+    // DEFAULT: every line - chat AND teach - speaks through ElevenLabs.
+    // We use a PREMADE multilingual voice rather than an instant clone: a
+    // clone trained on a few minutes of one-language audio guesses cross-
+    // language phonemes and drifts (the inconsistency heard with Loïs).
+    // Premade voices are curated for stable pronunciation across all the
+    // eleven_multilingual_v2 languages (Dutch / English / Spanish included).
+    // OpenAI stays the automatic fallback on any ElevenLabs error.
+    //
+    // To swap the voice, change VOICE_ID below and bump TTS_REV in the app
+    // (so cached audio regenerates). Warm female premade candidates:
+    //   EXAVITQu4vr4xnSDxMaL  Sarah   - mature, reassuring, soft (current)
+    //   Xb7hH8MSUJpSbSDYk0k2  Alice   - clear, engaging educator (British)
+    //   cgSgspJ2msm6clMCkdW9  Jessica - playful, bright, warm (kid-friendly)
+    const VOICE_ID = "EXAVITQu4vr4xnSDxMaL";   // Sarah - warm, multilingual-stable
     if (env.ELEVENLABS_API_KEY) {
-      const voiceId = "NR28ewDldNdNH9MMUJP2";   // Loïs - mother's cloned voice
+      const voiceId = VOICE_ID;
       try {
-        // Voice cloning needs expression to sound LIKE the cloned speaker.
-        // Earlier teach-mode settings (stability 0.7, style 0.1, speed 0.8)
-        // killed Loïs's voice character - she sounded robotic and flat.
-        // Keep teach close to chat: only mildly steadier and a touch slower.
+        // Premade voices hold up at higher stability without going flat, so
+        // teach mode can be a touch steadier for clean, repeatable phonemes.
         const settings = teach
-          ? { stability: 0.5,  similarity_boost: 0.85, style: 0.25, use_speaker_boost: true, speed: slow ? 0.85 : 0.92 }
-          : { stability: 0.45, similarity_boost: 0.8,  style: 0.35, use_speaker_boost: true, speed: slow ? 0.9  : 1.0  };
+          ? { stability: 0.6,  similarity_boost: 0.8, style: 0.15, use_speaker_boost: true, speed: slow ? 0.85 : 0.92 }
+          : { stability: 0.5,  similarity_boost: 0.8, style: 0.3,  use_speaker_boost: true, speed: slow ? 0.9  : 1.0  };
         const r = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
           {
