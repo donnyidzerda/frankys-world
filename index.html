@@ -809,7 +809,7 @@ const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY
 // Single source of truth for TTS audio versioning. Rides in the request
 // URL (busts Cloudflare edge cache) AND names the browser Cache Storage
 // bucket. Bump on ANY voice change: worker settings, PRONOUNCE, phrasing.
-const TTS_REV = 20;
+const TTS_REV = 21;
 let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
 // iOS Safari blocks programmatic audio until an <audio> element has been
 // started inside a real user gesture. We unlock ONE shared element on the
@@ -835,34 +835,14 @@ function unlockAudio() {
 // Franky is an English name (sounds like "Frenkie"). Dutch and Spanish TTS
 // would otherwise read it letter-by-letter ("frahn-kee"). Respell so the
 // dog's name sounds the same in every language the app speaks.
-// Word-level lookup: the regex below splits on apostrophes too, so
-// "Franky's" is matched as "Franky" + "s" and respelled to "Frenkie's".
-// Dutch words spelled like English ones ("slang", "man", "pen") confuse
-// the multilingual model into English phonemes. Respell with "ah" to
-// force the Dutch /ɑ/ vowel; add more as we hear them.
+// Word-level lookup for TTS only (the screen always shows the real word).
+// Now that each language has a NATIVE voice, the old "ah" respellings for
+// Dutch /ɑ/ words ("man" -> "mahn") backfire: the Dutch voice reads "mahn"
+// as the long "maan". So we keep only the name fix; native voices handle
+// their own vowels. Add an entry only if a native voice truly gets a word
+// wrong - and test it before committing.
 const PRONOUNCE = {
-  nl: {
-    franky: "frenkie",
-    slang: "slahng",      // /slɑŋ/ not English /slæŋ/
-    man: "mahn",
-    tas: "tahs",
-    kat: "kaht",
-    dak: "dahk",
-    pan: "pahn",
-    lat: "laht",
-    bal: "bahl",
-    nat: "naht",
-    sap: "sahp",
-    tak: "tahk",
-    kar: "kahr",
-    map: "mahp",
-    lat: "laht",
-    wak: "wahk",
-    laf: "lahf",
-    zak: "zahk",
-    jas: "jahs",
-    gat: "gaht",
-  },
+  nl: { franky: "frenkie" },
   en: {},
   es: { franky: "frenki" },
 };
@@ -2908,8 +2888,11 @@ function ReadScreen() {
   // the mic; if speech recognition is available it verifies the read aloud
   // (auto-pass on a match) and logs the transcript for the parent; otherwise
   // it falls back to the child/parent self-judge. Never blocks on a miss.
-  function micPanel({ promptText, sayIntro, modelEcho, recTarget, bumpKey, again }) {
+  function micPanel({ promptText, sayIntro, modelEcho, recTarget, bumpKey, again, display }) {
     promptEl.textContent = promptText;
+    // Keep the word/sentence on screen at the "read it aloud" step - the
+    // child needs to SEE what to read while the mic is up.
+    if (display != null) showEl.innerHTML = display;
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     const wrap = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:12px" });
     const mic = el("button", { cls: "micbtn", html: `<span class="mr"></span>` + ic("mic", 50, "var(--plum)") });
@@ -3009,7 +2992,7 @@ function ReadScreen() {
       micPanel({
         promptText: t("decodeBlend"), sayIntro: t("decodeBlendSay"),
         modelEcho: w + ". " + w + ".", recTarget: w, bumpKey: "w:" + w,
-        again: () => decodeItem(it),
+        display: lowerArt(w, 120), again: () => decodeItem(it),
       });
     }
   }
@@ -3028,7 +3011,7 @@ function ReadScreen() {
       html: ic("next", 20, "#fff") + `<span>${t("readNext")}</span>` });
     go2.onclick = () => micPanel({
       promptText: t("sightRead")(w), sayIntro: "", modelEcho: w + ". " + w + ".",
-      recTarget: w, bumpKey: "sight:" + w, again: () => sightItem(it),
+      recTarget: w, bumpKey: "sight:" + w, display: lowerArt(w, 120), again: () => sightItem(it),
     });
     choices.append(go2);
   }
@@ -3052,10 +3035,14 @@ function ReadScreen() {
     replay.onclick = () => { Sound.fx.tap(); speak(sent + ".", false); };
     frankySay("happy", t("sentSay"), false);
     function showRead() {
+      // Render the line word-by-word (lowerArt drops spaces) so the child
+      // can read the whole sentence while the mic is up.
+      const line = `<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center">${
+        words.map(wd => lowerArt(wd, 50)).join("")}</div>`;
       micPanel({
         promptText: t("sentRead"), sayIntro: t("sentReadSay"),
         modelEcho: sent + ".", recTarget: sent, bumpKey: "sent:" + sent,
-        again: () => sentenceItem(it),
+        display: line, again: () => sentenceItem(it),
       });
     }
   }
