@@ -271,12 +271,18 @@ export default {
     // eleven_multilingual_v2 languages (Dutch / English / Spanish included).
     // OpenAI stays the automatic fallback on any ElevenLabs error.
     //
-    // To swap the voice, change VOICE_ID below and bump TTS_REV in the app
-    // (so cached audio regenerates). Warm female premade candidates:
-    //   EXAVITQu4vr4xnSDxMaL  Sarah   - mature, reassuring, soft (current)
-    //   Xb7hH8MSUJpSbSDYk0k2  Alice   - clear, engaging educator (British)
-    //   cgSgspJ2msm6clMCkdW9  Jessica - playful, bright, warm (kid-friendly)
-    const VOICE_ID = "EXAVITQu4vr4xnSDxMaL";   // Sarah - warm, multilingual-stable
+    // One native-sounding voice PER LANGUAGE - far better pronunciation for
+    // phonics than a single English voice speaking all three. To swap a
+    // voice, change its id here and bump TTS_REV in the app.
+    //   nl: Roos    - kind, articulate, standard Dutch (educational)
+    //   es: Adriana - warm, calm, neutral Latin-American Spanish
+    //   en: Sarah   - mature, reassuring, warm (premade)
+    const VOICE_BY_LANG = {
+      nl: "7qdUFMklKPaaAVMsBTBt",
+      es: "jI8zlZKtaOjhGPBV6elt",
+      en: "EXAVITQu4vr4xnSDxMaL",
+    };
+    const VOICE_ID = VOICE_BY_LANG[(searchParams.get("l") || "en").slice(0, 2)] || VOICE_BY_LANG.en;
     if (env.ELEVENLABS_API_KEY) {
       const voiceId = VOICE_ID;
       try {
