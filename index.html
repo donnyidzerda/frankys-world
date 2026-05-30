@@ -809,7 +809,7 @@ const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY
 // Single source of truth for TTS audio versioning. Rides in the request
 // URL (busts Cloudflare edge cache) AND names the browser Cache Storage
 // bucket. Bump on ANY voice change: worker settings, PRONOUNCE, phrasing.
-const TTS_REV = 18;
+const TTS_REV = 19;
 let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
 // iOS Safari blocks programmatic audio until an <audio> element has been
 // started inside a real user gesture. We unlock ONE shared element on the
@@ -1589,16 +1589,16 @@ const I18N_X = {
     readTitle:"Lezen met Franky", readSub:n=>`Je kent al ${n} klanken. Tik om te oefenen!`,
     readListen:"Luister naar Franky", readWhichLetter:"Welke letter hoor je?",
     readAgain:"Nog eens", readNext:"Verder", readMore:"Nog meer lezen",
-    echoPrompt:"Nu jij. Zeg de klank.", echoHold:"Houd vast en zeg het", echoTap:"Tik en zeg het", echoTapStop:"Tik als je klaar bent",
-    echoSay:c=>`Nu jij. Houd de knop vast en zeg ${c}.`,
+    echoPrompt:"Nu jij. Zeg de klank.", echoTap:"Tik en zeg het", echoListening:"Ik luister...",
+    echoSay:c=>`Nu jij. Tik op de knop en zeg ${c}.`,
     echoJudge:"Hoe ging het?", echoGood:"Dat ging goed", echoRetry:"Nog een keer",
     decodePrompt:"Lees het woord", decodeBlend:"Nu het hele woord",
     decodeSay:"Tik op elke letter en zeg de klank.",
-    decodeBlendSay:"Knap! Houd de knop vast en lees nu het hele woord.",
+    decodeBlendSay:"Knap! Tik op de knop en lees nu het hele woord.",
     sightPrompt:"Onthoud dit woord", sightSay:w=>`Dit woordje is "${w}". Dat onthoud je gewoon.`,
-    sightRead:w=>`Houd vast en zeg "${w}".`,
+    sightRead:w=>`Tik en zeg "${w}".`,
     sentPrompt:"Lees de zin", sentSay:"Tik op elk woord, dan lees je de hele zin.",
-    sentRead:"Lees de hele zin", sentReadSay:"Knap! Houd vast en lees nu de hele zin hardop.",
+    sentRead:"Lees de hele zin", sentReadSay:"Knap! Tik op de knop en lees nu de hele zin hardop.",
     probeTitle:"Wat ken je al?", probeSay:"Tik op de klanken die je al kent. Geen zorgen als je er een niet weet.",
     probeKnow:"Deze ken ik", probeDone:"Klaar",
     rdProgressTitle:"Leesvoortgang",
@@ -1656,16 +1656,16 @@ const I18N_X = {
     readTitle:"Reading with Franky", readSub:n=>`You know ${n} sounds. Tap to practise!`,
     readListen:"Listen to Franky", readWhichLetter:"Which letter do you hear?",
     readAgain:"Again", readNext:"Next", readMore:"Read more",
-    echoPrompt:"Your turn. Say the sound.", echoHold:"Hold and say it", echoTap:"Tap and say it", echoTapStop:"Tap when you're done",
-    echoSay:c=>`Your turn. Hold the button and say ${c}.`,
+    echoPrompt:"Your turn. Say the sound.", echoTap:"Tap and say it", echoListening:"I'm listening...",
+    echoSay:c=>`Your turn. Tap the button and say ${c}.`,
     echoJudge:"How did it go?", echoGood:"That went well", echoRetry:"Once more",
     decodePrompt:"Read the word", decodeBlend:"Now the whole word",
     decodeSay:"Tap each letter and say its sound.",
-    decodeBlendSay:"Well done! Hold the button and read the whole word now.",
+    decodeBlendSay:"Well done! Tap the button and read the whole word now.",
     sightPrompt:"Remember this word", sightSay:w=>`This little word is "${w}". You just remember it.`,
-    sightRead:w=>`Hold and say "${w}".`,
+    sightRead:w=>`Tap and say "${w}".`,
     sentPrompt:"Read the sentence", sentSay:"Tap each word, then read the whole sentence.",
-    sentRead:"Read the whole line", sentReadSay:"Great! Hold and read the whole sentence aloud.",
+    sentRead:"Read the whole line", sentReadSay:"Great! Tap the button and read the whole sentence aloud.",
     probeTitle:"What do you know?", probeSay:"Tap the sounds you already know. No worries if you don't know one.",
     probeKnow:"I know this", probeDone:"Done",
     rdProgressTitle:"Reading progress",
@@ -1723,16 +1723,16 @@ const I18N_X = {
     readTitle:"Leer con Franky", readSub:n=>`Ya conoces ${n} sonidos. ¡Toca para practicar!`,
     readListen:"Escucha a Franky", readWhichLetter:"¿Qué letra escuchas?",
     readAgain:"Otra vez", readNext:"Seguir", readMore:"Leer más",
-    echoPrompt:"Ahora tú. Di el sonido.", echoHold:"Mantén y dilo", echoTap:"Toca y dilo", echoTapStop:"Toca cuando termines",
-    echoSay:c=>`Ahora tú. Mantén el botón y di ${c}.`,
+    echoPrompt:"Ahora tú. Di el sonido.", echoTap:"Toca y dilo", echoListening:"Te escucho...",
+    echoSay:c=>`Ahora tú. Toca el botón y di ${c}.`,
     echoJudge:"¿Cómo fue?", echoGood:"Salió bien", echoRetry:"Otra vez",
     decodePrompt:"Lee la palabra", decodeBlend:"Ahora la palabra entera",
     decodeSay:"Toca cada letra y di su sonido.",
-    decodeBlendSay:"¡Bien! Mantén el botón y lee la palabra entera.",
+    decodeBlendSay:"¡Bien! Toca el botón y lee la palabra entera.",
     sightPrompt:"Recuerda esta palabra", sightSay:w=>`Esta palabrita es "${w}". Solo la recuerdas.`,
-    sightRead:w=>`Mantén y di "${w}".`,
+    sightRead:w=>`Toca y di "${w}".`,
     sentPrompt:"Lee la frase", sentSay:"Toca cada palabra, luego lee la frase entera.",
-    sentRead:"Lee la frase entera", sentReadSay:"¡Bien! Mantén y lee la frase entera en voz alta.",
+    sentRead:"Lee la frase entera", sentReadSay:"¡Bien! Toca el botón y lee la frase entera en voz alta.",
     probeTitle:"¿Qué ya sabes?", probeSay:"Toca los sonidos que ya conoces. No pasa nada si no sabes alguno.",
     probeKnow:"Este lo sé", probeDone:"Listo",
     rdProgressTitle:"Progreso de lectura",
@@ -2826,14 +2826,12 @@ function ReadScreen() {
     const b = el("button", { cls: "card", css: "padding:16px 20px;min-width:96px;background:var(--surface)" });
     b.innerHTML = inner; b.onclick = on; return b;
   }
-  // Echo: the child's active-production turn. Franky says the sound, the
-  // child holds the mic and says it back, Franky models it once more, and
-  // the child self-assesses (Reggio: the child as judge). "Once more"
-  // simply restarts - never a wrong answer, only another try.
-  // Tap-to-talk (not hold): a 3-year-old can't reliably press-and-hold.
-  // First tap starts recording (red), second tap (or a 7s safety timeout,
-  // or recognition ending) stops it and fires onStop. label/hint updates.
-  function wireTapMic(mic, hint, onStart, onStop) {
+  // Tap-to-talk: a 3-year-old can't reliably press-and-hold, and two taps
+  // (start/stop) confuse. So it's ONE tap: tap the mic, say it, and it
+  // stops on its own after autoMs. (Tapping again just stops a touch early.)
+  // The hint reflects this - "Tik en zeg het" then "Ik luister..." - and
+  // matches what Franky says aloud.
+  function wireTapMic(mic, hint, onStart, onStop, autoMs) {
     let rec = false, used = false, autoT = 0;
     const setIcon = c => { const sv = mic.querySelector("svg"); if (sv) sv.setAttribute("stroke", c); };
     function stop() {
@@ -2849,9 +2847,9 @@ function ReadScreen() {
         rec = true; mic.classList.add("rec"); setIcon("var(--cream)"); buzz(14);
         try { speechSynthesis.cancel(); } catch {}
         if (_ttsEl) try { _ttsEl.pause(); } catch {}
-        if (hint) hint.textContent = t("echoTapStop");
+        if (hint) hint.textContent = t("echoListening");
         onStart && onStart();
-        autoT = setTimeout(stop, 7000);          // safety auto-stop
+        autoT = setTimeout(stop, autoMs || 3000);   // auto-stop, no 2nd tap needed
       } else stop();
     };
     return { stop };
@@ -2877,7 +2875,7 @@ function ReadScreen() {
       // Franky models the sound right after the child's attempt.
       setTimeout(() => speak(stretched + ". " + kw + ".", true), 220);
       setTimeout(showJudge, 1400);
-    });
+    }, 2400);   // a single sound - short window
 
     function showJudge() {
       promptEl.textContent = t("echoJudge");
@@ -2956,7 +2954,9 @@ function ReadScreen() {
         }
         if (m === true) { promptEl.textContent = t("echoJudge"); setTimeout(pass, 1300); }
         else setTimeout(showJudge, 1500);                 // miss/no-API → self-judge
-      });
+      },
+      // longer window for a whole sentence than a single word
+      recTarget && recTarget.indexOf(" ") >= 0 ? 4500 : 3000);
   }
 
   // #1 Decode with continuous blending. Child taps OR slides a finger across
@@ -3022,8 +3022,10 @@ function ReadScreen() {
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     replay.onclick = () => { Sound.fx.tap(); speak(w + ". " + w + ".", true); };
     frankySay("happy", t("sightSay")(w), true);
+    // "Verder" just reveals the speak step - it is not itself a speech
+    // action, so it gets a next arrow, not a mic.
     const go2 = el("button", { cls: "btn btn-go", css: "min-width:120px",
-      html: ic("mic", 20, "#fff") + `<span>${t("readNext")}</span>` });
+      html: ic("next", 20, "#fff") + `<span>${t("readNext")}</span>` });
     go2.onclick = () => micPanel({
       promptText: t("sightRead")(w), sayIntro: "", modelEcho: w + ". " + w + ".",
       recTarget: w, bumpKey: "sight:" + w, again: () => sightItem(it),
