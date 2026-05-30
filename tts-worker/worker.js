@@ -48,8 +48,8 @@ const newCode = () => {
    This is conflict-free: four devices can edit offline and reconcile with
    zero progress lost. MUST stay mirrored with mergeState() in index.html.
    ------------------------------------------------------------------------- */
-const SYNC_MAXNUM = ["stars", "worldSeenStars", "readIntro", "frankyLevel", "buddyLevel"];
-const SYNC_MAXMAP = ["readBox", "readProd", "completed"];
+const SYNC_MAXNUM = ["stars", "worldSeenStars", "readIntro", "mathIntro", "frankyLevel", "buddyLevel"];
+const SYNC_MAXMAP = ["readBox", "readProd", "completed", "mathBox"];
 const SYNC_UNION  = ["stickers"];
 const SYNC_KEEP   = new Set(["syncId", "syncTs", "id"]);   // never merged from remote
 function mergeState(local, remote, localTs, remoteTs) {

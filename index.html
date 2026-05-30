@@ -343,6 +343,7 @@ const defaultState = () => ({
   caseMode: "upper", drawDiff: 1, writeDiff: 1, sayName: "", worldSeenStars: 0,
   readBox: {}, readIntro: 1, readProd: {},
   readLat: {}, readPlaced: false, readHeard: {},   // Hoven: latency, placement, heard-log
+  mathBox: {}, mathIntro: 3, mathLat: {},          // number sense mastery (start range 1-3)
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", frankyLevel: 1,
   syncId: null, syncTs: 0,             // cross-device sync (set when linked)
   settings: { muted: false, voice: true, slowVoice: false,
@@ -420,8 +421,8 @@ function syncSnapshot(s) {
 // Monotonic learning state (stars, mastery boxes, completed, stickers)
 // merges conflict-free: max for counters, per-key max for count-maps, union
 // for sets. Only true profile metadata uses last-write-wins by timestamp.
-const SYNC_MAXNUM = ["stars", "worldSeenStars", "readIntro", "frankyLevel", "buddyLevel"];
-const SYNC_MAXMAP = ["readBox", "readProd", "completed"];
+const SYNC_MAXNUM = ["stars", "worldSeenStars", "readIntro", "mathIntro", "frankyLevel", "buddyLevel"];
+const SYNC_MAXMAP = ["readBox", "readProd", "completed", "mathBox"];
 const SYNC_UNION  = ["stickers"];
 const SYNC_KEEP   = new Set(["syncId", "syncTs", "id"]);
 function mergeState(local, remote, localTs, remoteTs) {
@@ -1201,6 +1202,13 @@ const I18N = {
     pill_read:"Lezen", pillSub_read:"Klanken en woordjes met Franky",
     pill_write:"Schrijven", pillSub_write:"Letters, cijfers en vormen natrekken",
     pill_draw:"Tekenen", pillSub_draw:"Dieren, voertuigen en vrij tekenen",
+    pill_math:"Rekenen", pillSub_math:"Hoeveelheden en getallen met Franky",
+    mathTitle:"Rekenen met Franky",
+    subPrompt:"Hoeveel zie je?", subSay:"Hoeveel zie je? Tik op het goede getal.",
+    countPrompt:"Tel ze samen", countSay:"Tik op elk om te tellen.",
+    countWhich:"Hoeveel waren het?",
+    bondPrompt:"Maak het samen", bondSay:n=>`Samen is het ${n}. Welk stukje hoort erbij?`,
+    mathAgain:"Nog eens", mathSuggest:n=>`Doe nu dit: oefen met de getallen tot ${n}.`,
     grownHint:"Volwassenen: houd deze knop ingedrukt om de instellingen te openen.",
     stepOf:(i,m)=>`Stap ${i} van ${m}`,
     showMe:"Doe voor", undo:"Terug", clear:"Wissen", next:"Verder", allDone:"Klaar!",
@@ -1256,6 +1264,13 @@ const I18N = {
     pill_read:"Reading", pillSub_read:"Sounds and words with Franky",
     pill_write:"Writing", pillSub_write:"Trace letters, numbers and shapes",
     pill_draw:"Drawing", pillSub_draw:"Animals, vehicles and free drawing",
+    pill_math:"Numbers", pillSub_math:"Quantities and numbers with Franky",
+    mathTitle:"Numbers with Franky",
+    subPrompt:"How many do you see?", subSay:"How many do you see? Tap the right number.",
+    countPrompt:"Count them together", countSay:"Tap each one to count.",
+    countWhich:"How many were there?",
+    bondPrompt:"Make it together", bondSay:n=>`Together it's ${n}. Which piece is missing?`,
+    mathAgain:"Again", mathSuggest:n=>`Do this next: practise the numbers up to ${n}.`,
     grownHint:"Grown-ups, press and hold this to open settings.",
     stepOf:(i,m)=>`Step ${i} of ${m}`,
     showMe:"Show me", undo:"Undo", clear:"Clear", next:"Next", allDone:"All done",
@@ -1311,6 +1326,13 @@ const I18N = {
     pill_read:"Leer", pillSub_read:"Sonidos y palabras con Franky",
     pill_write:"Escribir", pillSub_write:"Trazar letras, números y formas",
     pill_draw:"Dibujar", pillSub_draw:"Animales, vehículos y dibujo libre",
+    pill_math:"Números", pillSub_math:"Cantidades y números con Franky",
+    mathTitle:"Números con Franky",
+    subPrompt:"¿Cuántos ves?", subSay:"¿Cuántos ves? Toca el número correcto.",
+    countPrompt:"Cuéntalos juntos", countSay:"Toca cada uno para contar.",
+    countWhich:"¿Cuántos había?",
+    bondPrompt:"Hazlo juntos", bondSay:n=>`Juntos es ${n}. ¿Qué parte falta?`,
+    mathAgain:"Otra vez", mathSuggest:n=>`Haz esto ahora: practica los números hasta ${n}.`,
     grownHint:"Adultos: mantén pulsado este botón para abrir los ajustes.",
     stepOf:(i,m)=>`Paso ${i} de ${m}`,
     showMe:"Muéstrame", undo:"Deshacer", clear:"Borrar", next:"Siguiente", allDone:"¡Listo!",
@@ -3177,6 +3199,218 @@ function readingDashboard() {
   return card;
 }
 
+/* ----- 8h. "Rekenen met Franky" - number-sense engine -----------------
+   Mentava-style mastery applied to early maths: JUMP-Math micro-steps +
+   Numberblocks/NCETM block representation + subitizing + Singapore CPA
+   (concrete dots -> structured ten-frame -> the symbol). Quantity FIRST:
+   recognise a quantity, then count it, then compose it - mastery-gated and
+   spaced, exactly like the reading engine. */
+// The numeral, drawn from the same ball-and-stick GLYPHs as writing.
+function digitArt(n, size) {
+  const chars = String(n).split("").filter(c => GLYPH[c]); const gap = 8;
+  const wl = chars.reduce((a, c) => a + (GLYPH[c].b[2] - GLYPH[c].b[0]), 0) + gap * (chars.length - 1);
+  const s = Math.min(0.92, 70 / wl);
+  const y0 = Math.min(...chars.map(c => GLYPH[c].b[1])), y1 = Math.max(...chars.map(c => GLYPH[c].b[3]));
+  const oy = 50 - ((y0 + y1) / 2) * s; let x = 50 - (wl * s) / 2; const paths = [];
+  chars.forEach(c => { const g = GLYPH[c], ox = x - g.b[0] * s;
+    paths.push(...g.d({ s, x: lx => ox + lx * s, y: ly => oy + ly * s })); x += (g.b[2] - g.b[0] + gap) * s; });
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${
+    paths.map(d => `<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}</svg>`;
+}
+// A ten-frame: the standard structure that builds the "5 and 10" anchors.
+// Fills the top row first, then the bottom - so a quantity is SEEN, not
+// counted. `lit` optionally shows only the first `lit` dots (for bonds).
+function dotsArt(n, size, lit) {
+  const cols = 5, cw = 18, x0 = 5, y0 = 32, show = (lit == null ? n : lit);
+  let g = "";
+  for (let r = 0; r < 2; r++) for (let c = 0; c < cols; c++) {
+    const i = r * cols + c, cx = x0 + c * cw + cw / 2, cy = y0 + r * cw + cw / 2;
+    g += `<rect x="${x0 + c * cw}" y="${y0 + r * cw}" width="${cw}" height="${cw}" rx="3" fill="none" stroke="var(--line)" stroke-width="1.4"/>`;
+    if (i < n) g += `<circle cx="${cx}" cy="${cy}" r="6.4" fill="${i < show ? "var(--clay)" : "var(--surface-2)"}" ${i < show ? "" : 'stroke="var(--line)" stroke-width="1.2"'}/>`;
+  }
+  return `<svg width="${size}" height="${size * 0.74}" viewBox="0 0 100 74">${g}</svg>`;
+}
+
+const mBox = k => (S.mathBox && S.mathBox[k]) || 0;
+let _mAdvanced = new Set();
+const mBump = (k, ok) => {
+  S.mathBox = S.mathBox || {};
+  if (!ok) { S.mathBox[k] = Math.max(1, mBox(k)); return; }
+  if (_mAdvanced.has(k)) return;
+  S.mathBox[k] = Math.min(5, mBox(k) + 1); _mAdvanced.add(k);
+};
+const mRange = () => Array.from({ length: Math.min(S.mathIntro || 3, 10) }, (_, i) => i + 1);
+const mByNeed = pre => (a, b) => mBox(pre + a) - mBox(pre + b) || Math.random() - .5;
+function buildMathSession() {
+  const range = mRange(), items = [];
+  const bySub = [...range].sort(mByNeed("sub:"));
+  for (let i = 0; i < 4; i++) items.push({ t: "sub", n: bySub[i % bySub.length] });
+  const byCnt = [...range].sort(mByNeed("cnt:"));
+  for (let i = 0; i < 2; i++) items.push({ t: "count", n: byCnt[i % byCnt.length] });
+  // Number bonds (composition) once a few quantities are solid - the real
+  // "decoding" of maths: see the whole, find the missing part.
+  const solid = range.filter(n => mBox("sub:" + n) >= 2).length;
+  const totals = range.filter(n => n >= 3);
+  if ((S.mathIntro || 3) >= 4 && solid >= 3 && totals.length) {
+    const byBond = [...totals].sort(mByNeed("bond:"));
+    for (let i = 0; i < 3; i++) items.push({ t: "bond", n: byBond[i % byBond.length] });
+  }
+  // interleave: never two in a row on the same number+skill
+  const keyOf = it => it.t + it.n, out = [], pool = items.slice(0, 9); let last = null;
+  while (pool.length) { let i = pool.findIndex(it => keyOf(it) !== last); if (i < 0) i = 0;
+    const [it] = pool.splice(i, 1); out.push(it); last = keyOf(it); }
+  return out;
+}
+function mAdvance() {
+  // Introduce the next number once the current top is recognised AND counted.
+  const top = mRange()[mRange().length - 1];
+  if (top && mBox("sub:" + top) >= 2 && mBox("cnt:" + top) >= 2 && (S.mathIntro || 3) < 10) S.mathIntro++;
+}
+const mDistract = (n, max) => {
+  const pool = []; for (let k = 1; k <= Math.max(max, 5); k++) if (k !== n) pool.push(k);
+  const out = []; while (out.length < 2 && pool.length) out.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]);
+  return out;
+};
+
+function MathScreen() {
+  _mAdvanced = new Set();
+  const session = buildMathSession();
+  let i = 0, busy = false, finished = false, wrongStreak = 0, shownAt = 0;
+  const s = el("div", { cls: "screen" });
+  const head = el("div", { css: "display:flex;align-items:center;gap:10px;padding:14px 18px 6px" });
+  const back = el("button", { cls: "btn btn-quiet btn-icon", html: ic("back", 22) });
+  back.onclick = () => { Sound.fx.tap(); go("home"); };
+  head.append(back, el("div", { css: "flex:1", html: `<div class="t-title" style="color:var(--ochre)">${t("mathTitle")}</div>` }),
+    muteBtn(), el("div", { id: "buddy", "data-size": 52, html: Franky("happy", 52) }));
+  s.append(head);
+  const prog = el("div", { cls: "prog", css: "margin:2px auto 8px;max-width:640px;width:calc(100% - 40px)", html: "<i style='width:0'></i>" });
+  s.append(prog);
+  const stage = el("div", { cls: "cap", css: "flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:10px 18px;text-align:center" });
+  const promptEl = el("div", { cls: "t-title" });
+  const showEl = el("div", { css: "min-height:130px;display:flex;align-items:center;justify-content:center" });
+  const choices = el("div", { css: "display:flex;gap:14px;flex-wrap:wrap;justify-content:center" });
+  const replay = el("button", { cls: "btn btn-quiet", html: ic("sound", 20) + `<span>${t("mathAgain")}</span>` });
+  stage.append(promptEl, showEl, choices, replay);
+  s.append(stage); APP.append(s);
+
+  const numTile = (n, on) => {
+    const b = el("button", { cls: "card", css: "padding:10px 16px;min-width:84px;background:var(--surface)" });
+    b.innerHTML = digitArt(n, 64); b.onclick = on; return b;
+  };
+  function resolve(ok, key) {
+    if (busy) return; busy = true; choices.style.pointerEvents = "none";
+    if (ok) { Sound.fx.step(); buzz(20); if (key) mBump(key, true); wrongStreak = 0; }
+    else { Sound.fx.soft(); buzz(12); if (key) mBump(key, false); wrongStreak++; }
+    if (key && shownAt) { S.mathLat = S.mathLat || {}; const dt = Date.now() - shownAt;
+      S.mathLat[key] = Math.round((S.mathLat[key] || dt) * 0.6 + dt * 0.4);
+      if (ok && dt < 1500 && mBox(key) >= 3) S.mathBox[key] = 5; }
+    i++; prog.firstChild.style.width = (i / session.length) * 100 + "%";
+    const tired = wrongStreak >= 2 && i >= 5;
+    setTimeout(() => (i >= session.length || tired) ? finish() : showItem(), ok ? 700 : 1500);
+  }
+  // SUBITIZE: see a quantity, tap the matching numeral. (recognition)
+  function subitizeItem(it) {
+    const n = it.n;
+    promptEl.textContent = t("subPrompt");
+    showEl.innerHTML = dotsArt(n, 240);
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    replay.onclick = () => { Sound.fx.tap(); speak(t("subSay"), false); };
+    frankySay("happy", t("subSay"), false);
+    const opts = [n, ...mDistract(n, S.mathIntro || 3)].sort(() => Math.random() - .5);
+    const tiles = {};
+    opts.forEach(o => {
+      const b = numTile(o, () => {
+        if (busy) return;
+        if (o === n) { b.classList.add("rc-ok"); speak(String(n), false); resolve(true, "sub:" + n); }
+        else { b.classList.add("rc-no"); if (tiles[n]) tiles[n].classList.add("rc-ok"); resolve(false, "sub:" + n); }
+      });
+      tiles[o] = b; choices.append(b);
+    });
+    setTimeout(() => speak(t("subSay"), false), 250);
+  }
+  // COUNT: tap each object in turn, Franky counts aloud, then name the total.
+  function countItem(it) {
+    const n = it.n;
+    promptEl.textContent = t("countPrompt");
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    showEl.innerHTML = "";
+    const row = el("div", { css: "display:flex;gap:12px;justify-content:center;flex-wrap:wrap;max-width:380px" });
+    let count = 0; const done = new Set();
+    for (let k = 0; k < n; k++) {
+      const d = el("button", { css: "width:46px;height:46px;border-radius:50%;background:var(--clay);opacity:.5" });
+      d.onclick = () => {
+        if (done.has(k)) return; done.add(k); count++;
+        d.style.opacity = "1"; Sound.fx.tap(); buzz(10); speak(String(count), false);
+        if (done.size === n) setTimeout(askTotal, 650);
+      };
+      row.append(d);
+    }
+    showEl.append(row);
+    replay.onclick = () => { Sound.fx.tap(); speak(t("countSay"), false); };
+    frankySay("happy", t("countSay"), false);
+    function askTotal() {
+      promptEl.textContent = t("countWhich");
+      choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+      const opts = [n, ...mDistract(n, S.mathIntro || 3)].sort(() => Math.random() - .5);
+      const tiles = {};
+      opts.forEach(o => {
+        const b = numTile(o, () => {
+          if (busy) return;
+          if (o === n) { b.classList.add("rc-ok"); speak(String(n), false); resolve(true, "cnt:" + n); }
+          else { b.classList.add("rc-no"); if (tiles[n]) tiles[n].classList.add("rc-ok"); resolve(false, "cnt:" + n); }
+        });
+        tiles[o] = b; choices.append(b);
+      });
+    }
+  }
+  // BOND: see the whole and one part, find the missing part. (composition)
+  function bondItem(it) {
+    const n = it.n, part = 1 + ((Math.random() * (n - 1)) | 0), miss = n - part;
+    promptEl.textContent = t("bondPrompt");
+    showEl.innerHTML =
+      `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center">
+         ${dotsArt(n, 150, part)}
+         <span style="font-weight:900;font-size:26px;color:var(--ink-soft)">+ ?</span>
+         <span style="display:flex;flex-direction:column;align-items:center">
+           <span class="t-label">samen</span>${digitArt(n, 56)}</span>
+       </div>`;
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    replay.onclick = () => { Sound.fx.tap(); speak(t("bondSay")(n), false); };
+    frankySay("happy", t("bondSay")(n), false);
+    const opts = [miss, ...mDistract(miss, n)].sort(() => Math.random() - .5);
+    const tiles = {};
+    opts.forEach(o => {
+      const b = numTile(o, () => {
+        if (busy) return;
+        if (o === miss) { b.classList.add("rc-ok"); speak(String(miss), false); resolve(true, "bond:" + n); }
+        else { b.classList.add("rc-no"); if (tiles[miss]) tiles[miss].classList.add("rc-ok"); resolve(false, "bond:" + n); }
+      });
+      tiles[o] = b; choices.append(b);
+    });
+  }
+  function showItem() {
+    const it = session[i]; busy = false; shownAt = Date.now();
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    if (it.t === "sub") subitizeItem(it);
+    else if (it.t === "count") countItem(it);
+    else bondItem(it);
+  }
+  function finish() {
+    if (finished) return; finished = true;
+    mAdvance(); S.stars += 1; if (S.stars > S.frankyLevel * 8) S.frankyLevel++; save();
+    stage.innerHTML = "";
+    stage.append(el("div", { cls: "t-display", textContent: t("winTitle")(S.name) }));
+    const again = el("button", { cls: "btn btn-go t-head", html: ic("next", 22, "#fff") + `<span>${t("mathAgain")}</span>` });
+    again.onclick = () => { Sound.fx.tap(); go("math"); };
+    const home = el("button", { cls: "btn btn-quiet t-head", html: ic("home", 20) + `<span>${t("home")}</span>` });
+    home.onclick = () => { Sound.fx.tap(); go("home"); };
+    const row = el("div", { css: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px" });
+    row.append(again, home); stage.append(row);
+    Sound.fx.win(); buzz([20, 40, 20]); burst(.7); speak(rnd("praiseOk"));
+  }
+  showItem();
+}
+
 /* ----- 9. Router ------------------------------------------------------- */
 const APP = $("#app");
 function applyFlags() {
@@ -3192,7 +3426,7 @@ function go(screen, data) {
   applyFlags(); APP.innerHTML = "";
   ({ splash:Splash, home:Home, draw:DrawScreen, win:WinScreen,
      gallery:GalleryScreen, stickers:StickerScreen, free:FreeDraw,
-     read:ReadScreen, settings:Settings }[screen] || Home)(data);
+     read:ReadScreen, math:MathScreen, settings:Settings }[screen] || Home)(data);
 }
 window.addEventListener("DOMContentLoaded", () => {
   applyFlags();
@@ -3379,6 +3613,11 @@ function pillarScene(key) {
     <path d="M15 51 L24 43 L27 49 Z" fill="#fff"/>
     <path d="M17 50 L23 45 L25 48 Z" fill="#34302A"/>
     <path d="M13 53 l-2 7 7 -3 z" fill="#fff" opacity=".7"/></svg>`;
+  if (key === "math") return `<svg ${W}>
+    <rect x="12" y="12" width="40" height="40" rx="9" fill="#fff"/>
+    <circle cx="23" cy="23" r="4.5" fill="var(--ochre)"/><circle cx="41" cy="23" r="4.5" fill="var(--ochre)"/>
+    <circle cx="23" cy="41" r="4.5" fill="var(--ochre)"/><circle cx="41" cy="41" r="4.5" fill="var(--ochre)"/>
+    <circle cx="32" cy="32" r="4.5" fill="var(--clay)"/></svg>`;
   return `<svg ${W}>
     <path d="M13 50 Q24 56 33 50 Q42 44 51 49" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".5"/>
     <path d="M46 14 L28 38" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
@@ -3451,6 +3690,7 @@ function Home(mode) {
     };
     wrap.append(
       pillar("read", "var(--sky)", () => go("read")),
+      pillar("math", "var(--ochre)", () => go("math")),
       pillar("write", "var(--sage)", () => go("home", "write")),
       pillar("draw", "var(--clay)", () => go("home", "draw")),
     );
