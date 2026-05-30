@@ -809,7 +809,7 @@ const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY
 // Single source of truth for TTS audio versioning. Rides in the request
 // URL (busts Cloudflare edge cache) AND names the browser Cache Storage
 // bucket. Bump on ANY voice change: worker settings, PRONOUNCE, phrasing.
-const TTS_REV = 21;
+const TTS_REV = 22;
 let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
 // iOS Safari blocks programmatic audio until an <audio> element has been
 // started inside a real user gesture. We unlock ONE shared element on the
@@ -1497,18 +1497,23 @@ const SOUND = {
 // teachers avoid. NL has fricative g (stretchable); EN/ES g is a stop.
 const PLOSIVES = { nl:"bdkpt", en:"bdgkpt", es:"bdgkpt" };
 const isPlosive = c => (PLOSIVES[LC()] || PLOSIVES.en).includes(String(c).toLowerCase());
+// Only CONTINUANT consonants may be stretched (held): fricatives, nasals,
+// liquids - sss, fff, mmm, nnn, lll, rrr, zzz, vvv, plus the Dutch fricative
+// g. Vowels must NOT be stretched: a held short vowel turns long (the cause
+// of "man" -> "maan", "pot" -> "poot"). Plosives can't be held either. So
+// vowels and plosives are spoken once; only continuants are tripled.
+const STRETCHERS = { nl:"fmnlrsvzg", en:"fmnlrsvz", es:"fmnlrsvz" };
+const isStretch = c => (STRETCHERS[LC()] || STRETCHERS.en).includes(String(c).toLowerCase());
 function phonics(L) {
   const w = (SOUND[LC()] || SOUND.en)[L] || L.toLowerCase();
   const f = w[0];
   const dl = S.caseMode === "lower" ? L.toLowerCase() : L;
-  // Plosives ("plofklanken") get clipped twice with a pause, then the word.
-  // Fricatives/vowels get a stretched pure sound, period, then the word -
-  // never concatenated. Earlier "ssslang. slang." ran into one word for
-  // cloned voices ("sleng sleng"). Splitting with a period gives the model
-  // a hard boundary so the stretched sound and the real word stay distinct.
-  const say = isPlosive(L)
-    ? `${f}. ${f}. ${w}.`
-    : `${f + f + f}. ${w}.`;
+  // Continuant consonant: hold it (sss. slang.). Vowel or plosive: say it
+  // once (a. aap. / p. pot.) so a short vowel stays short. A period keeps
+  // the pure sound and the whole word as two distinct tokens for the voice.
+  const say = isStretch(L)
+    ? `${f + f + f}. ${w}.`
+    : `${f}. ${w}.`;
   return { tip: `${dl}  -  ${w}`, say };
 }
 
@@ -2640,20 +2645,20 @@ function lowerArt(str, size) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${
     paths.map(d => `<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}</svg>`;
 }
-// Blend model: each letter's sound (stretched if it stretches, clipped if
-// it's a plofklank), then the whole word.
+// Blend model: continuant consonants are held; vowels and plosives are said
+// once (a held vowel would turn long - "man" must not become "maan").
 const blendSay = w => [...w].map(c => {
   const kw = (SOUND[LC()] || SOUND.en)[c.toUpperCase()] || c;
   const f = kw[0];
-  return isPlosive(c) ? f : f + f + f;
+  return isStretch(c) ? f + f + f : f;
 }).join(". ") + ". " + w + ".";
 // #1 Continuous blending (Mentava core): the sounds slide together with NO
-// gaps - "ssspaaan" - then the whole word. Teaches blending-as-sliding, not
-// segment-then-assemble. Plosives stay short (can't stretch a /p/).
+// gaps - "ssspan" - then the whole word. Only continuants stretch; the vowel
+// stays a single short sound so the blended word keeps its short vowel.
 const blendCont = w => [...w].map(c => {
   const kw = (SOUND[LC()] || SOUND.en)[c.toUpperCase()] || c;
   const f = kw[0];
-  return isPlosive(c) ? f : f + f + f + f;
+  return isStretch(c) ? f + f + f + f : f;
 }).join("") + ". " + w + ".";
 
 /* ----- #3 speech recognition (Web Speech API) ---------------------------
@@ -2837,7 +2842,7 @@ function ReadScreen() {
   function echoItem(it) {
     const L = it.s.toUpperCase();
     const kw = (SOUND[LC()] || SOUND.en)[L] || it.s;
-    const stretched = isPlosive(it.s) ? kw[0] : kw[0] + kw[0] + kw[0];
+    const stretched = isStretch(it.s) ? kw[0] + kw[0] + kw[0] : kw[0];
     promptEl.textContent = t("echoPrompt");
     showEl.innerHTML = lowerArt(it.s, 120);
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
@@ -2958,7 +2963,7 @@ function ReadScreen() {
       const tile = tiles[idx]; tile._done = true; tile.classList.add("rc-ok");
       const ch = w[idx], kw = (SOUND[LC()] || SOUND.en)[ch.toUpperCase()] || ch, f = kw[0];
       Sound.fx.tap(); buzz(10);
-      speak(isPlosive(ch) ? f : f + f + f, true);
+      speak(isStretch(ch) ? f + f + f : f, true);
       tapped.add(idx);
       if (tapped.size === w.length) setTimeout(showBlend, 700);
     };
