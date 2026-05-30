@@ -810,7 +810,7 @@ const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY
 // Single source of truth for TTS audio versioning. Rides in the request
 // URL (busts Cloudflare edge cache) AND names the browser Cache Storage
 // bucket. Bump on ANY voice change: worker settings, PRONOUNCE, phrasing.
-const TTS_REV = 22;
+const TTS_REV = 23;
 let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
 // Every speak() bumps this. Async work (worker fetch, then play, or the
 // device-voice fallback) checks it before making sound, so a slower earlier
