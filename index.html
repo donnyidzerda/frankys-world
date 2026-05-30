@@ -1208,6 +1208,10 @@ const I18N = {
     countPrompt:"Tel ze samen", countSay:"Tik op elk om te tellen.",
     countWhich:"Hoeveel waren het?",
     bondPrompt:"Maak het samen", bondSay:n=>`Samen is het ${n}. Welk stukje hoort erbij?`,
+    comparePrompt:"Welke heeft meer?", compareSay:"Welke kant heeft er meer? Tik erop.",
+    changePrompt:"Hoeveel nu?", changeWhich:"Hoeveel zijn het er nu?",
+    changeAddSay:(s,d)=>`Er waren er ${s}. Er ${d===1?"komt":"komen"} er ${d} bij.`,
+    changeTakeSay:(s,d)=>`Er waren er ${s}. Er ${d===1?"gaat":"gaan"} er ${d} weg.`,
     mathAgain:"Nog eens", mathSuggest:n=>`Doe nu dit: oefen met de getallen tot ${n}.`,
     grownHint:"Volwassenen: houd deze knop ingedrukt om de instellingen te openen.",
     stepOf:(i,m)=>`Stap ${i} van ${m}`,
@@ -1270,6 +1274,10 @@ const I18N = {
     countPrompt:"Count them together", countSay:"Tap each one to count.",
     countWhich:"How many were there?",
     bondPrompt:"Make it together", bondSay:n=>`Together it's ${n}. Which piece is missing?`,
+    comparePrompt:"Which has more?", compareSay:"Which side has more? Tap it.",
+    changePrompt:"How many now?", changeWhich:"How many are there now?",
+    changeAddSay:(s,d)=>`There were ${s}. ${d===1?"One":d} more ${d===1?"comes":"come"} in.`,
+    changeTakeSay:(s,d)=>`There were ${s}. ${d===1?"One":d} ${d===1?"goes":"go"} away.`,
     mathAgain:"Again", mathSuggest:n=>`Do this next: practise the numbers up to ${n}.`,
     grownHint:"Grown-ups, press and hold this to open settings.",
     stepOf:(i,m)=>`Step ${i} of ${m}`,
@@ -1332,6 +1340,10 @@ const I18N = {
     countPrompt:"Cuéntalos juntos", countSay:"Toca cada uno para contar.",
     countWhich:"¿Cuántos había?",
     bondPrompt:"Hazlo juntos", bondSay:n=>`Juntos es ${n}. ¿Qué parte falta?`,
+    comparePrompt:"¿Cuál tiene más?", compareSay:"¿Qué lado tiene más? Tócalo.",
+    changePrompt:"¿Cuántos ahora?", changeWhich:"¿Cuántos hay ahora?",
+    changeAddSay:(s,d)=>`Había ${s}. ${d===1?"Llega uno":"Llegan "+d} más.`,
+    changeTakeSay:(s,d)=>`Había ${s}. ${d===1?"Se va uno":"Se van "+d}.`,
     mathAgain:"Otra vez", mathSuggest:n=>`Haz esto ahora: practica los números hasta ${n}.`,
     grownHint:"Adultos: mantén pulsado este botón para abrir los ajustes.",
     stepOf:(i,m)=>`Paso ${i} de ${m}`,
@@ -3220,13 +3232,20 @@ function digitArt(n, size) {
 // A ten-frame: the standard structure that builds the "5 and 10" anchors.
 // Fills the top row first, then the bottom - so a quantity is SEEN, not
 // counted. `lit` optionally shows only the first `lit` dots (for bonds).
-function dotsArt(n, size, lit) {
+function dotsArt(n, size, lit, split) {
+  // lit: show only the first `lit` dots filled (rest empty - for bonds).
+  // split: from index `split` on, dots use a 2nd colour (conceptual
+  // subitizing - the child SEES a quantity as two parts, e.g. 3 + 2).
   const cols = 5, cw = 18, x0 = 5, y0 = 32, show = (lit == null ? n : lit);
   let g = "";
   for (let r = 0; r < 2; r++) for (let c = 0; c < cols; c++) {
     const i = r * cols + c, cx = x0 + c * cw + cw / 2, cy = y0 + r * cw + cw / 2;
     g += `<rect x="${x0 + c * cw}" y="${y0 + r * cw}" width="${cw}" height="${cw}" rx="3" fill="none" stroke="var(--line)" stroke-width="1.4"/>`;
-    if (i < n) g += `<circle cx="${cx}" cy="${cy}" r="6.4" fill="${i < show ? "var(--clay)" : "var(--surface-2)"}" ${i < show ? "" : 'stroke="var(--line)" stroke-width="1.2"'}/>`;
+    if (i < n) {
+      const filled = i < show;
+      const col = filled ? (split != null && i >= split ? "var(--sky)" : "var(--clay)") : "var(--surface-2)";
+      g += `<circle cx="${cx}" cy="${cy}" r="6.4" fill="${col}" ${filled ? "" : 'stroke="var(--line)" stroke-width="1.2"'}/>`;
+    }
   }
   return `<svg width="${size}" height="${size * 0.74}" viewBox="0 0 100 74">${g}</svg>`;
 }
@@ -3242,21 +3261,41 @@ const mBump = (k, ok) => {
 const mRange = () => Array.from({ length: Math.min(S.mathIntro || 3, 10) }, (_, i) => i + 1);
 const mByNeed = pre => (a, b) => mBox(pre + a) - mBox(pre + b) || Math.random() - .5;
 function buildMathSession() {
-  const range = mRange(), items = [];
+  const range = mRange(), max = range[range.length - 1], items = [];
+  const pickTwo = () => { const a = 1 + ((Math.random() * max) | 0); let b;
+    do { b = 1 + ((Math.random() * max) | 0); } while (b === a); return [a, b]; };
+  // Subitize - sometimes 2-colour grouped (conceptual subitizing) once the
+  // child can see beyond 3, teaching "I see it as parts" not "I count".
   const bySub = [...range].sort(mByNeed("sub:"));
-  for (let i = 0; i < 4; i++) items.push({ t: "sub", n: bySub[i % bySub.length] });
+  for (let i = 0; i < 3; i++) {
+    const n = bySub[i % bySub.length];
+    const split = (n >= 4 && Math.random() < .5) ? 1 + ((Math.random() * (n - 1)) | 0) : null;
+    items.push({ t: "sub", n, split });
+  }
   const byCnt = [...range].sort(mByNeed("cnt:"));
   for (let i = 0; i < 2; i++) items.push({ t: "count", n: byCnt[i % byCnt.length] });
-  // Number bonds (composition) once a few quantities are solid - the real
-  // "decoding" of maths: see the whole, find the missing part.
+  // Compare (more/fewer) - a core Clements-Sarama trajectory level, and one
+  // of the strongest predictors of later maths. Always present.
+  { const [a, b] = pickTwo(); items.push({ t: "compare", a, b }); }
   const solid = range.filter(n => mBox("sub:" + n) >= 2).length;
+  // Change (join / separate) - the REAL arithmetic, introduced early once a
+  // few quantities are solid: "there were 2, one more comes, how many now?".
+  if ((S.mathIntro || 3) >= 3 && solid >= 2) {
+    const add = Math.random() < .6;
+    const delta = 1 + ((Math.random() * 2) | 0);              // +/- 1 or 2
+    let start, result;
+    if (add) { start = 1 + ((Math.random() * (max - delta)) | 0); result = start + delta; }
+    else { start = (delta + 1) + ((Math.random() * (max - delta)) | 0); result = start - delta; }
+    items.push({ t: "change", start, delta, op: add ? "add" : "take", result });
+  }
+  // Number bonds (composition) - find the missing part of a known whole.
   const totals = range.filter(n => n >= 3);
   if ((S.mathIntro || 3) >= 4 && solid >= 3 && totals.length) {
     const byBond = [...totals].sort(mByNeed("bond:"));
-    for (let i = 0; i < 3; i++) items.push({ t: "bond", n: byBond[i % byBond.length] });
+    for (let i = 0; i < 2; i++) items.push({ t: "bond", n: byBond[i % byBond.length] });
   }
-  // interleave: never two in a row on the same number+skill
-  const keyOf = it => it.t + it.n, out = [], pool = items.slice(0, 9); let last = null;
+  // interleave: avoid two of the same activity back to back
+  const keyOf = it => it.t + (it.n || it.result || it.a), out = [], pool = items.slice(0, 10); let last = null;
   while (pool.length) { let i = pool.findIndex(it => keyOf(it) !== last); if (i < 0) i = 0;
     const [it] = pool.splice(i, 1); out.push(it); last = keyOf(it); }
   return out;
@@ -3312,7 +3351,7 @@ function MathScreen() {
   function subitizeItem(it) {
     const n = it.n;
     promptEl.textContent = t("subPrompt");
-    showEl.innerHTML = dotsArt(n, 240);
+    showEl.innerHTML = dotsArt(n, 240, null, it.split);   // split = conceptual subitizing
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     replay.onclick = () => { Sound.fx.tap(); speak(t("subSay"), false); };
     frankySay("happy", t("subSay"), false);
@@ -3388,11 +3427,68 @@ function MathScreen() {
       tiles[o] = b; choices.append(b);
     });
   }
+  // COMPARE: two quantities, tap the one with MORE. (a core trajectory
+  // level and a strong predictor of later maths)
+  function compareItem(it) {
+    const { a, b } = it, more = Math.max(a, b), key = "cmp:" + more;
+    promptEl.textContent = t("comparePrompt");
+    showEl.innerHTML = "";
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    replay.onclick = () => { Sound.fx.tap(); speak(t("compareSay"), false); };
+    frankySay("happy", t("compareSay"), false);
+    const side = (val) => {
+      const card = el("button", { cls: "card", css: "padding:14px;background:var(--surface)" });
+      card.innerHTML = dotsArt(val, 200);
+      card.onclick = () => {
+        if (busy) return;
+        if (val === more && a !== b) { card.classList.add("rc-ok"); speak(String(more), false); resolve(true, key); }
+        else { card.classList.add("rc-no"); resolve(false, key); }
+      };
+      return card;
+    };
+    const wrap = el("div", { css: "display:flex;gap:18px;justify-content:center;flex-wrap:wrap" });
+    wrap.append(side(a), side(b)); choices.append(wrap);
+  }
+  // CHANGE (join / separate): the real arithmetic. Show the start set, then
+  // dots come in or go away, then name the new total.
+  function changeItem(it) {
+    const { start, delta, op, result } = it;
+    promptEl.textContent = t("changePrompt");
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    const intro = op === "add" ? t("changeAddSay")(start, delta) : t("changeTakeSay")(start, delta);
+    // First show the start quantity, then animate the change, then ask.
+    showEl.innerHTML = dotsArt(start, 220);
+    frankySay("happy", intro, false);
+    replay.onclick = () => { Sound.fx.tap(); speak(intro, false); };
+    setTimeout(() => {
+      showEl.innerHTML = dotsArt(op === "add" ? result : start, 220, op === "add" ? result : result);
+      buzz(14); Sound.fx.tap();
+      setTimeout(askTotal, 900);
+    }, 1500);
+    function askTotal() {
+      promptEl.textContent = t("changeWhich");
+      showEl.innerHTML = dotsArt(result, 220);
+      choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+      const key = "chg:" + result;
+      const opts = [result, ...mDistract(result, mRange()[mRange().length - 1])].sort(() => Math.random() - .5);
+      const tiles = {};
+      opts.forEach(o => {
+        const b = numTile(o, () => {
+          if (busy) return;
+          if (o === result) { b.classList.add("rc-ok"); speak(String(result), false); resolve(true, key); }
+          else { b.classList.add("rc-no"); if (tiles[result]) tiles[result].classList.add("rc-ok"); resolve(false, key); }
+        });
+        tiles[o] = b; choices.append(b);
+      });
+    }
+  }
   function showItem() {
     const it = session[i]; busy = false; shownAt = Date.now();
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     if (it.t === "sub") subitizeItem(it);
     else if (it.t === "count") countItem(it);
+    else if (it.t === "compare") compareItem(it);
+    else if (it.t === "change") changeItem(it);
     else bondItem(it);
   }
   function finish() {
