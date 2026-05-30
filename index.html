@@ -812,6 +812,10 @@ const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY
 // bucket. Bump on ANY voice change: worker settings, PRONOUNCE, phrasing.
 const TTS_REV = 22;
 let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
+// Every speak() bumps this. Async work (worker fetch, then play, or the
+// device-voice fallback) checks it before making sound, so a slower earlier
+// call can never play OVER a newer one - the cause of two overlapping voices.
+let _speakGen = 0;
 // iOS Safari blocks programmatic audio until an <audio> element has been
 // started inside a real user gesture. We unlock ONE shared element on the
 // first tap; afterwards Franky's realistic voice plays freely. Without this
@@ -855,7 +859,7 @@ function applyPronounce(text) {
     return hit === undefined ? w : hit;
   });
 }
-async function realisticSpeak(text, teach) {
+async function realisticSpeak(text, teach, gen) {
   const base = ttsUrl();
   if (!base || !("caches" in window)) return false;
   try {
@@ -878,8 +882,12 @@ async function realisticSpeak(text, teach) {
       if (!res.ok) return false;
       try { await _ttsCache.put(key, res.clone()); } catch {}
     }
+    const blob = await res.blob();
+    // A newer speak() started while we were fetching: abort silently so we
+    // don't play this (now stale) phrase on top of the newer one.
+    if (gen !== _speakGen) return true;
     if (_ttsObj) try { URL.revokeObjectURL(_ttsObj); } catch {}
-    _ttsObj = URL.createObjectURL(await res.blob());
+    _ttsObj = URL.createObjectURL(blob);
     _ttsEl = _ttsEl || new Audio();
     _ttsEl.playsInline = true; _ttsEl.volume = .95;
     try { _ttsEl.pause(); } catch {}
@@ -913,8 +921,11 @@ function speak(text, teach) {
   if (S.sayName && S.name) text = text.split(S.name).join(S.sayName);
   try { speechSynthesis.cancel(); } catch {}
   if (_ttsEl) try { _ttsEl.pause(); } catch {}
-  // Try the realistic voice first; gracefully fall back to the device voice.
-  realisticSpeak(text, teach).then(ok => { if (!ok) deviceSpeak(text); });
+  const gen = ++_speakGen;
+  // Try the realistic voice first; gracefully fall back to the device voice -
+  // but only if this is still the latest call, so a stale fallback can't
+  // play the device voice over a newer phrase's worker voice.
+  realisticSpeak(text, teach, gen).then(ok => { if (!ok && gen === _speakGen) deviceSpeak(text); });
 }
 
 /* ----- 5. Haptics ------------------------------------------------------- */
