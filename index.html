@@ -1208,6 +1208,8 @@ const I18N = {
     countPrompt:"Tel ze samen", countSay:"Tik op elk om te tellen.",
     countWhich:"Hoeveel waren het?",
     bondPrompt:"Maak het samen", bondSay:n=>`Samen is het ${n}. Welk stukje hoort erbij?`,
+    numLearnPrompt:"Dit cijfer", numLearnSay:n=>`Dit is de ${n}. Zoveel stippen horen erbij.`,
+    numIdPrompt:"Welk cijfer is dit?", numIdSay:"Welk cijfer hoort hierbij? Tik erop.",
     comparePrompt:"Welke heeft meer?", compareSay:"Welke kant heeft er meer? Tik erop.",
     changePrompt:"Hoeveel nu?", changeWhich:"Hoeveel zijn het er nu?",
     changeAddSay:(s,d)=>`Er waren er ${s}. Er ${d===1?"komt":"komen"} er ${d} bij.`,
@@ -1274,6 +1276,8 @@ const I18N = {
     countPrompt:"Count them together", countSay:"Tap each one to count.",
     countWhich:"How many were there?",
     bondPrompt:"Make it together", bondSay:n=>`Together it's ${n}. Which piece is missing?`,
+    numLearnPrompt:"This number", numLearnSay:n=>`This is ${n}. That many dots go with it.`,
+    numIdPrompt:"Which number is this?", numIdSay:"Which number goes with this? Tap it.",
     comparePrompt:"Which has more?", compareSay:"Which side has more? Tap it.",
     changePrompt:"How many now?", changeWhich:"How many are there now?",
     changeAddSay:(s,d)=>`There were ${s}. ${d===1?"One":d} more ${d===1?"comes":"come"} in.`,
@@ -1340,6 +1344,8 @@ const I18N = {
     countPrompt:"Cuéntalos juntos", countSay:"Toca cada uno para contar.",
     countWhich:"¿Cuántos había?",
     bondPrompt:"Hazlo juntos", bondSay:n=>`Juntos es ${n}. ¿Qué parte falta?`,
+    numLearnPrompt:"Este número", numLearnSay:n=>`Este es el ${n}. Le corresponden esos puntos.`,
+    numIdPrompt:"¿Qué número es este?", numIdSay:"¿Qué número va con esto? Tócalo.",
     comparePrompt:"¿Cuál tiene más?", compareSay:"¿Qué lado tiene más? Tócalo.",
     changePrompt:"¿Cuántos ahora?", changeWhich:"¿Cuántos hay ahora?",
     changeAddSay:(s,d)=>`Había ${s}. ${d===1?"Llega uno":"Llegan "+d} más.`,
@@ -3260,6 +3266,10 @@ const mBump = (k, ok) => {
 };
 const mRange = () => Array.from({ length: Math.min(S.mathIntro || 3, 10) }, (_, i) => i + 1);
 const mByNeed = pre => (a, b) => mBox(pre + a) - mBox(pre + b) || Math.random() - .5;
+// A numeral is "known" once recognised reliably. Until then, answers are
+// given as QUANTITIES (match the amount), so number sense develops without
+// the symbol; once known, that number's answers become the numeral (CPA).
+const mNumKnown = n => mBox("num:" + n) >= 2;
 function buildMathSession() {
   const range = mRange(), max = range[range.length - 1], items = [];
   const pickTwo = () => { const a = 1 + ((Math.random() * max) | 0); let b;
@@ -3274,6 +3284,15 @@ function buildMathSession() {
   }
   const byCnt = [...range].sort(mByNeed("cnt:"));
   for (let i = 0; i < 2; i++) items.push({ t: "count", n: byCnt[i % byCnt.length] });
+  // Numeral track: only AFTER a quantity is solid do we attach its symbol -
+  // meet it (numTeach), then map quantity -> numeral (numId). Until the
+  // numeral is known, every other activity answers with quantities.
+  const numCand = range.filter(n => mBox("sub:" + n) >= 2 && mBox("num:" + n) < 3).sort(mByNeed("num:"));
+  if (numCand.length) {
+    const n = numCand[0];
+    if (mBox("num:" + n) === 0) items.push({ t: "numTeach", n });
+    items.push({ t: "numId", n });
+  }
   // Compare (more/fewer) - a core Clements-Sarama trajectory level, and one
   // of the strongest predictors of later maths. Always present.
   { const [a, b] = pickTwo(); items.push({ t: "compare", a, b }); }
@@ -3347,7 +3366,25 @@ function MathScreen() {
     const tired = wrongStreak >= 2 && i >= 5;
     setTimeout(() => (i >= session.length || tired) ? finish() : showItem(), ok ? 700 : 1500);
   }
-  // SUBITIZE: see a quantity, tap the matching numeral. (recognition)
+  // Adaptive answer row: shows NUMERAL tiles once the answer's numeral is
+  // known, otherwise QUANTITY tiles (match the amount) - so a child answers
+  // with number sense before they can read the symbol (CPA: concrete first).
+  function answerRow(correct, key) {
+    const max = mRange()[mRange().length - 1];
+    const opts = [correct, ...mDistract(correct, max)].sort(() => Math.random() - .5);
+    const useNum = mNumKnown(correct), tiles = {};
+    opts.forEach(o => {
+      const b = el("button", { cls: "card", css: "padding:10px 14px;min-width:78px;background:var(--surface)" });
+      b.innerHTML = useNum ? digitArt(o, 60) : dotsArt(o, 108);
+      b.onclick = () => {
+        if (busy) return;
+        if (o === correct) { b.classList.add("rc-ok"); speak(String(correct), false); resolve(true, key); }
+        else { b.classList.add("rc-no"); if (tiles[correct]) tiles[correct].classList.add("rc-ok"); resolve(false, key); }
+      };
+      tiles[o] = b; choices.append(b);
+    });
+  }
+  // SUBITIZE: see a quantity, give the amount (recognition).
   function subitizeItem(it) {
     const n = it.n;
     promptEl.textContent = t("subPrompt");
@@ -3355,17 +3392,48 @@ function MathScreen() {
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     replay.onclick = () => { Sound.fx.tap(); speak(t("subSay"), false); };
     frankySay("happy", t("subSay"), false);
-    const opts = [n, ...mDistract(n, S.mathIntro || 3)].sort(() => Math.random() - .5);
+    answerRow(n, "sub:" + n);
+    setTimeout(() => speak(t("subSay"), false), 250);
+  }
+  // NUMERAL teach: meet the symbol once its quantity is solid - numeral +
+  // its ten-frame + Franky names it. Explicit, like the reading teach step.
+  function numTeachItem(it) {
+    const n = it.n;
+    promptEl.textContent = t("numLearnPrompt");
+    showEl.innerHTML =
+      `<div style="display:flex;align-items:center;gap:20px;justify-content:center">
+         ${digitArt(n, 120)}${dotsArt(n, 150)}</div>`;
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    const say = () => speak(t("numLearnSay")(n), false);
+    replay.onclick = () => { Sound.fx.tap(); say(); };
+    frankySay("happy", t("numLearnSay")(n), false);
+    const go2 = el("button", { cls: "btn btn-go", css: "min-width:120px", html: ic("next", 20, "#fff") + `<span>${t("readNext")}</span>` });
+    go2.onclick = () => {
+      if (busy) return; busy = true; Sound.fx.tap(); buzz(12); mBump("num:" + n, true);
+      i++; prog.firstChild.style.width = (i / session.length) * 100 + "%";
+      i >= session.length ? finish() : showItem();
+    };
+    choices.append(go2);
+  }
+  // NUMERAL recognise: see a quantity, pick its NUMERAL (always numerals
+  // here - this IS the symbol-learning task, quantity -> symbol mapping).
+  function numIdItem(it) {
+    const n = it.n;
+    promptEl.textContent = t("numIdPrompt");
+    showEl.innerHTML = dotsArt(n, 220);
+    choices.innerHTML = ""; choices.style.pointerEvents = "auto";
+    replay.onclick = () => { Sound.fx.tap(); speak(t("numIdSay"), false); };
+    frankySay("happy", t("numIdSay"), false);
+    const opts = [n, ...mDistract(n, mRange()[mRange().length - 1])].sort(() => Math.random() - .5);
     const tiles = {};
     opts.forEach(o => {
       const b = numTile(o, () => {
         if (busy) return;
-        if (o === n) { b.classList.add("rc-ok"); speak(String(n), false); resolve(true, "sub:" + n); }
-        else { b.classList.add("rc-no"); if (tiles[n]) tiles[n].classList.add("rc-ok"); resolve(false, "sub:" + n); }
+        if (o === n) { b.classList.add("rc-ok"); speak(String(n), false); resolve(true, "num:" + n); }
+        else { b.classList.add("rc-no"); if (tiles[n]) tiles[n].classList.add("rc-ok"); resolve(false, "num:" + n); }
       });
       tiles[o] = b; choices.append(b);
     });
-    setTimeout(() => speak(t("subSay"), false), 250);
   }
   // COUNT: tap each object in turn, Franky counts aloud, then name the total.
   function countItem(it) {
@@ -3390,16 +3458,7 @@ function MathScreen() {
     function askTotal() {
       promptEl.textContent = t("countWhich");
       choices.innerHTML = ""; choices.style.pointerEvents = "auto";
-      const opts = [n, ...mDistract(n, S.mathIntro || 3)].sort(() => Math.random() - .5);
-      const tiles = {};
-      opts.forEach(o => {
-        const b = numTile(o, () => {
-          if (busy) return;
-          if (o === n) { b.classList.add("rc-ok"); speak(String(n), false); resolve(true, "cnt:" + n); }
-          else { b.classList.add("rc-no"); if (tiles[n]) tiles[n].classList.add("rc-ok"); resolve(false, "cnt:" + n); }
-        });
-        tiles[o] = b; choices.append(b);
-      });
+      answerRow(n, "cnt:" + n);
     }
   }
   // BOND: see the whole and one part, find the missing part. (composition)
@@ -3416,16 +3475,7 @@ function MathScreen() {
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     replay.onclick = () => { Sound.fx.tap(); speak(t("bondSay")(n), false); };
     frankySay("happy", t("bondSay")(n), false);
-    const opts = [miss, ...mDistract(miss, n)].sort(() => Math.random() - .5);
-    const tiles = {};
-    opts.forEach(o => {
-      const b = numTile(o, () => {
-        if (busy) return;
-        if (o === miss) { b.classList.add("rc-ok"); speak(String(miss), false); resolve(true, "bond:" + n); }
-        else { b.classList.add("rc-no"); if (tiles[miss]) tiles[miss].classList.add("rc-ok"); resolve(false, "bond:" + n); }
-      });
-      tiles[o] = b; choices.append(b);
-    });
+    answerRow(miss, "bond:" + n);
   }
   // COMPARE: two quantities, tap the one with MORE. (a core trajectory
   // level and a strong predictor of later maths)
@@ -3469,23 +3519,15 @@ function MathScreen() {
       promptEl.textContent = t("changeWhich");
       showEl.innerHTML = dotsArt(result, 220);
       choices.innerHTML = ""; choices.style.pointerEvents = "auto";
-      const key = "chg:" + result;
-      const opts = [result, ...mDistract(result, mRange()[mRange().length - 1])].sort(() => Math.random() - .5);
-      const tiles = {};
-      opts.forEach(o => {
-        const b = numTile(o, () => {
-          if (busy) return;
-          if (o === result) { b.classList.add("rc-ok"); speak(String(result), false); resolve(true, key); }
-          else { b.classList.add("rc-no"); if (tiles[result]) tiles[result].classList.add("rc-ok"); resolve(false, key); }
-        });
-        tiles[o] = b; choices.append(b);
-      });
+      answerRow(result, "chg:" + result);
     }
   }
   function showItem() {
     const it = session[i]; busy = false; shownAt = Date.now();
     choices.innerHTML = ""; choices.style.pointerEvents = "auto";
     if (it.t === "sub") subitizeItem(it);
+    else if (it.t === "numTeach") numTeachItem(it);
+    else if (it.t === "numId") numIdItem(it);
     else if (it.t === "count") countItem(it);
     else if (it.t === "compare") compareItem(it);
     else if (it.t === "change") changeItem(it);
