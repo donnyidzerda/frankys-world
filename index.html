@@ -3266,6 +3266,16 @@ function dotsArt(n, size, lit, split) {
   }
   return `<svg width="${size}" height="${size * 0.74}" viewBox="0 0 100 74">${g}</svg>`;
 }
+// A bare digit ("2") gives the multilingual TTS voice no language context, so
+// it guesses - and reads "2" as English "two" even when the app is Dutch.
+// Speaking the number as a WORD in the current language fixes the language and
+// is clearer for a pre-reader. (Screens still SHOW the numeral.)
+const NUM_WORDS = {
+  nl: ["nul","een","twee","drie","vier","vijf","zes","zeven","acht","negen","tien","elf","twaalf","dertien","veertien","vijftien","zestien","zeventien","achttien","negentien","twintig"],
+  en: ["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen","twenty"],
+  es: ["cero","uno","dos","tres","cuatro","cinco","seis","siete","ocho","nueve","diez","once","doce","trece","catorce","quince","dieciséis","diecisiete","dieciocho","diecinueve","veinte"],
+};
+const numWord = n => (NUM_WORDS[LC()] || NUM_WORDS.en)[n] || String(n);
 
 const mBox = k => (S.mathBox && S.mathBox[k]) || 0;
 let _mAdvanced = new Set();
@@ -3389,7 +3399,7 @@ function MathScreen() {
       b.innerHTML = useNum ? digitArt(o, 60) : dotsArt(o, 108);
       b.onclick = () => {
         if (busy) return;
-        if (o === correct) { b.classList.add("rc-ok"); speak(String(correct), false); resolve(true, key); }
+        if (o === correct) { b.classList.add("rc-ok"); speak(numWord(correct), false); resolve(true, key); }
         else { b.classList.add("rc-no"); if (tiles[correct]) tiles[correct].classList.add("rc-ok"); resolve(false, key); }
       };
       tiles[o] = b; choices.append(b);
@@ -3440,7 +3450,7 @@ function MathScreen() {
     opts.forEach(o => {
       const b = numTile(o, () => {
         if (busy) return;
-        if (o === n) { b.classList.add("rc-ok"); speak(String(n), false); resolve(true, "num:" + n); }
+        if (o === n) { b.classList.add("rc-ok"); speak(numWord(n), false); resolve(true, "num:" + n); }
         else { b.classList.add("rc-no"); if (tiles[n]) tiles[n].classList.add("rc-ok"); resolve(false, "num:" + n); }
       });
       tiles[o] = b; choices.append(b);
@@ -3458,7 +3468,7 @@ function MathScreen() {
       const d = el("button", { css: "width:46px;height:46px;border-radius:50%;background:var(--clay);opacity:.5" });
       d.onclick = () => {
         if (done.has(k)) return; done.add(k); count++;
-        d.style.opacity = "1"; Sound.fx.tap(); buzz(10); speak(String(count), false);
+        d.style.opacity = "1"; Sound.fx.tap(); buzz(10); speak(numWord(count), false);
         if (done.size === n) setTimeout(askTotal, 650);
       };
       row.append(d);
@@ -3502,7 +3512,7 @@ function MathScreen() {
       card.innerHTML = dotsArt(val, 200);
       card.onclick = () => {
         if (busy) return;
-        if (val === more && a !== b) { card.classList.add("rc-ok"); speak(String(more), false); resolve(true, key); }
+        if (val === more && a !== b) { card.classList.add("rc-ok"); speak(numWord(more), false); resolve(true, key); }
         else { card.classList.add("rc-no"); resolve(false, key); }
       };
       return card;
