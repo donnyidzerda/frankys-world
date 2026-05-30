@@ -6,13 +6,15 @@
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'frankys-world-v84';
+const CACHE = 'frankys-world-v85';
 
 // Everything needed to boot fully offline after the first visit.
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './icon-180.png',
+  './icon-512.png',
   'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4',
   'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js',
 ];
