@@ -1218,7 +1218,7 @@ const I18N = {
     setSlow:"Langzamer en duidelijker praten", setSound:"Geluidseffecten",
     setHaptics:"Lichte trilling", setListen:"Franky luistert mee (lezen)", setContrast:"Hoog contrast",
     setCalm:"Rustige modus (minder beweging en geluid)",
-    artist:"Kunstenaar", ageSetting:"Leeftijd", reset:"Alles wissen",
+    artist:"Profiel", ageSetting:"Leeftijd", reset:"Alles wissen",
     resetConfirm:"De naam, sterren, stickers en alle bewaarde tekeningen wissen?",
     winTitle:n=>`Je hebt het gedaan, ${n}!`, winSticker:x=>`Je hebt de sticker ${x} verdiend.`,
     drawAgain:"Opnieuw", nextDrawing:"Volgende", home:"Home", share:"Delen",
@@ -1273,7 +1273,7 @@ const I18N = {
     setSlow:"Slower, clearer speech", setSound:"Sound effects",
     setHaptics:"Gentle vibration", setListen:"Franky listens along (reading)", setContrast:"High-contrast mode",
     setCalm:"Calm mode (less motion and sound)",
-    artist:"Artist", ageSetting:"Age setting", reset:"Reset everything",
+    artist:"Profile", ageSetting:"Age setting", reset:"Reset everything",
     resetConfirm:"Erase the name, stars, stickers and all saved drawings?",
     winTitle:n=>`You did it, ${n}`, winSticker:x=>`You earned the ${x} sticker.`,
     drawAgain:"Draw again", nextDrawing:"Next drawing", home:"Home", share:"Share",
@@ -1328,7 +1328,7 @@ const I18N = {
     setSlow:"Hablar más despacio y claro", setSound:"Efectos de sonido",
     setHaptics:"Vibración suave", setListen:"Franky escucha (lectura)", setContrast:"Alto contraste",
     setCalm:"Modo tranquilo (menos movimiento y sonido)",
-    artist:"Artista", ageSetting:"Edad", reset:"Borrar todo",
+    artist:"Perfil", ageSetting:"Edad", reset:"Borrar todo",
     resetConfirm:"¿Borrar el nombre, las estrellas, las pegatinas y todos los dibujos?",
     winTitle:n=>`¡Lo lograste, ${n}!`, winSticker:x=>`Ganaste la pegatina ${x}.`,
     drawAgain:"Otra vez", nextDrawing:"Siguiente dibujo", home:"Inicio", share:"Compartir",
@@ -4125,8 +4125,12 @@ async function GalleryScreen() {
   const wrap = el("div", { cls: "scroll fridge cap-wide", css: "flex:1;padding:18px 20px 140px;container-type:inline-size" });
   const items = await galleryAll();
   if (!items.length) {
-    wrap.append(el("div", { cls: "t-body", css: "text-align:center;margin-top:48px;color:var(--ink)",
-      textContent: t("galleryEmpty") }));
+    // Friendly empty state: Franky + a line, instead of bare text.
+    const empty = el("div", { css: "display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:56px;text-align:center" });
+    empty.append(
+      el("div", { cls: "float", css: "opacity:.9", html: Franky("warm", 120) }),
+      el("div", { cls: "t-body", css: "max-width:340px;color:var(--ink-soft)", textContent: t("galleryEmpty") }));
+    wrap.append(empty);
   } else {
     const grid = el("div", { cls: "grid", css: "gap:22px" });
     items.forEach(rec => {
@@ -4389,13 +4393,13 @@ function Settings() {
     ["muted", "mute", t("setMuted")],
     ["voice", "sound", t("setVoice")],
     ["slowVoice", "slow", t("setSlow")],
-    ["sound", "sound", t("setSound")],
+    ["sound", "play", t("setSound")],
     ["listen", "mic", t("setListen")],
   ], [
     ["haptics", "buzz", t("setHaptics")],
     ["calm", "calm", t("setCalm")],
     ["contrast", "contrast", t("setContrast")],
-    ["foundations", "calm", t("setFoundations")],
+    ["foundations", "help", t("setFoundations")],
   ]]);
 
   const prof = el("div", { cls: "card", css: "padding:18px;display:flex;flex-direction:column;gap:12px" });
