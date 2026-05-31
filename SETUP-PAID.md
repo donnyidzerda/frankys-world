@@ -1,91 +1,100 @@
-# Franky's World — Paid MVP setup (Lemon Squeezy)
+# Franky's World — Paid MVP setup (Paddle Billing)
 
-Payments run through **Lemon Squeezy** (Merchant of Record — it handles global
-VAT/sales tax for you, so no Stripe Tax/VAT/OSS setup needed).
+Payments run through **Paddle Billing** (Merchant of Record — Paddle handles
+global VAT/sales tax for you, so no Stripe Tax/VAT/OSS setup needed).
 
 The code is **built and deployed**:
-- App: paywall + premium gating + entitlement (tied to the sync account), data-erasure.
-- Worker (live): `/billing/checkout`, `/billing/portal`, `/billing/webhook`, `/entitlement`,
-  `/sync/delete`. All fail closed to free / `503` until the Lemon Squeezy keys are set.
+- App: paywall + premium gating + entitlement (tied to the sync account),
+  **client-side Paddle.js overlay checkout** (lazy-loaded), data-erasure.
+- Worker (live): `/billing/webhook` (Paddle-signed), `/billing/portal` (Paddle
+  customer portal), `/entitlement`, `/sync/delete`. Fails closed to free until keys set.
 - Legal: `privacy.html`, `terms.html`; marketing: `landing.html` (fill the `[PLACEHOLDERS]`).
 
-What's left needs your Lemon Squeezy account. The dashboard can't be automated
-here, so **you create the products + an API key** (5 min); then I can wire up the
-rest via the LS API (store id, variant ids, webhook), set the worker secrets and
-test — just paste me the API key.
+Paddle's checkout is a client-side overlay, so there are **two config locations**:
+publishable values in the app, secret values in the Worker.
 
 ---
 
-## 1. In the Lemon Squeezy dashboard (you)
-1. Create/confirm your **Store**. Turn on **Test mode** (top bar) while we test.
-2. Create products/variants (Products → New):
-   - **Premium — Yearly**: Subscription, €69 / year. (Optionally add a 7-day free trial.)
-   - **Premium — Monthly**: Subscription, €8.99 / month.
-   - **Premium — Lifetime**: Single payment, €149.
-   Name them clearly so the variants are easy to tell apart.
-3. **Settings → API → Create API key** → copy it (starts with `eyJ...`). 
+## 1. In the Paddle dashboard (you) — use **Sandbox** first
+Create a sandbox account at sandbox-vendors.paddle.com (separate from live).
+1. **Catalog → Products** → create products, then add **Prices**:
+   - *Premium — Yearly*: recurring, €69 / year (optionally a 7-day trial).
+   - *Premium — Monthly*: recurring, €8.99 / month.
+   - *Premium — Lifetime*: **one-time** price, €149.
+   Copy each **Price id** (`pri_...`).
+2. **Developer Tools → Authentication**:
+   - **Client-side token** (`test_...`) — publishable, goes in the app.
+   - **API key** (`apikey_...` / secret) — goes in the Worker (for the portal).
+3. **Developer Tools → Notifications** → create a destination:
+   - URL: `https://scribble-tts.donny-idzerda.workers.dev/billing/webhook`
+   - Events: `transaction.completed`, `subscription.created`, `subscription.updated`,
+     `subscription.activated`, `subscription.canceled`, `subscription.past_due`,
+     `subscription.paused`, `subscription.trialing`
+   - Copy the **secret key** (`pdl_ntfset_...` / signing secret).
+4. **Checkout → set the approved domain** to your app domain
+   (`frankysworld.skep.co`) so the overlay is allowed there.
 
-That's all you need to do by hand. Paste me the API key and I'll do steps 2–4 below.
-
-## 2. Get the IDs (I can run this with your API key)
-```bash
-LS=eyJ...   # your API key
-curl -s https://api.lemonsqueezy.com/v1/stores  -H "Authorization: Bearer $LS" -H "Accept: application/vnd.api+json" | python3 -m json.tool | grep -E '"id"|"name"'
-curl -s "https://api.lemonsqueezy.com/v1/variants?page[size]=100" -H "Authorization: Bearer $LS" -H "Accept: application/vnd.api+json" | python3 -m json.tool | grep -E '"id"|"name"|"price"'
+## 2. App config (publishable — I can paste these in `index.html` for you)
+Near the top of the billing block in `index.html`:
+```js
+const PADDLE_ENV = "sandbox";                 // "production" at go-live
+const PADDLE_CLIENT_TOKEN = "test_xxxxxxxx";  // client-side token
+const PADDLE_PRICE = { annual: "pri_...", monthly: "pri_...", lifetime: "pri_..." };
 ```
-→ note the **store id** and the three **variant ids** (annual / monthly / lifetime).
+Give me the client token + 3 price ids and I'll fill these and push.
 
-## 3. Create the webhook (I can run this)
-```bash
-curl -s -X POST https://api.lemonsqueezy.com/v1/webhooks \
-  -H "Authorization: Bearer $LS" -H "Accept: application/vnd.api+json" -H "Content-Type: application/vnd.api+json" \
-  -d '{"data":{"type":"webhooks","attributes":{
-        "url":"https://scribble-tts.donny-idzerda.workers.dev/billing/webhook",
-        "events":["subscription_created","subscription_updated","subscription_cancelled","subscription_resumed","subscription_expired","subscription_paused","order_created"],
-        "secret":"PICK_A_LONG_RANDOM_STRING"},
-      "relationships":{"store":{"data":{"type":"stores","id":"STORE_ID"}}}}}'
-```
-The `secret` is one you choose — it becomes `LS_WEBHOOK_SECRET`.
-
-## 4. Set the Worker secrets + deploy (I can run this)
+## 3. Worker secrets (I can run this with your API key + webhook secret)
 ```bash
 cd tts-worker
-npx wrangler secret put LS_API_KEY          # the eyJ... key
-npx wrangler secret put LS_STORE_ID         # store id
-npx wrangler secret put LS_WEBHOOK_SECRET   # the random string from step 3
-npx wrangler secret put LS_VARIANT_ANNUAL   # variant id
-npx wrangler secret put LS_VARIANT_MONTHLY  # variant id
-npx wrangler secret put LS_VARIANT_LIFETIME # variant id
+npx wrangler secret put PADDLE_API_KEY        # apikey_... (for the customer portal)
+npx wrangler secret put PADDLE_WEBHOOK_SECRET # pdl_ntfset_... signing secret
+# and set the env (sandbox now, production later):
+#   add  [vars]  PADDLE_ENV = "sandbox"  to wrangler.toml, or:
 npx wrangler deploy
 ```
-Billing flips from `503` to live automatically.
+> `PADDLE_ENV` for the Worker controls which Paddle API base the portal uses.
+> I've left it defaulting to production; for sandbox testing add `PADDLE_ENV="sandbox"`
+> under `[vars]` in `wrangler.toml` (I can do this).
 
-## 5. Test (test mode)
+## 4. Test (sandbox)
 1. Open the app → hit a locked feature (2nd profile, or reading past the 3rd sound) → paywall.
-2. Pick a plan → parent gate → Lemon Squeezy checkout. Use a **test card** (`4242 4242 4242 4242`).
-3. You return to the app; it polls `/entitlement` and unlocks Premium.
-4. Settings → Premium → **Manage subscription** opens the LS customer portal.
+2. Pick a plan → parent gate → the **Paddle overlay** opens. Pay with a Paddle
+   sandbox test card (e.g. `4242 4242 4242 4242`, any future date/CVC).
+3. The overlay's `checkout.completed` + the `?billing=success` return both poll
+   `/entitlement`; Premium unlocks.
+4. Settings → Premium → **Manage subscription** opens the Paddle customer portal.
 
-## 6. Go live
-- Turn **off** Test mode in LS, complete store **activation** (identity/payout — LS pays you out).
-- The same API key works; live transactions just need the store activated.
-- Confirm the app's displayed prices match (in `index.html`: `pwAnnualP` / `pwMonthlyP` / `pwLifetimeP`, per language).
+## 5. Go live
+- Recreate products/prices + token/secret in your **live** Paddle account
+  (sandbox and live are separate). Update `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE`,
+  `PADDLE_ENV="production"` in `index.html`, and the Worker secrets + remove the
+  sandbox `PADDLE_ENV` var.
+- Complete Paddle's **website/seller verification** (they review before live payouts).
+- Confirm the app's displayed prices match (`pwAnnualP` / `pwMonthlyP` / `pwLifetimeP`).
 
-## 7. Legal (before charging real money)
+## 6. Legal (before charging real money)
 - Fill every `[PLACEHOLDER]` in `privacy.html`, `terms.html`, `landing.html`.
-- Have a kids-privacy lawyer review. Already in code: no ads/trackers, voice transcripts never leave the device, parent gate on purchases, working "Delete all my data" (local + cloud).
+- Have a kids-privacy lawyer review. Already in code: no ads/trackers, voice
+  transcripts never leave the device, parent gate on purchases, working
+  "Delete all my data" (local + cloud).
 
 ---
 
 ## How it works (reference)
-- **Entitlement = one record per sync account** (`syncId`), in the sync KV (`ent:<id>`), set by
-  the LS webhook (which receives `custom_data.sync_id` from checkout) and read by the app via
-  `/entitlement?id=`. The app caches it and **fails open to free** — a paying child is never
-  locked out offline; an expired sub lapses via the cached `until`.
+- **Checkout is client-side** (Paddle.js overlay), lazy-loaded only when a parent
+  taps a plan. It passes `custom_data.sync_id` (+ plan).
+- **Entitlement = one record per sync account** (`syncId`) in the sync KV (`ent:<id>`),
+  set by the signed Paddle webhook, read by the app via `/entitlement?id=`. The app
+  caches it and **fails open to free** — a paying child is never locked out offline;
+  an expired sub lapses via the cached `until`.
+- **Lifetime** is granted on `transaction.completed` (custom_data.plan==="lifetime");
+  **subscriptions** are driven by the `subscription.*` events.
 - **Free tier:** first 3 reading sounds (`FREE_SOUNDS`), free-draw, 1 child profile.
-- **No separate login:** purchases attach to the cross-device sync account, so the sync code is
-  also the "restore purchase" path.
+- **No separate login:** purchases attach to the cross-device sync account.
 
 ## Not needed for the MVP (defer)
 Pre-generated audio corpus → R2, App Store/Capacitor wrap, Cloudflare Pages migration,
 first-party analytics. See `COMMERCIALIZATION.md`.
+
+> Cleanup: the abandoned Lemon Squeezy API key you pasted earlier should be
+> **revoked** in Lemon Squeezy (Settings → API), and the store can be removed.

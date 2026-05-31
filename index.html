@@ -654,11 +654,38 @@ const Sync = (() => {
 
 /* ----- Entitlement / premium --------------------------------------------
    Premium is one boolean per family, attached to the sync account (syncId).
-   The server sets it from Stripe webhooks; the client CACHES it (S.ent) and
+   The server sets it from Paddle webhooks; the client CACHES it (S.ent) and
    FAILS OPEN to free - a paying child is never locked out offline. The cached
    `until` lets an expired subscription lapse naturally even with no network. */
 const BILLING_URL = () => ttsUrl();          // same Worker host as TTS + sync
 let _onEntChange = null;
+// Paddle Billing (Merchant of Record). The client token + price ids are
+// PUBLISHABLE - safe to ship in the client. Fill these after creating the
+// prices in Paddle (see SETUP-PAID.md). Until then the paywall buttons no-op.
+const PADDLE_ENV = "sandbox";                 // "sandbox" while testing, "production" at go-live
+const PADDLE_CLIENT_TOKEN = "";               // test_... / live_...
+const PADDLE_PRICE = { annual: "", monthly: "", lifetime: "" };   // pri_...
+let _paddleReady = null;
+function loadPaddle() {
+  if (_paddleReady) return _paddleReady;
+  _paddleReady = new Promise((resolve, reject) => {
+    if (!PADDLE_CLIENT_TOKEN) return reject(new Error("paddle not configured"));
+    const init = () => {
+      try {
+        if (PADDLE_ENV === "sandbox" && window.Paddle.Environment) window.Paddle.Environment.set("sandbox");
+        window.Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN,
+          eventCallback: e => { if (e && e.name === "checkout.completed") { try { Ent.refreshSoon(); } catch {} } } });
+        resolve(window.Paddle);
+      } catch (err) { reject(err); }
+    };
+    if (window.Paddle) return init();
+    const sc = document.createElement("script");
+    sc.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
+    sc.onload = init; sc.onerror = () => reject(new Error("paddle load failed"));
+    document.head.appendChild(sc);
+  });
+  return _paddleReady;
+}
 const Ent = (() => {
   const ent = () => (S && S.ent) || { premium: false, until: 0 };
   // Premium when the server said so AND the cached window hasn't lapsed.
@@ -687,17 +714,23 @@ const Ent = (() => {
     return isPremium();
   }
   // Buy: a purchase MUST be attached to a sync account, so create one if the
-  // family hasn't linked yet. Then hand off to the Worker, which builds the
-  // Stripe Checkout session and redirects to it.
+  // family hasn't linked yet. Then open the Paddle overlay checkout, passing
+  // the account id as custom data so the webhook can grant the entitlement.
   async function startCheckout(plan) {
     if (navigator.onLine === false) return;       // checkout needs the network
+    const priceId = PADDLE_PRICE[plan];
+    if (!priceId || !PADDLE_CLIENT_TOKEN) return;  // billing not configured yet
     try { if (!S.syncId) await Sync.create(); } catch {}
     if (!S.syncId) return;
-    const ret = location.origin + location.pathname;
-    location.href = BILLING_URL() + "/billing/checkout?id=" + encodeURIComponent(S.syncId)
-      + "&plan=" + encodeURIComponent(plan)
-      + "&lang=" + encodeURIComponent(LC())
-      + "&return=" + encodeURIComponent(ret);
+    let Paddle; try { Paddle = await loadPaddle(); } catch { return; }
+    Paddle.Checkout.open({
+      items: [{ priceId, quantity: 1 }],
+      customData: { sync_id: S.syncId, plan },
+      settings: {
+        displayMode: "overlay", theme: "light", locale: LC(),
+        successUrl: location.origin + location.pathname + "?billing=success",
+      },
+    });
   }
   function openPortal() {
     if (!S.syncId) return;

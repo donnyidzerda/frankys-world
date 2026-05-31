@@ -253,26 +253,20 @@ async function handleSync(req, env, parts) {
 }
 
 /* =========================================================================
-   Billing (Lemon Squeezy) + entitlement. Lemon Squeezy is the Merchant of
-   Record - it handles global VAT/sales tax for us. Web-first: the app sends
-   the family to /billing/checkout, LS handles payment, the webhook sets the
-   entitlement in the same KV the sync uses (keyed by the sync account id, sent
-   as checkout custom data `sync_id`). The app reads /entitlement?id=... and
-   caches it. Everything fails closed to "free" if not configured.
+   Billing (Paddle Billing) + entitlement. Paddle is the Merchant of Record -
+   it handles global VAT/sales tax for us. Checkout runs CLIENT-SIDE via
+   Paddle.js (overlay) in the app, passing custom_data.sync_id. This Worker
+   handles the server side: the signed webhook sets the entitlement in the same
+   KV the sync uses (keyed by the sync account id), and /billing/portal opens
+   the Paddle customer portal. /entitlement is read + cached by the app. All
+   fails closed to "free" if not configured.
 
    Required (wrangler secret put ...):
-     LS_API_KEY, LS_STORE_ID, LS_WEBHOOK_SECRET,
-     LS_VARIANT_ANNUAL, LS_VARIANT_MONTHLY, LS_VARIANT_LIFETIME
+     PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET
+   Optional var: PADDLE_ENV = "sandbox" | "production" (default production)
    ========================================================================= */
-const lsVariant = (env, plan) =>
-  plan === "annual" ? env.LS_VARIANT_ANNUAL
-  : plan === "monthly" ? env.LS_VARIANT_MONTHLY
-  : plan === "lifetime" ? env.LS_VARIANT_LIFETIME : null;
-const lsHeaders = env => ({
-  "Authorization": "Bearer " + env.LS_API_KEY,
-  "Accept": "application/vnd.api+json",
-  "Content-Type": "application/vnd.api+json",
-});
+const paddleApiBase = env =>
+  (env.PADDLE_ENV === "sandbox") ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
 async function getEnt(env, id) {
   try { const raw = await env.SYNC.get("ent:" + id); return raw ? JSON.parse(raw) : null; }
   catch { return null; }
@@ -291,93 +285,74 @@ async function entitlementGet(env, sp) {
 async function handleBilling(req, env, parts, sp) {
   const sub = parts[1];
   if (sub === "webhook") return billingWebhook(req, env);
-  if (!env.LS_API_KEY) return new Response("billing not configured", { status: 503, headers: CORS });
-  if (sub === "checkout") return billingCheckout(env, sp);
+  // checkout is client-side (Paddle.js); nothing to do server-side.
+  if (sub === "checkout") return J({ note: "client-side via Paddle.js" });
   if (sub === "portal")   return billingPortal(env, sp);
   return new Response("ok", { headers: CORS });
 }
-const withParam = (url, kv) => url + (url.includes("?") ? "&" : "?") + kv;
-async function billingCheckout(env, sp) {
-  const id = sp.get("id"), plan = sp.get("plan") || "annual";
-  const ret = sp.get("return") || "";
-  if (!id || !ret) return new Response("bad request", { status: 400, headers: CORS });
-  const variant = lsVariant(env, plan);
-  if (!variant || !env.LS_STORE_ID) return new Response("unknown plan", { status: 400, headers: CORS });
-  // Create a Lemon Squeezy checkout. `custom.sync_id` rides through to the
-  // webhook so we can attach the entitlement to the right family account.
-  const body = {
-    data: {
-      type: "checkouts",
-      attributes: {
-        checkout_data: { custom: { sync_id: id } },
-        product_options: { redirect_url: withParam(ret, "billing=success") },
-        checkout_options: { embed: false },
-      },
-      relationships: {
-        store:   { data: { type: "stores",   id: String(env.LS_STORE_ID) } },
-        variant: { data: { type: "variants", id: String(variant) } },
-      },
-    },
-  };
-  const r = await fetch("https://api.lemonsqueezy.com/v1/checkouts",
-    { method: "POST", headers: lsHeaders(env), body: JSON.stringify(body) });
-  const j = await r.json().catch(() => ({}));
-  const url = j && j.data && j.data.attributes && j.data.attributes.url;
-  if (!r.ok || !url) return J({ error: "lemonsqueezy", detail: j.errors || null }, 502);
-  return Response.redirect(url, 303);
-}
+// Open the Paddle customer portal for this family's stored Paddle customer.
 async function billingPortal(env, sp) {
-  const id = sp.get("id"), ret = sp.get("return") || "";
+  const id = sp.get("id"), ret = sp.get("return") || "https://frankysworld.skep.co/";
   if (!id) return new Response("bad request", { status: 400, headers: CORS });
   const ent = await getEnt(env, id);
-  // LS gives a signed customer-portal URL per subscription; we stored it on the
-  // webhook. Fall back to the app if there's nothing to manage (e.g. lifetime).
-  return Response.redirect((ent && ent.portal) || ret || "https://frankysworld.skep.co/", 303);
-}
-// Verify a Lemon Squeezy webhook: HMAC-SHA256 of the raw body with the signing
-// secret, compared (hex) to the X-Signature header.
-async function verifyLemon(payload, sigHex, secret) {
+  if (!env.PADDLE_API_KEY || !ent || !ent.customer) return Response.redirect(ret, 303);
   try {
-    if (!sigHex) return false;
+    const r = await fetch(paddleApiBase(env) + "/customers/" + ent.customer + "/portal-sessions", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + env.PADDLE_API_KEY, "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const j = await r.json().catch(() => ({}));
+    const url = j && j.data && j.data.urls && j.data.urls.general && j.data.urls.general.overview;
+    return Response.redirect(url || ret, 303);
+  } catch { return Response.redirect(ret, 303); }
+}
+// Verify a Paddle webhook signature. Header: "ts=...;h1=<hex hmac>".
+// Signed payload is `${ts}:${rawBody}`, HMAC-SHA256 with the secret. 5-min skew.
+async function verifyPaddle(payload, sigHeader, secret) {
+  try {
+    const map = Object.fromEntries(String(sigHeader).split(";").map(kv => kv.split("=")));
+    const t = map.ts, h1 = map.h1;
+    if (!t || !h1) return false;
+    if (Math.abs(Date.now() / 1000 - (+t)) > 300) return false;
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", enc.encode(secret),
       { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const mac = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+    const mac = await crypto.subtle.sign("HMAC", key, enc.encode(t + ":" + payload));
     const hex = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, "0")).join("");
-    if (hex.length !== sigHex.length) return false;
-    let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ sigHex.charCodeAt(i);
+    if (hex.length !== h1.length) return false;
+    let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ h1.charCodeAt(i);
     return diff === 0;
   } catch { return false; }
 }
 async function billingWebhook(req, env) {
-  const sig = req.headers.get("x-signature") || "";
+  const sig = req.headers.get("paddle-signature") || "";
   const payload = await req.text();
-  if (!env.LS_WEBHOOK_SECRET || !(await verifyLemon(payload, sig, env.LS_WEBHOOK_SECRET)))
+  if (!env.PADDLE_WEBHOOK_SECRET || !(await verifyPaddle(payload, sig, env.PADDLE_WEBHOOK_SECRET)))
     return new Response("bad signature", { status: 400 });
   let evt; try { evt = JSON.parse(payload); } catch { return new Response("bad json", { status: 400 }); }
-  const event = evt.meta && evt.meta.event_name;
-  const cd = (evt.meta && evt.meta.custom_data) || {};
+  const type = evt.event_type || "";
+  const d = evt.data || {};
+  const cd = d.custom_data || {};
   const id = cd.sync_id || cd.syncId;
-  const a = (evt.data && evt.data.attributes) || {};
   const FAR = Date.now() + 100 * 365 * 24 * 3600 * 1000;   // ~forever (lifetime)
   const GRACE = Date.now() + 8 * 24 * 3600 * 1000;         // provisional window
   const ts = s => { const t = Date.parse(s || ""); return isNaN(t) ? 0 : t; };
-  const portal = (a.urls && a.urls.customer_portal) || undefined;
   try {
     if (id) {
-      if (event === "order_created") {
-        // One-time purchase (lifetime). Only grant on a paid order.
-        if (a.status === "paid" || a.status === "active")
-          await setEnt(env, id, { premium: true, until: FAR, plan: "lifetime", portal });
-      } else if (event && event.indexOf("subscription_") === 0) {
-        // status: active | on_trial | paused | past_due | unpaid | cancelled | expired
-        const s = a.status;
-        const ends = ts(a.ends_at), renews = ts(a.renews_at);
-        const live = ["active", "on_trial", "past_due"].includes(s);
-        const stillPaid = s === "cancelled" && ends > Date.now();  // keep access until period end
-        const premium = live || stillPaid;
+      if (type === "transaction.completed") {
+        // One-time purchase (lifetime). Subscriptions are handled by the
+        // subscription.* events, so only grant lifetime here.
+        if (cd.plan === "lifetime")
+          await setEnt(env, id, { premium: true, until: FAR, plan: "lifetime", customer: d.customer_id || undefined });
+      } else if (type.indexOf("subscription.") === 0) {
+        // status: active | trialing | past_due | paused | canceled
+        const s = d.status;
+        const ends = ts(d.current_billing_period && d.current_billing_period.ends_at);
+        const premium = ["active", "trialing", "past_due"].includes(s);
         await setEnt(env, id, {
-          premium, until: premium ? (renews || ends || GRACE) : 0, plan: "sub", portal,
+          premium, until: premium ? (ends || GRACE) : 0, plan: "sub",
+          customer: d.customer_id || undefined,
         });
       }
     }
