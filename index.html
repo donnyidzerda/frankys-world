@@ -2952,7 +2952,8 @@ function rdAdvance() {
     S.readIntro++;
   }
 }
-const FREE_SOUNDS = 3;
+const FREE_SOUNDS = 5;          // free tier reaches the first decodable word
+const FREE_CREATIONS = 5;       // free guided drawing/writing/number creations
 let _readCapped = false;
 // Render letters/words in the lowercase letterforms (reading is lowercase).
 function lowerArt(str, size) {
@@ -3612,10 +3613,15 @@ function buildMathSession() {
     const [it] = pool.splice(i, 1); out.push(it); last = keyOf(it); }
   return out;
 }
+const FREE_MATH = 3;            // free tier = the starting number range only
+let _mathCapped = false;
 function mAdvance() {
   // Introduce the next number once the current top is recognised AND counted.
   const top = mRange()[mRange().length - 1];
-  if (top && mBox("sub:" + top) >= 2 && mBox("cnt:" + top) >= 2 && (S.mathIntro || 3) < 10) S.mathIntro++;
+  if (top && mBox("sub:" + top) >= 2 && mBox("cnt:" + top) >= 2 && (S.mathIntro || 3) < 10) {
+    if (!Ent.isPremium() && (S.mathIntro || 3) >= FREE_MATH) { _mathCapped = true; return; }
+    S.mathIntro++;
+  }
 }
 const mDistract = (n, max) => {
   const pool = []; for (let k = 1; k <= Math.max(max, 5); k++) if (k !== n) pool.push(k);
@@ -3838,6 +3844,7 @@ function MathScreen() {
     const row = el("div", { css: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px" });
     row.append(again, home); stage.append(row);
     Sound.fx.win(); buzz([20, 40, 20]); burst(.7); speak(rnd("praiseOk"));
+    if (_mathCapped) { _mathCapped = false; setTimeout(() => Paywall("pwLockedRead"), 900); }
   }
   showItem();
 }
@@ -4606,6 +4613,13 @@ function toolbar(engine, opts = {}) {
 /* ----- 13. Guided drawing ---------------------------------------------- */
 function DrawScreen(id) {
   const D = DRAWINGS.find(d => d.id === id) || DRAWINGS[0];
+  // Free tier: FREE_CREATIONS guided creations (drawing/writing/numbers/shapes).
+  // Opening a NEW one past the cap shows the paywall. Already-made ones replay
+  // free; free-draw (FreeDraw) is never gated.
+  if (!Ent.isPremium() && !S.completed[D.id]
+      && Object.keys(S.completed || {}).length >= FREE_CREATIONS) {
+    go("home"); setTimeout(() => Paywall("pwLockedRead"), 60); return;
+  }
   const built = D.build ? D.build() : D.steps;
   const steps = (AGE[S.age].oneStep && !D.pen)
     ? built.slice(0, Math.min(2, built.length)) : built;
