@@ -1720,6 +1720,8 @@ const DRAW_NAMES = {
        tree:"Un árbol", icecream:"Un helado" },
 };
 const LC = () => I18N[S.lang] ? S.lang : "en";
+// Localized legal page URL: privacy.html (nl) / privacy-en.html / privacy-es.html
+const legalUrl = base => base + (LC() === "nl" ? ".html" : "-" + LC() + ".html");
 function t(k) { const o = I18N[LC()]; return (o && o[k] !== undefined) ? o[k] : I18N.en[k]; }
 // Display name for a drawing (writing words stay as-is, e.g. "MAMA").
 const drawName = d => {
@@ -4027,7 +4029,7 @@ function Splash() {
   };
   legal.append(el("div", { cls: "t-body muted", css: "font-size:12px;margin-bottom:4px", textContent: t("legalAgree") }));
   const row = el("div", { css: "display:flex;gap:12px;justify-content:center;font-size:12px" });
-  row.append(llink(t("legalTerms"), "terms.html"), llink(t("legalPrivacy"), "privacy.html"), llink(t("legalRefund"), "refund.html"));
+  row.append(llink(t("legalTerms"), legalUrl("terms")), llink(t("legalPrivacy"), legalUrl("privacy")), llink(t("legalRefund"), legalUrl("refund")));
   legal.append(row);
   s.append(legal);
 
@@ -5100,7 +5102,7 @@ function Settings() {
     const a = el("a", { cls: "btn btn-quiet", css: "text-decoration:none", textContent: label });
     a.href = href; a.target = "_blank"; a.rel = "noopener"; return a;
   };
-  legalRow.append(legalLink(t("legalPrivacy"), "privacy.html"), legalLink(t("legalTerms"), "terms.html"), legalLink(t("legalRefund"), "refund.html"));
+  legalRow.append(legalLink(t("legalPrivacy"), legalUrl("privacy")), legalLink(t("legalTerms"), legalUrl("terms")), legalLink(t("legalRefund"), legalUrl("refund")));
   const delAllBtn = el("button", { cls: "btn",
     css: "background:var(--clay-soft);color:var(--clay);border:1px solid var(--clay)", textContent: t("delAll") });
   delAllBtn.onclick = () => parentGate(() => { if (window.confirm(t("delAllConfirm"))) wipeEverything(); });
