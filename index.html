@@ -346,6 +346,7 @@ const defaultState = () => ({
   mathBox: {}, mathIntro: 3, mathLat: {},          // number sense mastery (start range 1-3)
   stars: 0, stickers: [], completed: {}, streak: 0, lastPlay: "", frankyLevel: 1,
   syncId: null, syncTs: 0,             // cross-device sync (set when linked)
+  ent: { premium: false, until: 0, plan: "", ts: 0 },  // cached entitlement (server-refreshed)
   settings: { muted: false, voice: true, slowVoice: false,
     sound: true, haptics: true, contrast: false, calm: false,
     foundations: false, listen: true },   // listen = speech-recognition verify
@@ -411,7 +412,11 @@ function save() {
    ------------------------------------------------------------------------- */
 const SYNC_URL = () => ttsUrl() + "/sync";    // shares the TTS Worker host
 // Fields we exclude from the cloud blob (kept device-local).
-const SYNC_OMIT = new Set(["syncId", "syncTs"]);
+// `readHeard` holds speech-recognition transcripts derived from a CHILD'S
+// VOICE - sensitive data. We never send it off-device: it stays in local
+// storage only, and the server only ever sees the pass/fail mastery boxes.
+// (`ent` is the cached entitlement, refreshed from the server, not pushed.)
+const SYNC_OMIT = new Set(["syncId", "syncTs", "readHeard", "ent"]);
 function syncSnapshot(s) {
   const out = {};
   for (const k in s) if (!SYNC_OMIT.has(k)) out[k] = s[k];
@@ -637,6 +642,106 @@ const Sync = (() => {
   return { start, create, pair, newCode, unlink, pull, push, schedulePush,
            connectWS, linked, status: () => ({ linked: linked(), lastPull, lastErr, live: wsOpen() }) };
 })();
+
+/* ----- Entitlement / premium --------------------------------------------
+   Premium is one boolean per family, attached to the sync account (syncId).
+   The server sets it from Stripe webhooks; the client CACHES it (S.ent) and
+   FAILS OPEN to free - a paying child is never locked out offline. The cached
+   `until` lets an expired subscription lapse naturally even with no network. */
+const BILLING_URL = () => ttsUrl();          // same Worker host as TTS + sync
+let _onEntChange = null;
+const Ent = (() => {
+  const ent = () => (S && S.ent) || { premium: false, until: 0 };
+  // Premium when the server said so AND the cached window hasn't lapsed.
+  const isPremium = () => { const e = ent(); return !!e.premium && (+e.until || 0) > Date.now(); };
+  function set(e) {
+    if (!S) return;
+    S.ent = { premium: !!(e && e.premium), until: +(e && e.until) || 0,
+              plan: (e && e.plan) || "", ts: Date.now() };
+    save(); if (typeof _onEntChange === "function") _onEntChange();
+  }
+  // Pull the authoritative entitlement for this account. No account => free.
+  async function refresh() {
+    if (!S || !S.syncId || navigator.onLine === false) return;
+    try {
+      const r = await fetch(BILLING_URL() + "/entitlement?id=" + encodeURIComponent(S.syncId),
+        { mode: "cors", cache: "no-store" });
+      if (!r.ok) return;
+      const e = await r.json();
+      set({ premium: e.premium, until: e.until, plan: e.plan });
+    } catch {}
+  }
+  // Poll a few times after returning from Stripe (the webhook may lag a beat).
+  async function refreshSoon(tries = 6) {
+    for (let i = 0; i < tries; i++) { await refresh(); if (isPremium()) return true;
+      await new Promise(r => setTimeout(r, 1500)); }
+    return isPremium();
+  }
+  // Buy: a purchase MUST be attached to a sync account, so create one if the
+  // family hasn't linked yet. Then hand off to the Worker, which builds the
+  // Stripe Checkout session and redirects to it.
+  async function startCheckout(plan) {
+    if (navigator.onLine === false) return;       // checkout needs the network
+    try { if (!S.syncId) await Sync.create(); } catch {}
+    if (!S.syncId) return;
+    const ret = location.origin + location.pathname;
+    location.href = BILLING_URL() + "/billing/checkout?id=" + encodeURIComponent(S.syncId)
+      + "&plan=" + encodeURIComponent(plan)
+      + "&lang=" + encodeURIComponent(LC())
+      + "&return=" + encodeURIComponent(ret);
+  }
+  function openPortal() {
+    if (!S.syncId) return;
+    const ret = location.origin + location.pathname;
+    location.href = BILLING_URL() + "/billing/portal?id=" + encodeURIComponent(S.syncId)
+      + "&return=" + encodeURIComponent(ret);
+  }
+  return { isPremium, refresh, refreshSoon, set, startCheckout, openPortal };
+})();
+// Run `onAllowed` only for premium families; otherwise show the paywall.
+function requirePremium(reasonKey, onAllowed) {
+  if (Ent.isPremium()) { onAllowed && onAllowed(); return true; }
+  Paywall(reasonKey); return false;
+}
+// The paywall sheet. Parent-facing: the actual checkout is behind the parent
+// gate (Kids-category requirement), the purchase opens Stripe in this tab.
+function Paywall(reasonKey) {
+  Sound.fx.tap();
+  const ov = el("div", { css: "position:fixed;inset:0;z-index:60;background:rgba(52,48,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto" });
+  const card = el("div", { cls: "card", css: "max-width:520px;width:100%;padding:22px;display:flex;flex-direction:column;gap:14px;max-height:92vh;overflow:auto" });
+  const reason = reasonKey ? `<div class="t-body" style="background:var(--ochre-soft,#f3e7cf);border-radius:12px;padding:10px 12px">${t(reasonKey)}</div>` : "";
+  const bullets = ["pwBul1","pwBul2","pwBul3","pwBul4"]
+    .map(k => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--sage)">${ic("check",18,"var(--sage)")}</span><span class="t-body">${t(k)}</span></div>`).join("");
+  card.innerHTML =
+    `<div style="display:flex;align-items:center;gap:12px">
+       <span>${Franky("happy",54)}</span>
+       <div><div class="t-title">${t("pwTitle")}</div>
+       <div class="t-body muted">${t("pwSub")}</div></div></div>
+     ${reason}
+     <div style="display:flex;flex-direction:column;gap:9px;margin-top:2px">${bullets}</div>`;
+  const plan = (key, label, price, note, best) => {
+    const b = el("button", { cls: "btn",
+      css: `width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 18px;border-radius:16px;border:2px solid ${best ? "var(--sage)" : "var(--line)"};background:${best ? "var(--sage-soft,#e8efe2)" : "var(--surface)"}` });
+    b.innerHTML =
+      `<span style="text-align:left"><span class="t-head">${label}</span>${best ? ` <span style="font-size:11px;font-weight:800;color:var(--sage);background:#fff;border-radius:8px;padding:2px 7px">${t("pwBest")}</span>` : ""}
+        ${note ? `<br><span class="t-body muted" style="font-size:13px">${note}</span>` : ""}</span>
+       <span class="t-head" style="white-space:nowrap">${price}</span>`;
+    b.onclick = () => parentGate(() => Ent.startCheckout(key));
+    return b;
+  };
+  const plans = el("div", { css: "display:flex;flex-direction:column;gap:10px;margin-top:4px" });
+  plans.append(
+    plan("annual", t("pwAnnual"), t("pwAnnualP"), t("pwAnnualNote"), true),
+    plan("monthly", t("pwMonthly"), t("pwMonthlyP"), "", false),
+    plan("lifetime", t("pwLifetime"), t("pwLifetimeP"), "", false),
+  );
+  card.append(plans);
+  const restore = el("div", { cls: "t-body muted", css: "font-size:13px;text-align:center;margin-top:2px", textContent: t("pwRestore") });
+  const later = el("button", { cls: "btn btn-quiet", css: "align-self:center", textContent: t("pwMaybe") });
+  later.onclick = () => { Sound.fx.tap(); ov.remove(); };
+  card.append(restore, later);
+  ov.append(card); document.body.append(ov);
+}
 // Lightweight list for the picker (id, name, age) read from snapshots.
 function profileList() {
   const idx = loadIdx(); if (!idx) return [];
@@ -1627,6 +1732,21 @@ const I18N_X = {
     shapeSay:s=>`Laten we de ${s} natekenen. Rustig aan.`,
     shp_circle:"cirkel", shp_square:"vierkant", shp_triangle:"driehoek", shp_heart:"hart", shp_star:"ster",
     profiles:"Profielen", switchProfile:"Wisselen", addChild:"Kind toevoegen", ageWord:"Leeftijd",
+    pwTitle:"Franky's World Premium", pwSub:"Open het volledige avontuur voor je kind",
+    pwBul1:"De volledige leesreis: alle klanken, woordjes en zinnen",
+    pwBul2:"Alle werelden, rekenen en tekenlessen",
+    pwBul3:"Meerdere kinderprofielen + voortgang op al je apparaten",
+    pwBul4:"Rustig, reclamevrij en zonder tracking",
+    pwAnnual:"Per jaar", pwMonthly:"Per maand", pwLifetime:"Voor altijd",
+    pwAnnualP:"€69 / jaar", pwMonthlyP:"€8,99 / maand", pwLifetimeP:"€149 eenmalig",
+    pwAnnualNote:"7 dagen gratis proberen", pwBest:"Beste keuze",
+    pwRestore:"Al gekocht? Koppel dit apparaat met je sync-code.",
+    pwMaybe:"Misschien later", pwManage:"Abonnement beheren",
+    pwThanks:n=>`Dank je wel! Premium staat aan voor ${n}.`,
+    pwChecking:"Even je aankoop bevestigen…",
+    pwLockedRead:"Dit hoort bij Premium — open de volledige leesreis voor je kind.",
+    pwLockedProfiles:"Meerdere kinderprofielen horen bij Premium.",
+    pwPremiumOn:"Premium is actief", pwPremiumOff:"Gratis versie",
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
     sayNameLabel:"Hoe spreek je de naam uit?",
@@ -1694,6 +1814,21 @@ const I18N_X = {
     shapeSay:s=>`Let's trace the ${s}. Nice and slow.`,
     shp_circle:"circle", shp_square:"square", shp_triangle:"triangle", shp_heart:"heart", shp_star:"star",
     profiles:"Profiles", switchProfile:"Switch", addChild:"Add a child", ageWord:"Age",
+    pwTitle:"Franky's World Premium", pwSub:"Unlock the full adventure for your child",
+    pwBul1:"The full reading journey: every sound, word and sentence",
+    pwBul2:"All worlds, numbers and drawing lessons",
+    pwBul3:"Multiple child profiles + progress on all your devices",
+    pwBul4:"Calm, ad-free and no tracking",
+    pwAnnual:"Yearly", pwMonthly:"Monthly", pwLifetime:"Forever",
+    pwAnnualP:"€69 / year", pwMonthlyP:"€8.99 / month", pwLifetimeP:"€149 once",
+    pwAnnualNote:"7-day free trial", pwBest:"Best value",
+    pwRestore:"Already bought it? Link this device with your sync code.",
+    pwMaybe:"Maybe later", pwManage:"Manage subscription",
+    pwThanks:n=>`Thank you! Premium is on for ${n}.`,
+    pwChecking:"Confirming your purchase…",
+    pwLockedRead:"This is part of Premium — unlock the full reading journey.",
+    pwLockedProfiles:"Multiple child profiles are part of Premium.",
+    pwPremiumOn:"Premium is active", pwPremiumOff:"Free version",
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
     sayNameLabel:"How is the name pronounced?",
@@ -1761,6 +1896,21 @@ const I18N_X = {
     shapeSay:s=>`Vamos a trazar el ${s}. Despacito.`,
     shp_circle:"círculo", shp_square:"cuadrado", shp_triangle:"triángulo", shp_heart:"corazón", shp_star:"estrella",
     profiles:"Perfiles", switchProfile:"Cambiar", addChild:"Añadir un niño", ageWord:"Edad",
+    pwTitle:"Franky's World Premium", pwSub:"Desbloquea toda la aventura para tu hijo",
+    pwBul1:"El recorrido de lectura completo: sonidos, palabras y frases",
+    pwBul2:"Todos los mundos, números y lecciones de dibujo",
+    pwBul3:"Varios perfiles + progreso en todos tus dispositivos",
+    pwBul4:"Tranquilo, sin anuncios ni rastreo",
+    pwAnnual:"Anual", pwMonthly:"Mensual", pwLifetime:"Para siempre",
+    pwAnnualP:"€69 / año", pwMonthlyP:"€8,99 / mes", pwLifetimeP:"€149 una vez",
+    pwAnnualNote:"7 días de prueba gratis", pwBest:"Mejor opción",
+    pwRestore:"¿Ya lo compraste? Vincula este dispositivo con tu código.",
+    pwMaybe:"Quizá más tarde", pwManage:"Gestionar suscripción",
+    pwThanks:n=>`¡Gracias! Premium está activo para ${n}.`,
+    pwChecking:"Confirmando tu compra…",
+    pwLockedRead:"Esto es parte de Premium — desbloquea la lectura completa.",
+    pwLockedProfiles:"Varios perfiles son parte de Premium.",
+    pwPremiumOn:"Premium activo", pwPremiumOff:"Versión gratuita",
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
     sayNameLabel:"¿Cómo se pronuncia el nombre?",
@@ -1871,7 +2021,11 @@ function ProfilePicker() {
     card.append(row);
   });
   const add = el("button", { cls: "btn btn-go t-head", html: ic("next", 20, "#fff") + `<span>${t("addChild")}</span>` });
-  add.onclick = () => parentGate(() => { ov.remove(); _adding = true; Splash(); });
+  add.onclick = () => parentGate(() => {
+    // Free tier = one child. A second profile is Premium.
+    if (!Ent.isPremium() && profileList().length >= 1) { Paywall("pwLockedProfiles"); return; }
+    ov.remove(); _adding = true; Splash();
+  });
   const close = el("button", { cls: "btn", css: "background:var(--surface-2)", textContent: t("cancel") });
   close.onclick = () => ov.remove();
   card.append(add, close);
@@ -2704,8 +2858,15 @@ function rdAdvance() {
   const intro = rdIntro();
   const top = intro[intro.length - 1];
   const ready = top && rdBox("s:" + top) >= 2;
-  if (ready && S.readIntro < RD().sounds.length) S.readIntro++;
+  if (ready && S.readIntro < RD().sounds.length) {
+    // Free tier opens the first FREE_SOUNDS sounds (a real taste of the
+    // method). Past that, the full reading journey is Premium.
+    if (!Ent.isPremium() && S.readIntro >= FREE_SOUNDS) { _readCapped = true; return; }
+    S.readIntro++;
+  }
 }
+const FREE_SOUNDS = 3;
+let _readCapped = false;
 // Render letters/words in the lowercase letterforms (reading is lowercase).
 function lowerArt(str, size) {
   const chars = [...str].filter(c => LOWER[c]); const gap = 6;
@@ -3189,6 +3350,8 @@ function ReadScreen() {
     row.append(again, home); stage.append(row);
     Sound.fx.win(); buzz([20, 40, 20]); burst(.8);
     speak(rnd("praiseOk"));
+    // Free child has reached the end of the free sounds: gently offer Premium.
+    if (_readCapped) { _readCapped = false; setTimeout(() => Paywall("pwLockedRead"), 900); }
   }
   showItem();
 }
@@ -3611,12 +3774,36 @@ function go(screen, data) {
 }
 window.addEventListener("DOMContentLoaded", () => {
   applyFlags();
-  const q = new URLSearchParams(location.search).get("screen");
+  const params = new URLSearchParams(location.search);
+  const q = params.get("screen");
   if (!S.onboarded) Splash();
   else if (q === "freedraw") FreeDraw();
   else if (q === "gallery") GalleryScreen();
   else Home();
+  // Re-render the live screen whenever entitlement flips (e.g. just paid).
+  _onEntChange = () => { if (_currentScreen) go(_currentScreen); };
+  // Coming back from Stripe Checkout: confirm the purchase, then celebrate.
+  const billing = params.get("billing");
+  if (billing) {
+    history.replaceState(null, "", location.origin + location.pathname);
+    if (billing === "success") billingReturn();
+  }
+  Ent.refresh();   // keep the cached entitlement honest on every cold start
 });
+// After returning from a successful Stripe Checkout: poll the entitlement
+// (the webhook may lag a second) and show a warm thank-you when it lands.
+async function billingReturn() {
+  const ov = el("div", { css: "position:fixed;inset:0;z-index:70;background:rgba(52,48,42,.55);display:flex;align-items:center;justify-content:center;padding:18px" });
+  const card = el("div", { cls: "card", css: "max-width:420px;width:100%;padding:24px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center" });
+  card.innerHTML = `<span>${Franky("happy",72)}</span><div class="t-body muted">${t("pwChecking")}</div>`;
+  ov.append(card); document.body.append(ov);
+  const ok = await Ent.refreshSoon();
+  card.innerHTML = `<span>${Franky("happy",84)}</span><div class="t-title">${ok ? t("pwThanks")(S.name || "") : t("pwChecking")}</div>`;
+  const close = el("button", { cls: "btn btn-go t-head", css: "margin-top:6px", textContent: "OK" });
+  close.onclick = () => { Sound.fx.tap(); ov.remove(); if (_currentScreen) go(_currentScreen); };
+  card.append(close);
+  if (ok) { Sound.fx.win(); buzz([20,40,20]); burst(.7); }
+}
 window.addEventListener("pointerdown", function once() {
   Sound.ensure(); unlockAudio();
   // We're inside a real user gesture now, so audio is unlockable: mark it
@@ -4777,6 +4964,18 @@ function Settings() {
     el("button", { cls: "btn btn-quiet", css: "padding:10px 16px", textContent: t("switchProfile") }));
   profCard.onclick = () => ProfilePicker();
 
+  // Premium status + manage. Free families see an upgrade button; paying
+  // families can open the Stripe customer portal (parent-gated) to manage.
+  const premOn = Ent.isPremium();
+  const premCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
+  const premBtn = el("button", { cls: premOn ? "btn btn-quiet" : "btn btn-go",
+    css: "padding:10px 16px", textContent: premOn ? t("pwManage") : t("pwTitle") });
+  premBtn.onclick = () => premOn ? parentGate(() => Ent.openPortal()) : Paywall("");
+  premCard.append(
+    el("div", { html: ic("star", 22, premOn ? "var(--ochre)" : "var(--ink-soft)") }),
+    el("div", { cls: "t-head", css: "flex:1", textContent: premOn ? t("pwPremiumOn") : t("pwPremiumOff") }),
+    premBtn);
+
   // Letter case (caps recommended first; lowercase when ready)
   const caseCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
   caseCard.append(el("div", { cls: "t-label", textContent: t("caseLabel") }));
@@ -5003,7 +5202,7 @@ function Settings() {
   // Ordered, grouped layout: child first, then learning, sound, devices,
   // and finally app-level bits + the explainer. One clear scroll.
   wrap.append(
-    sectionLabel(t("secChild")), stat, prof, profCard,
+    sectionLabel(t("secChild")), stat, prof, profCard, premCard,
     sectionLabel(t("secLearn")), caseCard, dashCard,
     sectionLabel(t("secSound")), soundCard,
     sectionLabel(t("secDevices")), syncCard,
