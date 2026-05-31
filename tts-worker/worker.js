@@ -253,33 +253,26 @@ async function handleSync(req, env, parts) {
 }
 
 /* =========================================================================
-   Billing (Stripe) + entitlement. Web-first: the app sends the family to
-   /billing/checkout, Stripe handles payment, the webhook sets the entitlement
-   in the same KV the sync uses (keyed by the sync account id). The app reads
-   /entitlement?id=... and caches it. Everything fails closed to "free" if not
-   configured, so the app keeps working before keys are set.
+   Billing (Lemon Squeezy) + entitlement. Lemon Squeezy is the Merchant of
+   Record - it handles global VAT/sales tax for us. Web-first: the app sends
+   the family to /billing/checkout, LS handles payment, the webhook sets the
+   entitlement in the same KV the sync uses (keyed by the sync account id, sent
+   as checkout custom data `sync_id`). The app reads /entitlement?id=... and
+   caches it. Everything fails closed to "free" if not configured.
 
-   Required secrets (wrangler secret put ...):
-     STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
-     STRIPE_PRICE_ANNUAL, STRIPE_PRICE_MONTHLY, STRIPE_PRICE_LIFETIME
+   Required (wrangler secret put ...):
+     LS_API_KEY, LS_STORE_ID, LS_WEBHOOK_SECRET,
+     LS_VARIANT_ANNUAL, LS_VARIANT_MONTHLY, LS_VARIANT_LIFETIME
    ========================================================================= */
-const formEncode = obj =>
-  Object.entries(obj).filter(([, v]) => v != null)
-    .map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v)).join("&");
-function stripe(env, path, params, method = "POST") {
-  return fetch("https://api.stripe.com" + path, {
-    method,
-    headers: {
-      "Authorization": "Bearer " + env.STRIPE_SECRET_KEY,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params ? formEncode(params) : undefined,
-  });
-}
-const planPrice = (env, plan) =>
-  plan === "annual" ? env.STRIPE_PRICE_ANNUAL
-  : plan === "monthly" ? env.STRIPE_PRICE_MONTHLY
-  : plan === "lifetime" ? env.STRIPE_PRICE_LIFETIME : null;
+const lsVariant = (env, plan) =>
+  plan === "annual" ? env.LS_VARIANT_ANNUAL
+  : plan === "monthly" ? env.LS_VARIANT_MONTHLY
+  : plan === "lifetime" ? env.LS_VARIANT_LIFETIME : null;
+const lsHeaders = env => ({
+  "Authorization": "Bearer " + env.LS_API_KEY,
+  "Accept": "application/vnd.api+json",
+  "Content-Type": "application/vnd.api+json",
+});
 async function getEnt(env, id) {
   try { const raw = await env.SYNC.get("ent:" + id); return raw ? JSON.parse(raw) : null; }
   catch { return null; }
@@ -298,7 +291,7 @@ async function entitlementGet(env, sp) {
 async function handleBilling(req, env, parts, sp) {
   const sub = parts[1];
   if (sub === "webhook") return billingWebhook(req, env);
-  if (!env.STRIPE_SECRET_KEY) return new Response("billing not configured", { status: 503, headers: CORS });
+  if (!env.LS_API_KEY) return new Response("billing not configured", { status: 503, headers: CORS });
   if (sub === "checkout") return billingCheckout(env, sp);
   if (sub === "portal")   return billingPortal(env, sp);
   return new Response("ok", { headers: CORS });
@@ -306,84 +299,85 @@ async function handleBilling(req, env, parts, sp) {
 const withParam = (url, kv) => url + (url.includes("?") ? "&" : "?") + kv;
 async function billingCheckout(env, sp) {
   const id = sp.get("id"), plan = sp.get("plan") || "annual";
-  const ret = sp.get("return") || "", lang = (sp.get("lang") || "en").slice(0, 2);
+  const ret = sp.get("return") || "";
   if (!id || !ret) return new Response("bad request", { status: 400, headers: CORS });
-  const price = planPrice(env, plan);
-  if (!price) return new Response("unknown plan", { status: 400, headers: CORS });
-  const lifetime = plan === "lifetime";
-  const params = {
-    mode: lifetime ? "payment" : "subscription",
-    "line_items[0][price]": price,
-    "line_items[0][quantity]": "1",
-    client_reference_id: id,
-    success_url: withParam(ret, "billing=success"),
-    cancel_url:  withParam(ret, "billing=cancel"),
-    locale: ["nl", "en", "es"].includes(lang) ? lang : "auto",
-    allow_promotion_codes: "true",
-    "metadata[syncId]": id,
+  const variant = lsVariant(env, plan);
+  if (!variant || !env.LS_STORE_ID) return new Response("unknown plan", { status: 400, headers: CORS });
+  // Create a Lemon Squeezy checkout. `custom.sync_id` rides through to the
+  // webhook so we can attach the entitlement to the right family account.
+  const body = {
+    data: {
+      type: "checkouts",
+      attributes: {
+        checkout_data: { custom: { sync_id: id } },
+        product_options: { redirect_url: withParam(ret, "billing=success") },
+        checkout_options: { embed: false },
+      },
+      relationships: {
+        store:   { data: { type: "stores",   id: String(env.LS_STORE_ID) } },
+        variant: { data: { type: "variants", id: String(variant) } },
+      },
+    },
   };
-  if (lifetime) params["payment_intent_data[metadata][syncId]"] = id;
-  else { params["subscription_data[trial_period_days]"] = "7";
-         params["subscription_data[metadata][syncId]"] = id; }
-  const r = await stripe(env, "/v1/checkout/sessions", params);
+  const r = await fetch("https://api.lemonsqueezy.com/v1/checkouts",
+    { method: "POST", headers: lsHeaders(env), body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.url) return J({ error: "stripe", detail: j.error || null }, 502);
-  return Response.redirect(j.url, 303);
+  const url = j && j.data && j.data.attributes && j.data.attributes.url;
+  if (!r.ok || !url) return J({ error: "lemonsqueezy", detail: j.errors || null }, 502);
+  return Response.redirect(url, 303);
 }
 async function billingPortal(env, sp) {
   const id = sp.get("id"), ret = sp.get("return") || "";
   if (!id) return new Response("bad request", { status: 400, headers: CORS });
   const ent = await getEnt(env, id);
-  if (!ent || !ent.customer) return Response.redirect(ret || "https://frankysworld.skep.co/", 303);
-  const r = await stripe(env, "/v1/billing_portal/sessions", { customer: ent.customer, return_url: ret });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.url) return J({ error: "stripe", detail: j.error || null }, 502);
-  return Response.redirect(j.url, 303);
+  // LS gives a signed customer-portal URL per subscription; we stored it on the
+  // webhook. Fall back to the app if there's nothing to manage (e.g. lifetime).
+  return Response.redirect((ent && ent.portal) || ret || "https://frankysworld.skep.co/", 303);
 }
-// Verify Stripe's webhook signature (HMAC-SHA256 over "t.payload"), with the
-// standard 5-minute timestamp tolerance.
-async function verifyStripe(payload, sigHeader, secret) {
+// Verify a Lemon Squeezy webhook: HMAC-SHA256 of the raw body with the signing
+// secret, compared (hex) to the X-Signature header.
+async function verifyLemon(payload, sigHex, secret) {
   try {
-    const map = Object.fromEntries(String(sigHeader).split(",").map(kv => kv.split("=")));
-    const t = map.t, v1 = map.v1;
-    if (!t || !v1) return false;
-    if (Math.abs(Date.now() / 1000 - (+t)) > 300) return false;
+    if (!sigHex) return false;
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", enc.encode(secret),
       { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const mac = await crypto.subtle.sign("HMAC", key, enc.encode(t + "." + payload));
+    const mac = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
     const hex = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, "0")).join("");
-    if (hex.length !== v1.length) return false;
-    let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ v1.charCodeAt(i);
+    if (hex.length !== sigHex.length) return false;
+    let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ sigHex.charCodeAt(i);
     return diff === 0;
   } catch { return false; }
 }
 async function billingWebhook(req, env) {
-  const sig = req.headers.get("stripe-signature") || "";
+  const sig = req.headers.get("x-signature") || "";
   const payload = await req.text();
-  if (!env.STRIPE_WEBHOOK_SECRET || !(await verifyStripe(payload, sig, env.STRIPE_WEBHOOK_SECRET)))
+  if (!env.LS_WEBHOOK_SECRET || !(await verifyLemon(payload, sig, env.LS_WEBHOOK_SECRET)))
     return new Response("bad signature", { status: 400 });
   let evt; try { evt = JSON.parse(payload); } catch { return new Response("bad json", { status: 400 }); }
-  const o = (evt.data && evt.data.object) || {};
+  const event = evt.meta && evt.meta.event_name;
+  const cd = (evt.meta && evt.meta.custom_data) || {};
+  const id = cd.sync_id || cd.syncId;
+  const a = (evt.data && evt.data.attributes) || {};
   const FAR = Date.now() + 100 * 365 * 24 * 3600 * 1000;   // ~forever (lifetime)
   const GRACE = Date.now() + 8 * 24 * 3600 * 1000;         // provisional window
+  const ts = s => { const t = Date.parse(s || ""); return isNaN(t) ? 0 : t; };
+  const portal = (a.urls && a.urls.customer_portal) || undefined;
   try {
-    if (evt.type === "checkout.session.completed") {
-      const id = o.client_reference_id || (o.metadata && o.metadata.syncId);
-      if (id) {
-        if (o.mode === "payment")
-          await setEnt(env, id, { premium: true, until: FAR, plan: "lifetime", customer: o.customer || null });
-        else
-          await setEnt(env, id, { premium: true, until: GRACE, plan: "sub", customer: o.customer || null });
-      }
-    } else if (evt.type.indexOf("customer.subscription.") === 0) {
-      const id = o.metadata && o.metadata.syncId;
-      if (id) {
-        const active = ["active", "trialing", "past_due"].includes(o.status);
-        const until = o.current_period_end ? o.current_period_end * 1000 : 0;
+    if (id) {
+      if (event === "order_created") {
+        // One-time purchase (lifetime). Only grant on a paid order.
+        if (a.status === "paid" || a.status === "active")
+          await setEnt(env, id, { premium: true, until: FAR, plan: "lifetime", portal });
+      } else if (event && event.indexOf("subscription_") === 0) {
+        // status: active | on_trial | paused | past_due | unpaid | cancelled | expired
+        const s = a.status;
+        const ends = ts(a.ends_at), renews = ts(a.renews_at);
+        const live = ["active", "on_trial", "past_due"].includes(s);
+        const stillPaid = s === "cancelled" && ends > Date.now();  // keep access until period end
+        const premium = live || stillPaid;
         await setEnt(env, id, {
-          premium: active, until: active ? (until || GRACE) : 0, plan: "sub",
-          customer: o.customer || undefined,
+          premium, until: premium ? (renews || ends || GRACE) : 0, plan: "sub", portal,
         });
       }
     }
