@@ -265,8 +265,14 @@ async function handleSync(req, env, parts) {
      PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET
    Optional var: PADDLE_ENV = "sandbox" | "production" (default production)
    ========================================================================= */
-const paddleApiBase = env =>
-  (env.PADDLE_ENV === "sandbox") ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+// PADDLE_ENV (var) selects sandbox vs production. Each env keeps its OWN
+// secrets so flipping is a one-line var change with no key re-entry:
+//   sandbox    -> PADDLE_API_KEY_SANDBOX / PADDLE_WEBHOOK_SECRET_SANDBOX
+//   production -> PADDLE_API_KEY / PADDLE_WEBHOOK_SECRET
+const paddleSandbox = env => env.PADDLE_ENV === "sandbox";
+const paddleApiBase = env => paddleSandbox(env) ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+const paddleApiKey  = env => paddleSandbox(env) ? env.PADDLE_API_KEY_SANDBOX : env.PADDLE_API_KEY;
+const paddleWebhookSecret = env => paddleSandbox(env) ? env.PADDLE_WEBHOOK_SECRET_SANDBOX : env.PADDLE_WEBHOOK_SECRET;
 async function getEnt(env, id) {
   try { const raw = await env.SYNC.get("ent:" + id); return raw ? JSON.parse(raw) : null; }
   catch { return null; }
@@ -295,11 +301,11 @@ async function billingPortal(env, sp) {
   const id = sp.get("id"), ret = sp.get("return") || "https://frankysworld.skep.co/";
   if (!id) return new Response("bad request", { status: 400, headers: CORS });
   const ent = await getEnt(env, id);
-  if (!env.PADDLE_API_KEY || !ent || !ent.customer) return Response.redirect(ret, 303);
+  if (!paddleApiKey(env) || !ent || !ent.customer) return Response.redirect(ret, 303);
   try {
     const r = await fetch(paddleApiBase(env) + "/customers/" + ent.customer + "/portal-sessions", {
       method: "POST",
-      headers: { "Authorization": "Bearer " + env.PADDLE_API_KEY, "Content-Type": "application/json" },
+      headers: { "Authorization": "Bearer " + paddleApiKey(env), "Content-Type": "application/json" },
       body: "{}",
     });
     const j = await r.json().catch(() => ({}));
@@ -328,7 +334,7 @@ async function verifyPaddle(payload, sigHeader, secret) {
 async function billingWebhook(req, env) {
   const sig = req.headers.get("paddle-signature") || "";
   const payload = await req.text();
-  if (!env.PADDLE_WEBHOOK_SECRET || !(await verifyPaddle(payload, sig, env.PADDLE_WEBHOOK_SECRET)))
+  if (!paddleWebhookSecret(env) || !(await verifyPaddle(payload, sig, paddleWebhookSecret(env))))
     return new Response("bad signature", { status: 400 });
   let evt; try { evt = JSON.parse(payload); } catch { return new Response("bad json", { status: 400 }); }
   const type = evt.event_type || "";

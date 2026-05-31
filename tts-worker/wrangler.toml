@@ -2,6 +2,12 @@ name = "scribble-tts"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
+# Billing environment. "sandbox" uses the *_SANDBOX Paddle secrets + sandbox
+# API; set to "production" (or remove) at go-live to use PADDLE_API_KEY /
+# PADDLE_WEBHOOK_SECRET against api.paddle.com.
+[vars]
+PADDLE_ENV = "sandbox"
+
 # The OpenAI key is NOT stored here. It is set once as an encrypted secret:
 #   npx wrangler secret put OPENAI_API_KEY
 
