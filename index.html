@@ -788,12 +788,20 @@ const langTag = () => LANG_TAG[LC()] || "en-US";
 // follows a language change immediately.
 function deviceVoice() {
   if (!("speechSynthesis" in window)) return null;
-  const v = speechSynthesis.getVoices(), pre = LC();
-  const byLang = v.filter(x => x.lang && x.lang.toLowerCase().startsWith(pre));
+  const v = speechSynthesis.getVoices(), pre = LC(), tag = langTag().toLowerCase();
+  // Prefer the EXACT region we want (e.g. nl-NL) and avoid other regional
+  // variants - on iOS the generic "nl" match often resolves to nl-BE ("Ellen",
+  // Flemish/Belgian), which sounds wrong for a Netherlands-Dutch app. Only fall
+  // back to other same-language regions if no exact-region voice exists.
+  const exact = v.filter(x => x.lang && x.lang.toLowerCase() === tag);
+  const sameLang = v.filter(x => x.lang && x.lang.toLowerCase().startsWith(pre)
+    && !/-be$/i.test(x.lang));                          // never the Belgian one if avoidable
+  const pool = exact.length ? exact : (sameLang.length ? sameLang
+    : v.filter(x => x.lang && x.lang.toLowerCase().startsWith(pre)));
   return (
-    byLang.find(x => /natural|enhanced|premium|google|siri/i.test(x.name)) ||
-    byLang.find(x => /female|vrouw|mujer/i.test(x.name)) ||
-    byLang[0] ||
+    pool.find(x => /natural|enhanced|premium|google|siri/i.test(x.name)) ||
+    pool.find(x => /female|vrouw|mujer/i.test(x.name)) ||
+    pool[0] ||
     v.find(x => x.lang && x.lang.startsWith("en")) || v[0] || null
   );
 }
@@ -816,6 +824,15 @@ let _ttsEl = null, _ttsCache = null, _ttsUnlocked = false, _ttsObj = null;
 // device-voice fallback) checks it before making sound, so a slower earlier
 // call can never play OVER a newer one - the cause of two overlapping voices.
 let _speakGen = 0;
+// Speech requested BEFORE the first tap (e.g. the home greeting on cold open)
+// can't use the realistic voice yet - iOS hasn't unlocked audio - and we must
+// NOT blurt it through the robotic device voice. Hold the latest such line and
+// speak it (in the warm voice) the moment audio unlocks on the first tap.
+let _pendingSpeak = null;
+function flushPendingSpeak() {
+  if (!_pendingSpeak) return;
+  const [t, te] = _pendingSpeak; _pendingSpeak = null; speak(t, te);
+}
 // iOS Safari blocks programmatic audio until an <audio> element has been
 // started inside a real user gesture. We unlock ONE shared element on the
 // first tap; afterwards Franky's realistic voice plays freely. Without this
@@ -915,6 +932,11 @@ function deviceSpeak(text) {
 // Franky's warm everyday voice.
 function speak(text, teach) {
   if (S.settings.muted || !S.settings.voice) return;
+  // Before audio is unlocked (no tap yet) the realistic voice can't play. Don't
+  // fall back to the robotic device voice for it - hold it and speak it in the
+  // warm voice the instant the first tap unlocks audio. (Avoids the "Belgian
+  // robot" greeting on cold open, esp. iPad.)
+  if (!_ttsUnlocked) { _pendingSpeak = [text, teach]; return; }
   // Spoken-name override: the display name stays (e.g. "Lucy") but the
   // voice says the parent's phonetic spelling (e.g. "Loesie") so names
   // are pronounced correctly in the chosen language.
@@ -3597,6 +3619,11 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 window.addEventListener("pointerdown", function once() {
   Sound.ensure(); unlockAudio();
+  // We're inside a real user gesture now, so audio is unlockable: mark it
+  // unlocked even if the silent-clip warmup promise is slow/rejects (otherwise
+  // held speech could never flush and the app would go mute). Then speak any
+  // line that was waiting for this first tap, in the warm voice.
+  _ttsUnlocked = true; flushPendingSpeak();
   window.removeEventListener("pointerdown", once);
 }, { once: true });
 
