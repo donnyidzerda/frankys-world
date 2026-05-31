@@ -338,8 +338,17 @@ const SAVE_KEY = "scribble-heroes-v2";          // legacy single-profile key
 const IDX_KEY  = "scribble-heroes-idx";
 const pKey = id => SAVE_KEY + "::" + id;
 const genId = () => "p" + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
+// Default a brand-new profile to the DEVICE language when we support it
+// (nl/en/es), else English. Only the default - an existing profile keeps the
+// language it was saved with, and the parent can always switch on the splash.
+const deviceLang = () => {
+  const ls = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+  for (const l of ls) { const c = String(l).slice(0, 2).toLowerCase();
+    if (c === "nl" || c === "en" || c === "es") return c; }
+  return "en";
+};
 const defaultState = () => ({
-  id: null, name: "", age: 2, onboarded: false, lang: "nl",
+  id: null, name: "", age: 2, onboarded: false, lang: deviceLang(),
   caseMode: "upper", drawDiff: 1, writeDiff: 1, sayName: "", worldSeenStars: 0,
   readBox: {}, readIntro: 1, readProd: {},
   readLat: {}, readPlaced: false, readHeard: {},   // Hoven: latency, placement, heard-log
