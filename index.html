@@ -777,6 +777,23 @@ async function deleteProfile(id) {
   if (idx.active) { S = readProfile(idx.active) || defaultState(); applyFlags(); go("home"); }
   else { S = defaultState(); Splash(); }
 }
+// GDPR right-to-erasure: wipe EVERY profile's cloud record + entitlement, then
+// all local data, and return to a clean first run. Parent-gated by the caller.
+async function wipeEverything() {
+  const ids = ((loadIdx() || {}).ids) || [];
+  for (const pid of ids) {
+    const s = readProfile(pid);
+    if (s && s.syncId) {
+      try { await fetch(BILLING_URL() + "/sync/delete", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: s.syncId }) }); } catch {}
+    }
+    try { (await galleryAll(pid)).forEach(r => galleryDel(r.id)); } catch {}
+  }
+  try { Object.keys(localStorage)
+    .filter(k => k === IDX_KEY || k.indexOf(SAVE_KEY) === 0)
+    .forEach(k => localStorage.removeItem(k)); } catch {}
+  location.href = location.origin + location.pathname;   // clean reload -> Splash
+}
 function touchStreak() {
   const today = new Date().toDateString();
   if (S.lastPlay === today) return;
@@ -1747,6 +1764,10 @@ const I18N_X = {
     pwLockedRead:"Dit hoort bij Premium — open de volledige leesreis voor je kind.",
     pwLockedProfiles:"Meerdere kinderprofielen horen bij Premium.",
     pwPremiumOn:"Premium is actief", pwPremiumOff:"Gratis versie",
+    legalSection:"Privacy & voorwaarden", legalPrivacy:"Privacybeleid", legalTerms:"Voorwaarden",
+    delAll:"Verwijder al mijn gegevens",
+    delAllConfirm:"Weet je het zeker? Alle profielen, voortgang en de premium-koppeling op dit apparaat én in de cloud worden gewist. Dit kan niet ongedaan worden gemaakt.",
+    delAllDone:"Alle gegevens zijn gewist.",
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
     sayNameLabel:"Hoe spreek je de naam uit?",
@@ -1829,6 +1850,10 @@ const I18N_X = {
     pwLockedRead:"This is part of Premium — unlock the full reading journey.",
     pwLockedProfiles:"Multiple child profiles are part of Premium.",
     pwPremiumOn:"Premium is active", pwPremiumOff:"Free version",
+    legalSection:"Privacy & terms", legalPrivacy:"Privacy policy", legalTerms:"Terms",
+    delAll:"Delete all my data",
+    delAllConfirm:"Are you sure? All profiles, progress and the premium link on this device AND in the cloud will be erased. This cannot be undone.",
+    delAllDone:"All data has been erased.",
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
     sayNameLabel:"How is the name pronounced?",
@@ -1911,6 +1936,10 @@ const I18N_X = {
     pwLockedRead:"Esto es parte de Premium — desbloquea la lectura completa.",
     pwLockedProfiles:"Varios perfiles son parte de Premium.",
     pwPremiumOn:"Premium activo", pwPremiumOff:"Versión gratuita",
+    legalSection:"Privacidad y términos", legalPrivacy:"Política de privacidad", legalTerms:"Términos",
+    delAll:"Borrar todos mis datos",
+    delAllConfirm:"¿Seguro? Se borrarán todos los perfiles, el progreso y el vínculo premium en este dispositivo Y en la nube. Esto no se puede deshacer.",
+    delAllDone:"Todos los datos han sido borrados.",
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
     sayNameLabel:"¿Cómo se pronuncia el nombre?",
@@ -4976,6 +5005,19 @@ function Settings() {
     el("div", { cls: "t-head", css: "flex:1", textContent: premOn ? t("pwPremiumOn") : t("pwPremiumOff") }),
     premBtn);
 
+  // Privacy, terms & full data erasure (GDPR). Parent-gated.
+  const legalCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
+  const legalRow = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap" });
+  const legalLink = (label, href) => {
+    const a = el("a", { cls: "btn btn-quiet", css: "text-decoration:none", textContent: label });
+    a.href = href; a.target = "_blank"; a.rel = "noopener"; return a;
+  };
+  legalRow.append(legalLink(t("legalPrivacy"), "privacy.html"), legalLink(t("legalTerms"), "terms.html"));
+  const delAllBtn = el("button", { cls: "btn",
+    css: "background:var(--clay-soft);color:var(--clay);border:1px solid var(--clay)", textContent: t("delAll") });
+  delAllBtn.onclick = () => parentGate(() => { if (window.confirm(t("delAllConfirm"))) wipeEverything(); });
+  legalCard.append(legalRow, delAllBtn);
+
   // Letter case (caps recommended first; lowercase when ready)
   const caseCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:10px" });
   caseCard.append(el("div", { cls: "t-label", textContent: t("caseLabel") }));
@@ -5207,6 +5249,7 @@ function Settings() {
     sectionLabel(t("secSound")), soundCard,
     sectionLabel(t("secDevices")), syncCard,
     sectionLabel(t("secApp")), langCard, limCard, shareCard, note,
+    sectionLabel(t("legalSection")), legalCard,
   );
   s.append(wrap);
   APP.append(s);

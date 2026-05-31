@@ -237,7 +237,158 @@ async function handleSync(req, env, parts) {
     return J({ ts });
   }
 
+  // POST /sync/delete { id }  -> erase this family's cloud data (GDPR erasure).
+  // Removes the synced learning state AND the entitlement record. (Stripe
+  // cancellation, if any, is handled separately via the customer portal.)
+  if (sub === "delete" && req.method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const id = String(body.id || "");
+    if (!/^[a-f0-9]{32}$/.test(id)) return J({ error: "bad_id" }, 400);
+    try { await env.SYNC.delete("id:" + id); } catch {}
+    try { await env.SYNC.delete("ent:" + id); } catch {}
+    return J({ ok: true });
+  }
+
   return J({ error: "not_found" }, 404);
+}
+
+/* =========================================================================
+   Billing (Stripe) + entitlement. Web-first: the app sends the family to
+   /billing/checkout, Stripe handles payment, the webhook sets the entitlement
+   in the same KV the sync uses (keyed by the sync account id). The app reads
+   /entitlement?id=... and caches it. Everything fails closed to "free" if not
+   configured, so the app keeps working before keys are set.
+
+   Required secrets (wrangler secret put ...):
+     STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+     STRIPE_PRICE_ANNUAL, STRIPE_PRICE_MONTHLY, STRIPE_PRICE_LIFETIME
+   ========================================================================= */
+const formEncode = obj =>
+  Object.entries(obj).filter(([, v]) => v != null)
+    .map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v)).join("&");
+function stripe(env, path, params, method = "POST") {
+  return fetch("https://api.stripe.com" + path, {
+    method,
+    headers: {
+      "Authorization": "Bearer " + env.STRIPE_SECRET_KEY,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params ? formEncode(params) : undefined,
+  });
+}
+const planPrice = (env, plan) =>
+  plan === "annual" ? env.STRIPE_PRICE_ANNUAL
+  : plan === "monthly" ? env.STRIPE_PRICE_MONTHLY
+  : plan === "lifetime" ? env.STRIPE_PRICE_LIFETIME : null;
+async function getEnt(env, id) {
+  try { const raw = await env.SYNC.get("ent:" + id); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+}
+async function setEnt(env, id, patch) {
+  const next = Object.assign((await getEnt(env, id)) || {}, patch);
+  await env.SYNC.put("ent:" + id, JSON.stringify(next));
+  return next;
+}
+async function entitlementGet(env, sp) {
+  const id = sp.get("id");
+  const ent = id ? await getEnt(env, id) : null;
+  const premium = !!(ent && ent.premium && (+ent.until || 0) > Date.now());
+  return J({ premium, until: ent ? (+ent.until || 0) : 0, plan: ent ? (ent.plan || "") : "" });
+}
+async function handleBilling(req, env, parts, sp) {
+  const sub = parts[1];
+  if (sub === "webhook") return billingWebhook(req, env);
+  if (!env.STRIPE_SECRET_KEY) return new Response("billing not configured", { status: 503, headers: CORS });
+  if (sub === "checkout") return billingCheckout(env, sp);
+  if (sub === "portal")   return billingPortal(env, sp);
+  return new Response("ok", { headers: CORS });
+}
+const withParam = (url, kv) => url + (url.includes("?") ? "&" : "?") + kv;
+async function billingCheckout(env, sp) {
+  const id = sp.get("id"), plan = sp.get("plan") || "annual";
+  const ret = sp.get("return") || "", lang = (sp.get("lang") || "en").slice(0, 2);
+  if (!id || !ret) return new Response("bad request", { status: 400, headers: CORS });
+  const price = planPrice(env, plan);
+  if (!price) return new Response("unknown plan", { status: 400, headers: CORS });
+  const lifetime = plan === "lifetime";
+  const params = {
+    mode: lifetime ? "payment" : "subscription",
+    "line_items[0][price]": price,
+    "line_items[0][quantity]": "1",
+    client_reference_id: id,
+    success_url: withParam(ret, "billing=success"),
+    cancel_url:  withParam(ret, "billing=cancel"),
+    locale: ["nl", "en", "es"].includes(lang) ? lang : "auto",
+    allow_promotion_codes: "true",
+    "metadata[syncId]": id,
+  };
+  if (lifetime) params["payment_intent_data[metadata][syncId]"] = id;
+  else { params["subscription_data[trial_period_days]"] = "7";
+         params["subscription_data[metadata][syncId]"] = id; }
+  const r = await stripe(env, "/v1/checkout/sessions", params);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.url) return J({ error: "stripe", detail: j.error || null }, 502);
+  return Response.redirect(j.url, 303);
+}
+async function billingPortal(env, sp) {
+  const id = sp.get("id"), ret = sp.get("return") || "";
+  if (!id) return new Response("bad request", { status: 400, headers: CORS });
+  const ent = await getEnt(env, id);
+  if (!ent || !ent.customer) return Response.redirect(ret || "https://frankysworld.skep.co/", 303);
+  const r = await stripe(env, "/v1/billing_portal/sessions", { customer: ent.customer, return_url: ret });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.url) return J({ error: "stripe", detail: j.error || null }, 502);
+  return Response.redirect(j.url, 303);
+}
+// Verify Stripe's webhook signature (HMAC-SHA256 over "t.payload"), with the
+// standard 5-minute timestamp tolerance.
+async function verifyStripe(payload, sigHeader, secret) {
+  try {
+    const map = Object.fromEntries(String(sigHeader).split(",").map(kv => kv.split("=")));
+    const t = map.t, v1 = map.v1;
+    if (!t || !v1) return false;
+    if (Math.abs(Date.now() / 1000 - (+t)) > 300) return false;
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey("raw", enc.encode(secret),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const mac = await crypto.subtle.sign("HMAC", key, enc.encode(t + "." + payload));
+    const hex = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, "0")).join("");
+    if (hex.length !== v1.length) return false;
+    let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ v1.charCodeAt(i);
+    return diff === 0;
+  } catch { return false; }
+}
+async function billingWebhook(req, env) {
+  const sig = req.headers.get("stripe-signature") || "";
+  const payload = await req.text();
+  if (!env.STRIPE_WEBHOOK_SECRET || !(await verifyStripe(payload, sig, env.STRIPE_WEBHOOK_SECRET)))
+    return new Response("bad signature", { status: 400 });
+  let evt; try { evt = JSON.parse(payload); } catch { return new Response("bad json", { status: 400 }); }
+  const o = (evt.data && evt.data.object) || {};
+  const FAR = Date.now() + 100 * 365 * 24 * 3600 * 1000;   // ~forever (lifetime)
+  const GRACE = Date.now() + 8 * 24 * 3600 * 1000;         // provisional window
+  try {
+    if (evt.type === "checkout.session.completed") {
+      const id = o.client_reference_id || (o.metadata && o.metadata.syncId);
+      if (id) {
+        if (o.mode === "payment")
+          await setEnt(env, id, { premium: true, until: FAR, plan: "lifetime", customer: o.customer || null });
+        else
+          await setEnt(env, id, { premium: true, until: GRACE, plan: "sub", customer: o.customer || null });
+      }
+    } else if (evt.type.indexOf("customer.subscription.") === 0) {
+      const id = o.metadata && o.metadata.syncId;
+      if (id) {
+        const active = ["active", "trialing", "past_due"].includes(o.status);
+        const until = o.current_period_end ? o.current_period_end * 1000 : 0;
+        await setEnt(env, id, {
+          premium: active, until: active ? (until || GRACE) : 0, plan: "sub",
+          customer: o.customer || undefined,
+        });
+      }
+    }
+  } catch {}
+  return new Response("ok", { status: 200 });
 }
 
 export default {
@@ -247,6 +398,8 @@ export default {
     const { pathname, searchParams } = new URL(req.url);
     const parts = pathname.split("/").filter(Boolean);
     if (parts[0] === "sync") return handleSync(req, env, parts);
+    if (parts[0] === "billing") return handleBilling(req, env, parts, searchParams);
+    if (pathname === "/entitlement") return entitlementGet(env, searchParams);
     if (pathname !== "/tts") return new Response("ok", { headers: CORS });
 
     // Keep requests tiny and abuse-resistant: short text only.
