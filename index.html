@@ -723,7 +723,7 @@ const Ent = (() => {
       set({ premium: e.premium, until: e.until, plan: e.plan });
     } catch {}
   }
-  // Poll a few times after returning from Stripe (the webhook may lag a beat).
+  // Poll a few times after returning from Paddle (the webhook may lag a beat).
   async function refreshSoon(tries = 6) {
     for (let i = 0; i < tries; i++) { await refresh(); if (isPremium()) return true;
       await new Promise(r => setTimeout(r, 1500)); }
@@ -756,13 +756,8 @@ const Ent = (() => {
   }
   return { isPremium, refresh, refreshSoon, set, startCheckout, openPortal };
 })();
-// Run `onAllowed` only for premium families; otherwise show the paywall.
-function requirePremium(reasonKey, onAllowed) {
-  if (Ent.isPremium()) { onAllowed && onAllowed(); return true; }
-  Paywall(reasonKey); return false;
-}
 // The paywall sheet. Parent-facing: the actual checkout is behind the parent
-// gate (Kids-category requirement), the purchase opens Stripe in this tab.
+// gate (Kids-category requirement), the purchase opens the Paddle.js overlay.
 function Paywall(reasonKey) {
   Sound.fx.tap();
   const ov = el("div", { css: "position:fixed;inset:0;z-index:60;background:rgba(52,48,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto" });
@@ -2441,7 +2436,6 @@ const DRAWINGS = [
    y8, x-height top y38, baseline y78, descender bottom y98.
    To add a word: add the letters it needs to GLYPH, then push it to WORDS. */
 const _ln = (P, x1, y1, x2, y2) => `M ${P.x(x1)} ${P.y(y1)} L ${P.x(x2)} ${P.y(y2)}`;
-const _cir = (P, cx, cy, r) => C(P.x(cx), P.y(cy), r * P.s);
 // Ellipse as a path (for round caps that need optical overshoot).
 const _ell = (P, cx, cy, rx, ry) => {
   const X = P.x(cx), Y = P.y(cy), a = rx * P.s, b = ry * P.s;
@@ -3881,7 +3875,7 @@ window.addEventListener("DOMContentLoaded", () => {
   else Home();
   // Re-render the live screen whenever entitlement flips (e.g. just paid).
   _onEntChange = () => { if (_currentScreen) go(_currentScreen); };
-  // Coming back from Stripe Checkout: confirm the purchase, then celebrate.
+  // Coming back from Paddle checkout: confirm the purchase, then celebrate.
   const billing = params.get("billing");
   if (billing) {
     history.replaceState(null, "", location.origin + location.pathname);
@@ -3889,7 +3883,7 @@ window.addEventListener("DOMContentLoaded", () => {
   }
   Ent.refresh();   // keep the cached entitlement honest on every cold start
 });
-// After returning from a successful Stripe Checkout: poll the entitlement
+// After returning from a successful Paddle checkout: poll the entitlement
 // (the webhook may lag a second) and show a warm thank-you when it lands.
 async function billingReturn() {
   const ov = el("div", { css: "position:fixed;inset:0;z-index:70;background:rgba(52,48,42,.55);display:flex;align-items:center;justify-content:center;padding:18px" });
@@ -5084,7 +5078,7 @@ function Settings() {
   profCard.onclick = () => ProfilePicker();
 
   // Premium status + manage. Free families see an upgrade button; paying
-  // families can open the Stripe customer portal (parent-gated) to manage.
+  // families can open the Paddle customer portal (parent-gated) to manage.
   const premOn = Ent.isPremium();
   const premCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;align-items:center;gap:14px" });
   const premBtn = el("button", { cls: premOn ? "btn btn-quiet" : "btn btn-go",

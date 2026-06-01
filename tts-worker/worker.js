@@ -238,7 +238,7 @@ async function handleSync(req, env, parts) {
   }
 
   // POST /sync/delete { id }  -> erase this family's cloud data (GDPR erasure).
-  // Removes the synced learning state AND the entitlement record. (Stripe
+  // Removes the synced learning state AND the entitlement record. (Paddle
   // cancellation, if any, is handled separately via the customer portal.)
   if (sub === "delete" && req.method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -345,12 +345,24 @@ async function billingWebhook(req, env) {
   const GRACE = Date.now() + 8 * 24 * 3600 * 1000;         // provisional window
   const ts = s => { const t = Date.parse(s || ""); return isNaN(t) ? 0 : t; };
   try {
+    // Refund / chargeback on a one-time (lifetime) purchase -> revoke. The
+    // adjustment event carries no custom_data, so we resolve the sync account
+    // via the txn:<id> reverse map written when the lifetime was granted.
+    // (Subscriptions revoke themselves through the subscription.* events.)
+    if (type === "adjustment.created" && ["refund", "chargeback"].includes(d.action || "")) {
+      const owner = d.transaction_id && await env.SYNC.get("txn:" + d.transaction_id);
+      if (owner) await setEnt(env, owner, { premium: false, until: 0, plan: "lifetime_refunded" });
+      return new Response("ok", { status: 200 });
+    }
     if (id) {
       if (type === "transaction.completed") {
         // One-time purchase (lifetime). Subscriptions are handled by the
-        // subscription.* events, so only grant lifetime here.
-        if (cd.plan === "lifetime")
+        // subscription.* events, so only grant lifetime here. Store a reverse
+        // map so a later refund/chargeback can find this account to revoke.
+        if (cd.plan === "lifetime") {
           await setEnt(env, id, { premium: true, until: FAR, plan: "lifetime", customer: d.customer_id || undefined });
+          try { await env.SYNC.put("txn:" + d.id, id); } catch {}
+        }
       } else if (type.indexOf("subscription.") === 0) {
         // status: active | trialing | past_due | paused | canceled
         const s = d.status;
@@ -380,6 +392,21 @@ export default {
     // Keep requests tiny and abuse-resistant: short text only.
     const text = (searchParams.get("t") || "").slice(0, 300).trim();
     if (!text) return new Response("missing text", { status: 400, headers: CORS });
+
+    // Coarse per-IP rate limit so a script can't drain the TTS budget. Only
+    // novel phrases reach here - repeats replay from browser cache and never
+    // hit the Worker - so a real child stays far under the cap. KV is
+    // eventually consistent, so this is approximate by design: it caps
+    // egregious abuse, not exact metering, and fails open on any KV hiccup.
+    if (env.SYNC) {
+      const ip = req.headers.get("cf-connecting-ip") || "0";
+      const bucket = "rl:tts:" + ip + ":" + Math.floor(Date.now() / 60000);
+      try {
+        const n = (+(await env.SYNC.get(bucket)) || 0) + 1;
+        if (n > 120) return new Response("rate limited", { status: 429, headers: CORS });
+        await env.SYNC.put(bucket, String(n), { expirationTtl: 120 });
+      } catch { /* KV unavailable -> fail open */ }
+    }
     const slow = searchParams.get("s") === "1";
     // Mode: "teach" = letter sounds / words / reading (must be exact and
     // accent-free); "chat" = Franky's warm everyday speech (praise, etc.).
