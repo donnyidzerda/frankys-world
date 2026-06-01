@@ -6,7 +6,7 @@
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'frankys-world-v112';
+const CACHE = 'frankys-world-v115';
 
 // Everything needed to boot fully offline after the first visit.
 const APP_SHELL = [
@@ -17,6 +17,7 @@ const APP_SHELL = [
   './icon-512.png',
   'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4',
   'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
 ];
 
 self.addEventListener('install', (event) => {

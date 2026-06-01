@@ -408,7 +408,8 @@ function save() {
   if (!idx.ids.includes(S.id)) idx.ids.push(S.id);
   idx.active = S.id;
   saveIdx(idx);
-  Sync.schedulePush();                   // debounced cloud push (if linked)
+  Sync.schedulePush();                   // debounced cloud push (legacy, if linked)
+  if (USE_SUPABASE) SupaSync.schedulePush();   // debounced cloud push (Supabase)
 }
 
 /* -------------------------------------------------------------------------
@@ -702,6 +703,183 @@ function loadPaddle() {
   });
   return _paddleReady;
 }
+/* ----- Supabase: durable accounts + data (anon -> link email/SSO) --------
+   The publishable (anon) key is browser-safe; Row-Level Security confines each
+   family to its own rows. A child plays instantly as an ANONYMOUS user (no
+   signup wall); a parent can later attach email/SSO so the account - and thus
+   the data AND the premium entitlement - survives a wiped device or deleted
+   PWA. When SUPABASE_URL is empty the app falls back to the legacy pair-code
+   sync, so the working app is never broken mid-migration. */
+const SUPABASE_URL = "https://paynhwqxosinwkzzuytz.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_IWHZu0N2X9x4G8FQ0kHoOA_PNlg65rE";
+const BILLING_PROVIDER = "creem";          // must match the Worker's BILLING_PROVIDER
+const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+let _sb = null, _sbReady = null;
+const sb = () => _sb;
+function loadSupabase() {
+  if (_sbReady) return _sbReady;
+  _sbReady = new Promise((resolve, reject) => {
+    if (!USE_SUPABASE) return reject(new Error("supabase not configured"));
+    const go = () => {
+      try {
+        _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
+          { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+        resolve(_sb);
+      } catch (e) { reject(e); }
+    };
+    if (window.supabase && window.supabase.createClient) return go();
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+    s.onload = go; s.onerror = () => reject(new Error("supabase load failed"));
+    document.head.appendChild(s);
+  });
+  return _sbReady;
+}
+// The family account. Anonymous at first; uid() is the stable family key that
+// premium + cloud profiles hang off. Persisted across reloads by supabase-js.
+const Account = (() => {
+  let _uid = null, _email = null, _anon = true, _ready = null;
+  const uid = () => _uid;
+  const email = () => _email;
+  const isAnon = () => _anon;
+  function _apply(session) {
+    const u = session && session.user;
+    _uid = u ? u.id : null;
+    _email = u ? (u.email || null) : null;
+    _anon = u ? !u.email : true;
+    return _uid;
+  }
+  async function init() {
+    if (_ready) return _ready;
+    _ready = (async () => {
+      let client; try { client = await loadSupabase(); } catch { return null; }
+      try {
+        let { data: { session } } = await client.auth.getSession();
+        if (!session) {
+          const { data, error } = await client.auth.signInAnonymously();
+          if (!error) session = data.session;
+        }
+        _apply(session);
+        client.auth.onAuthStateChange((_e, s) => { _apply(s); try { _onEntChange && _onEntChange(); } catch {} });
+      } catch {}
+      return _uid;
+    })();
+    return _ready;
+  }
+  // Attach email + password to the current anonymous account (makes it
+  // recoverable). The uid is preserved, so data + premium carry over.
+  async function linkEmail(emailAddr, password) {
+    const client = await loadSupabase();
+    const { data, error } = await client.auth.updateUser({ email: emailAddr, password });
+    if (error) throw error;
+    if (data && data.user) _apply({ user: data.user });
+    return data;
+  }
+  // Sign in to an EXISTING account on a fresh device (the recovery path); the
+  // caller then pulls the cloud profiles back down via SupaSync.restoreAll().
+  async function signIn(emailAddr, password) {
+    const client = await loadSupabase();
+    const { data, error } = await client.auth.signInWithPassword({ email: emailAddr, password });
+    if (error) throw error;
+    _apply(data.session);
+    return data;
+  }
+  return { init, uid, email, isAnon, linkEmail, signIn };
+})();
+// Cloud sync over Supabase: localStorage stays the offline cache; each profile
+// is one row in `profiles` (matched by state->>id), reconciled with the same
+// grow-only mergeState the legacy path used. Realtime pushes to other devices.
+const SupaSync = (() => {
+  let pushTimer = 0, pushing = false, channel = null;
+  const on = () => USE_SUPABASE && Account.uid() && navigator.onLine !== false && sb();
+  async function rowId() {
+    const { data } = await sb().from("profiles").select("id")
+      .eq("user_id", Account.uid()).eq("state->>id", S.id).limit(1);
+    return data && data.length ? data[0].id : null;
+  }
+  async function push() {
+    if (!on() || !S.id || pushing) return;
+    pushing = true;
+    try {
+      const payload = { user_id: Account.uid(), name: S.name || "", age: S.age || null,
+        lang: S.lang || null, state: syncSnapshot(S), client_ts: S.syncTs || Date.now() };
+      const id = await rowId();
+      if (id) await sb().from("profiles").update(payload).eq("id", id);
+      else await sb().from("profiles").insert(payload);
+    } catch {} finally { pushing = false; }
+  }
+  async function pull() {
+    if (!on() || !S.id) return false;
+    try {
+      const { data } = await sb().from("profiles").select("state,client_ts")
+        .eq("user_id", Account.uid()).eq("state->>id", S.id).limit(1);
+      if (data && data.length) {
+        const changed = syncApply(data[0].state, data[0].client_ts || 0);
+        applyFlags && applyFlags();
+        if (changed) window.dispatchEvent(new CustomEvent("sync:applied"));
+        return changed;
+      }
+    } catch {}
+    return false;
+  }
+  // Pull EVERY cloud profile into local storage (fresh device / after sign-in),
+  // merging with anything already local. Rebuilds the local index.
+  async function restoreAll() {
+    if (!on()) return 0;
+    try {
+      const { data } = await sb().from("profiles").select("state,client_ts").eq("user_id", Account.uid());
+      if (!data || !data.length) return 0;
+      const idx = loadIdx() || { active: null, ids: [], legacyPid: null };
+      for (const row of data) {
+        const st = row.state || {}; if (!st.id) continue;
+        const local = readProfile(st.id);
+        const merged = local
+          ? mergeState(local, st, local.syncTs || 0, row.client_ts || 0)
+          : Object.assign(defaultState(), st);
+        merged.id = st.id;
+        merged.syncTs = Math.max((local && local.syncTs) || 0, row.client_ts || 0);
+        merged.settings = Object.assign(defaultState().settings, merged.settings || {});
+        localStorage.setItem(pKey(st.id), JSON.stringify(merged));
+        if (!idx.ids.includes(st.id)) idx.ids.push(st.id);
+      }
+      if (!idx.active && idx.ids.length) idx.active = idx.ids[0];
+      saveIdx(idx);
+      return data.length;
+    } catch { return 0; }
+  }
+  function schedulePush() {
+    if (!on()) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(push, 500);
+  }
+  function subscribe() {
+    const c = sb(); if (!c || !Account.uid()) return;
+    if (channel) { try { c.removeChannel(channel); } catch {} channel = null; }
+    channel = c.channel("profiles-" + Account.uid())
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "profiles", filter: "user_id=eq." + Account.uid() },
+        (payload) => {
+          const row = payload.new; if (!row || !row.state) return;
+          if (row.state.id === S.id) {
+            const changed = syncApply(row.state, row.client_ts || 0);
+            applyFlags && applyFlags();
+            if (changed) window.dispatchEvent(new CustomEvent("sync:applied"));
+          }
+        }).subscribe();
+  }
+  async function start() {
+    if (!USE_SUPABASE) return;
+    await Account.init();
+    if (!Account.uid()) return;
+    await restoreAll();
+    await pull();
+    await push();
+    subscribe();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
+    window.addEventListener("online", () => { pull(); push(); });
+  }
+  return { start, push, pull, restoreAll, schedulePush, subscribe, linked: () => USE_SUPABASE && !!Account.uid() };
+})();
 const Ent = (() => {
   const ent = () => (S && S.ent) || { premium: false, until: 0 };
   // Premium when the server said so AND the cached window hasn't lapsed.
@@ -714,7 +892,19 @@ const Ent = (() => {
   }
   // Pull the authoritative entitlement for this account. No account => free.
   async function refresh() {
-    if (!S || !S.syncId || navigator.onLine === false) return;
+    if (navigator.onLine === false) return;
+    if (USE_SUPABASE) {
+      if (!Account.uid()) return;             // anon or signed-in: read by uid
+      try {
+        const { data } = await sb().from("entitlements")
+          .select("premium,until,plan").eq("user_id", Account.uid()).maybeSingle();
+        if (data) set({ premium: !!data.premium, until: data.until ? Date.parse(data.until) : 0, plan: data.plan || "" });
+        else set({ premium: false, until: 0, plan: "" });
+      } catch {}
+      return;
+    }
+    // Legacy pair-code path (Supabase not configured).
+    if (!S || !S.syncId) return;
     try {
       const r = await fetch(BILLING_URL() + "/entitlement?id=" + encodeURIComponent(S.syncId),
         { mode: "cors", cache: "no-store" });
@@ -734,6 +924,22 @@ const Ent = (() => {
   // the account id as custom data so the webhook can grant the entitlement.
   async function startCheckout(plan) {
     if (navigator.onLine === false) return;       // checkout needs the network
+    if (USE_SUPABASE && BILLING_PROVIDER === "creem") {
+      // Server-creates a Creem hosted checkout tied to this family's uid, then
+      // redirects. The signed webhook grants the entitlement on return.
+      try { if (!Account.uid()) await Account.init(); } catch {}
+      if (!Account.uid()) return;
+      try {
+        const r = await fetch(BILLING_URL() + "/billing/checkout", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uid: Account.uid(), plan, return: location.origin + location.pathname }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (j && j.url) location.href = j.url;
+      } catch {}
+      return;
+    }
+    // Legacy Paddle.js overlay (Supabase/Creem not configured).
     const priceId = PADDLE_PRICE[plan];
     if (!priceId || !PADDLE_CLIENT_TOKEN) return;  // billing not configured yet
     try { if (!S.syncId) await Sync.create(); } catch {}
@@ -749,8 +955,14 @@ const Ent = (() => {
     });
   }
   function openPortal() {
-    if (!S.syncId) return;
     const ret = location.origin + location.pathname;
+    if (USE_SUPABASE) {
+      if (!Account.uid()) return;
+      location.href = BILLING_URL() + "/billing/portal?uid=" + encodeURIComponent(Account.uid())
+        + "&return=" + encodeURIComponent(ret);
+      return;
+    }
+    if (!S.syncId) return;
     location.href = BILLING_URL() + "/billing/portal?id=" + encodeURIComponent(S.syncId)
       + "&return=" + encodeURIComponent(ret);
   }
@@ -1868,6 +2080,14 @@ const I18N_X = {
     writeHero:"Verder oefenen", writeHeroSub:"Franky heeft een letter voor je klaar",
     found:["Goed je best doen is het allerbelangrijkste.","Als iets niet lukt, probeer je het gewoon nog een keer.","Wees lief en geduldig, ook voor jezelf.","Eerlijk zijn is altijd het beste.","Rustig ademhalen helpt als je het moeilijk vindt.","Je leert elke dag iets nieuws. Knap hoor."],
     syncTitle:"Voortgang over apparaten", syncOn:"Aan", syncLast:"Laatste sync", syncNever:"nog nooit",
+    acctSecureTitle:"Houd de voortgang veilig", acctOn:"Aan",
+    acctAnonHint:"De voortgang staat nu alleen op dit apparaat. Voeg een e-mail toe om hem terug te krijgen op een nieuwe telefoon of na opnieuw installeren — en om je premium te bewaren.",
+    acctSecureBtn:"Gegevens veiligstellen", acctHaveBtn:"Ik heb al een account",
+    acctOnHint:e=>`Ingelogd als ${e} — de voortgang wordt op je account bewaard en gedeeld over apparaten.`,
+    acctSignOut:"Uitloggen", acctEmail:"E-mail", acctPw:"Wachtwoord",
+    acctLinkGo:"Opslaan", acctSignInGo:"Inloggen", acctLinkTitle:"Gegevens veiligstellen", acctSignInTitle:"Inloggen",
+    acctErr:"Er ging iets mis. Controleer je gegevens en probeer opnieuw.",
+    acctLinkedOk:"Je gegevens zijn nu veiliggesteld.", acctRestored:"Welkom terug! Je profielen worden geladen.",
     syncLinkedHint:"De voortgang van dit kind wordt automatisch gedeeld met andere gekoppelde apparaten.",
     syncIntro:"Koppel iPad, iPhone en oma's tablet zodat sterren en sticker overal hetzelfde zijn.",
     syncStart:"Sync aanzetten", syncPair:"Code invullen",
@@ -1955,6 +2175,14 @@ const I18N_X = {
     writeHero:"Keep practising", writeHeroSub:"Franky has a letter ready for you",
     found:["Trying your best is what matters most.","If something is hard, you just try again.","Be kind and patient, also with yourself.","Telling the truth is always best.","Slow breathing helps when something feels hard.","You learn something new every day. Well done."],
     syncTitle:"Progress across devices", syncOn:"On", syncLast:"Last sync", syncNever:"never yet",
+    acctSecureTitle:"Keep your progress safe", acctOn:"On",
+    acctAnonHint:"Right now your progress lives only on this device. Add an email so you can get it back on a new phone or after reinstalling — and to keep your premium.",
+    acctSecureBtn:"Secure my data", acctHaveBtn:"I already have an account",
+    acctOnHint:e=>`Signed in as ${e} — your progress is saved to your account and syncs across devices.`,
+    acctSignOut:"Sign out", acctEmail:"Email", acctPw:"Password",
+    acctLinkGo:"Save", acctSignInGo:"Sign in", acctLinkTitle:"Secure your data", acctSignInTitle:"Sign in",
+    acctErr:"Something went wrong. Check your details and try again.",
+    acctLinkedOk:"Your data is now secured.", acctRestored:"Welcome back! Your profiles are loading.",
     syncLinkedHint:"This child's progress is shared automatically with linked devices.",
     syncIntro:"Link iPad, iPhone and grandma's tablet so stars and stickers stay in step.",
     syncStart:"Turn on sync", syncPair:"Enter code",
@@ -2042,6 +2270,14 @@ const I18N_X = {
     writeHero:"Seguir practicando", writeHeroSub:"Franky tiene una letra para ti",
     found:["Esforzarte es lo más importante.","Si algo es difícil, lo intentas otra vez.","Sé amable y paciente, también contigo.","Decir la verdad siempre es lo mejor.","Respirar despacio ayuda cuando algo cuesta.","Aprendes algo nuevo cada día. Muy bien."],
     syncTitle:"Progreso entre dispositivos", syncOn:"Activado", syncLast:"Última sincronía", syncNever:"todavía no",
+    acctSecureTitle:"Guarda tu progreso", acctOn:"Activado",
+    acctAnonHint:"Ahora mismo tu progreso está solo en este dispositivo. Añade un correo para recuperarlo en un teléfono nuevo o tras reinstalar — y para conservar tu premium.",
+    acctSecureBtn:"Proteger mis datos", acctHaveBtn:"Ya tengo una cuenta",
+    acctOnHint:e=>`Sesión iniciada como ${e} — tu progreso se guarda en tu cuenta y se sincroniza entre dispositivos.`,
+    acctSignOut:"Cerrar sesión", acctEmail:"Correo", acctPw:"Contraseña",
+    acctLinkGo:"Guardar", acctSignInGo:"Entrar", acctLinkTitle:"Proteger mis datos", acctSignInTitle:"Iniciar sesión",
+    acctErr:"Algo salió mal. Revisa tus datos e inténtalo de nuevo.",
+    acctLinkedOk:"Tus datos ya están protegidos.", acctRestored:"¡Bienvenido de nuevo! Cargando tus perfiles.",
     syncLinkedHint:"El progreso de este niño se comparte automáticamente entre los dispositivos vinculados.",
     syncIntro:"Vincula iPad, iPhone y la tablet de la abuela para que las estrellas y pegatinas vayan juntas.",
     syncStart:"Activar sincronía", syncPair:"Introducir código",
@@ -3881,7 +4117,13 @@ window.addEventListener("DOMContentLoaded", () => {
     history.replaceState(null, "", location.origin + location.pathname);
     if (billing === "success") billingReturn();
   }
-  Ent.refresh();   // keep the cached entitlement honest on every cold start
+  if (USE_SUPABASE) {
+    // Sign in (anonymously if needed), pull cloud profiles, then sync + refresh
+    // the entitlement against the account. Falls through harmlessly offline.
+    SupaSync.start().then(() => Ent.refresh());
+  } else {
+    Ent.refresh();   // keep the cached entitlement honest on every cold start
+  }
 });
 // After returning from a successful Paddle checkout: poll the entitlement
 // (the webhook may lag a second) and show a warm thank-you when it lands.
@@ -5190,8 +5432,10 @@ function Settings() {
   // Links one child profile across the family's devices via a 6-digit
   // pair-code. No accounts, no email. The cloud only sees an opaque blob.
   const syncCard = el("div", { cls: "card", css: "padding:16px 18px;display:flex;flex-direction:column;gap:12px" });
-  syncCard.append(el("div", { cls: "t-label", textContent: t("syncTitle") }));
-  if (Sync.linked()) {
+  syncCard.append(el("div", { cls: "t-label", textContent: USE_SUPABASE ? t("acctSecureTitle") : t("syncTitle") }));
+  if (USE_SUPABASE) {
+    accountCard();
+  } else if (Sync.linked()) {
     // Linked state: show status + actions.
     const st = Sync.status();
     const when = st.lastPull
@@ -5285,6 +5529,78 @@ function Settings() {
     c.append(row);
     ov.append(c); APP.append(ov);
     setTimeout(() => inp.focus(), 50);
+  }
+
+  // ---- Supabase account card (anon -> secure with email / sign in) -------
+  function accountCard() {
+    const linkedEmail = !Account.isAnon() && Account.email();
+    if (linkedEmail) {
+      syncCard.append(el("div", { cls: "t-body",
+        html: `<span style="color:var(--sage);font-weight:700">● ${t("acctOn")}</span>` }));
+      syncCard.append(el("div", { cls: "t-body muted", textContent: t("acctOnHint")(linkedEmail) }));
+      const out = el("button", { cls: "btn btn-quiet", css: "align-self:flex-start",
+        html: ic("eraser", 18) + `<span>${t("acctSignOut")}</span>` });
+      out.onclick = () => parentGate(async () => {
+        Sound.fx.tap();
+        try { await loadSupabase(); await sb().auth.signOut(); } catch {}
+        location.reload();
+      });
+      syncCard.append(out);
+    } else {
+      syncCard.append(el("div", { cls: "t-body muted", textContent: t("acctAnonHint") }));
+      const row = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap" });
+      const secure = el("button", { cls: "btn btn-go", css: "flex:1;min-width:160px",
+        html: ic("check", 18, "#fff") + `<span>${t("acctSecureBtn")}</span>` });
+      secure.onclick = () => parentGate(() => showAccountDialog("link"));
+      const have = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:160px",
+        html: ic("next", 18) + `<span>${t("acctHaveBtn")}</span>` });
+      have.onclick = () => parentGate(() => showAccountDialog("signin"));
+      row.append(secure, have);
+      syncCard.append(row);
+    }
+  }
+  // Email + password sheet for either securing (link) or recovering (signin).
+  function showAccountDialog(mode) {
+    const ov = el("div", { css: "position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.6);backdrop-filter:blur(4px);padding:24px" });
+    const c = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:12px" });
+    c.append(el("div", { cls: "t-title", textContent: mode === "link" ? t("acctLinkTitle") : t("acctSignInTitle") }));
+    const mk = (ph, type, ac) => el("input", { type, autocomplete: ac, placeholder: ph,
+      css: "padding:13px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none;font-size:16px" });
+    const email = mk(t("acctEmail"), "email", "email");
+    const pw = mk(t("acctPw"), "password", mode === "link" ? "new-password" : "current-password");
+    const err = el("div", { cls: "t-body", css: "color:var(--clay);display:none" });
+    c.append(email, pw, err);
+    const row = el("div", { css: "display:flex;gap:10px" });
+    const cancel = el("button", { cls: "btn btn-quiet", css: "flex:1", html: `<span>${t("cancel")}</span>` });
+    cancel.onclick = () => ov.remove();
+    const ok = el("button", { cls: "btn btn-go", css: "flex:1",
+      html: ic("check", 18, "#fff") + `<span>${mode === "link" ? t("acctLinkGo") : t("acctSignInGo")}</span>` });
+    ok.onclick = async () => {
+      const e = email.value.trim(), p = pw.value;
+      if (!e || p.length < 6) { err.style.display = "block"; err.textContent = t("acctErr"); return; }
+      ok.disabled = true; ok.textContent = "...";
+      try {
+        if (mode === "link") {
+          await Account.linkEmail(e, p);
+          await SupaSync.push();              // attach this device's profiles to the now-permanent account
+          ov.remove(); Sound.fx.step(); Settings();
+        } else {
+          await Account.signIn(e, p);
+          await SupaSync.restoreAll();        // pull the account's cloud profiles down
+          S = load(); applyFlags();
+          SupaSync.start().then(() => Ent.refresh());
+          ov.remove(); Sound.fx.step(); go("home");
+        }
+      } catch (ex) {
+        ok.disabled = false;
+        ok.innerHTML = ic("check", 18, "#fff") + `<span>${mode === "link" ? t("acctLinkGo") : t("acctSignInGo")}</span>`;
+        err.style.display = "block"; err.textContent = t("acctErr");
+      }
+    };
+    row.append(cancel, ok);
+    c.append(row);
+    ov.append(c); APP.append(ov);
+    setTimeout(() => email.focus(), 50);
   }
 
   // Share with another family + offline printable parent sheet.
