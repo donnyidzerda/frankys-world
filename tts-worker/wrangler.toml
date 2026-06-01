@@ -2,14 +2,23 @@ name = "scribble-tts"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# Billing environment. "sandbox" uses the *_SANDBOX Paddle secrets + sandbox
-# API; set to "production" (or remove) at go-live to use PADDLE_API_KEY /
-# PADDLE_WEBHOOK_SECRET against api.paddle.com.
+# Billing. BILLING_PROVIDER picks the Merchant of Record (default "creem").
+# CREEM_ENV "test" uses test-api.creem.io + the *_TEST secrets/products; set to
+# "live" at go-live. CREEM_PRODUCTS[_TEST] maps our plan keys to Creem product
+# ids (fill after creating the products in the Creem dashboard). PADDLE_ENV is
+# kept only for the fallback Paddle provider.
 [vars]
+BILLING_PROVIDER = "creem"
+CREEM_ENV = "test"
+CREEM_PRODUCTS_TEST = '{"annual":"prod_REPLACE","monthly":"prod_REPLACE","lifetime":"prod_REPLACE"}'
+# CREEM_PRODUCTS    = '{"annual":"prod_..","monthly":"prod_..","lifetime":"prod_.."}'
+# SUPABASE_URL      = "https://YOURREF.supabase.co"   # set before go-live
 PADDLE_ENV = "sandbox"
 
-# The OpenAI key is NOT stored here. It is set once as an encrypted secret:
-#   npx wrangler secret put OPENAI_API_KEY
+# Secrets are NOT stored here. Set each once with `npx wrangler secret put`:
+#   OPENAI_API_KEY, ELEVENLABS_API_KEY
+#   SUPABASE_SERVICE_KEY            (service-role key - webhook writes entitlements)
+#   CREEM_API_KEY_TEST, CREEM_WEBHOOK_SECRET_TEST   (+ CREEM_API_KEY / CREEM_WEBHOOK_SECRET at go-live)
 
 # Cross-device sync uses a KV namespace. Create it once with:
 #   npx wrangler kv namespace create SCRIBBLE_SYNC

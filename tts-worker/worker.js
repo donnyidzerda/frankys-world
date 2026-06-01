@@ -253,125 +253,281 @@ async function handleSync(req, env, parts) {
 }
 
 /* =========================================================================
-   Billing (Paddle Billing) + entitlement. Paddle is the Merchant of Record -
-   it handles global VAT/sales tax for us. Checkout runs CLIENT-SIDE via
-   Paddle.js (overlay) in the app, passing custom_data.sync_id. This Worker
-   handles the server side: the signed webhook sets the entitlement in the same
-   KV the sync uses (keyed by the sync account id), and /billing/portal opens
-   the Paddle customer portal. /entitlement is read + cached by the app. All
-   fails closed to "free" if not configured.
+   Billing - provider-agnostic Merchant of Record (Creem or Paddle) +
+   entitlement. The MoR handles global VAT/sales tax for us. ONE var picks the
+   provider so we keep the freedom to switch:
+     BILLING_PROVIDER = "creem" (default) | "paddle"
 
-   Required (wrangler secret put ...):
-     PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET
-   Optional var: PADDLE_ENV = "sandbox" | "production" (default production)
+   Identity is the Supabase auth user id ("uid"), passed as checkout metadata
+   so the signed webhook can grant the right family. Entitlements live in the
+   Supabase `entitlements` table, written ONLY here via the service-role key
+   (clients read their own row through RLS). `billing_links` maps the MoR's
+   customer/order id back to a uid so a refund/dispute - which carries no
+   metadata - can still find the family to revoke. Everything fails closed to
+   "free" when not configured.
+
+   Secrets (wrangler secret put ...), per env:
+     Creem  : CREEM_API_KEY[_TEST], CREEM_WEBHOOK_SECRET[_TEST]
+     Paddle : PADDLE_API_KEY[_SANDBOX], PADDLE_WEBHOOK_SECRET[_SANDBOX]
+     Supabase: SUPABASE_URL (var), SUPABASE_SERVICE_KEY (secret)
+   Vars: BILLING_PROVIDER, CREEM_ENV ("test"|"live"), CREEM_PRODUCTS[_TEST]
+         (JSON: {"annual":"prod_..","monthly":"prod_..","lifetime":"prod_.."})
    ========================================================================= */
-// PADDLE_ENV (var) selects sandbox vs production. Each env keeps its OWN
-// secrets so flipping is a one-line var change with no key re-entry:
-//   sandbox    -> PADDLE_API_KEY_SANDBOX / PADDLE_WEBHOOK_SECRET_SANDBOX
-//   production -> PADDLE_API_KEY / PADDLE_WEBHOOK_SECRET
-const paddleSandbox = env => env.PADDLE_ENV === "sandbox";
-const paddleApiBase = env => paddleSandbox(env) ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
-const paddleApiKey  = env => paddleSandbox(env) ? env.PADDLE_API_KEY_SANDBOX : env.PADDLE_API_KEY;
-const paddleWebhookSecret = env => paddleSandbox(env) ? env.PADDLE_WEBHOOK_SECRET_SANDBOX : env.PADDLE_WEBHOOK_SECRET;
-async function getEnt(env, id) {
-  try { const raw = await env.SYNC.get("ent:" + id); return raw ? JSON.parse(raw) : null; }
-  catch { return null; }
+const PROVIDER = env => (env.BILLING_PROVIDER || "creem").toLowerCase();
+const FAR   = () => Date.now() + 100 * 365 * 24 * 3600 * 1000;   // ~forever (lifetime)
+const GRACE = () => Date.now() + 8 * 24 * 3600 * 1000;           // provisional window
+const tparse = s => { const t = Date.parse(s || ""); return isNaN(t) ? 0 : t; };
+// Constant-time hex/string compare for signatures.
+function tEq(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
 }
-async function setEnt(env, id, patch) {
-  const next = Object.assign((await getEnt(env, id)) || {}, patch);
-  await env.SYNC.put("ent:" + id, JSON.stringify(next));
-  return next;
-}
-async function entitlementGet(env, sp) {
-  const id = sp.get("id");
-  const ent = id ? await getEnt(env, id) : null;
-  const premium = !!(ent && ent.premium && (+ent.until || 0) > Date.now());
-  return J({ premium, until: ent ? (+ent.until || 0) : 0, plan: ent ? (ent.plan || "") : "" });
-}
-async function handleBilling(req, env, parts, sp) {
-  const sub = parts[1];
-  if (sub === "webhook") return billingWebhook(req, env);
-  // checkout is client-side (Paddle.js); nothing to do server-side.
-  if (sub === "checkout") return J({ note: "client-side via Paddle.js" });
-  if (sub === "portal")   return billingPortal(env, sp);
-  return new Response("ok", { headers: CORS });
-}
-// Open the Paddle customer portal for this family's stored Paddle customer.
-async function billingPortal(env, sp) {
-  const id = sp.get("id"), ret = sp.get("return") || "https://frankysworld.skep.co/";
-  if (!id) return new Response("bad request", { status: 400, headers: CORS });
-  const ent = await getEnt(env, id);
-  if (!paddleApiKey(env) || !ent || !ent.customer) return Response.redirect(ret, 303);
+
+/* ---- Supabase entitlement store (service role; bypasses RLS) ----------- */
+const sbHeaders = env => ({
+  apikey: env.SUPABASE_SERVICE_KEY,
+  Authorization: "Bearer " + env.SUPABASE_SERVICE_KEY,
+  "Content-Type": "application/json",
+});
+async function sbUpsert(env, table, row, onConflict) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return;
   try {
-    const r = await fetch(paddleApiBase(env) + "/customers/" + ent.customer + "/portal-sessions", {
+    await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
       method: "POST",
-      headers: { "Authorization": "Bearer " + paddleApiKey(env), "Content-Type": "application/json" },
-      body: "{}",
+      headers: { ...sbHeaders(env), Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(row),
     });
-    const j = await r.json().catch(() => ({}));
-    const url = j && j.data && j.data.urls && j.data.urls.general && j.data.urls.general.overview;
-    return Response.redirect(url || ret, 303);
-  } catch { return Response.redirect(ret, 303); }
+  } catch {}
 }
-// Verify a Paddle webhook signature. Header: "ts=...;h1=<hex hmac>".
-// Signed payload is `${ts}:${rawBody}`, HMAC-SHA256 with the secret. 5-min skew.
-async function verifyPaddle(payload, sigHeader, secret) {
+async function sbSelectOne(env, table, query) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return null;
   try {
-    const map = Object.fromEntries(String(sigHeader).split(";").map(kv => kv.split("=")));
-    const t = map.ts, h1 = map.h1;
-    if (!t || !h1) return false;
-    if (Math.abs(Date.now() / 1000 - (+t)) > 300) return false;
+    const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?${query}`, { headers: sbHeaders(env) });
+    const a = await r.json().catch(() => []);
+    return Array.isArray(a) && a.length ? a[0] : null;
+  } catch { return null; }
+}
+// Grant/revoke premium for a family. `until` is ms epoch (0/falsy = revoked).
+async function setEnt(env, uid, patch) {
+  const row = { user_id: uid };
+  if ("premium" in patch) row.premium = !!patch.premium;
+  if ("until"   in patch) row.until = patch.until ? new Date(patch.until).toISOString() : null;
+  if ("plan"    in patch) row.plan = patch.plan || "";
+  if (patch.customer) row.customer = patch.customer;
+  if (patch.txn)      row.txn = patch.txn;
+  await sbUpsert(env, "entitlements", row, "user_id");
+}
+const linkBilling = (env, ref, uid) => sbUpsert(env, "billing_links", { ref, user_id: uid }, "ref");
+async function uidForRef(env, ref) {
+  const row = await sbSelectOne(env, "billing_links", "ref=eq." + encodeURIComponent(ref) + "&select=user_id");
+  return row ? row.user_id : null;
+}
+
+/* ---- Creem -------------------------------------------------------------
+   Base: test-api.creem.io / api.creem.io. Auth header x-api-key. Checkout is
+   server-created (POST /v1/checkouts -> { checkout_url }) and we redirect to
+   it. Webhooks: header "creem-signature" = HMAC-SHA256(rawBody) hex; envelope
+   { id, eventType, created_at, object }. */
+const creemTest = env => env.CREEM_ENV !== "live";   // default to test until flipped
+const creemBase = env => creemTest(env) ? "https://test-api.creem.io/v1" : "https://api.creem.io/v1";
+const creemKey  = env => creemTest(env) ? env.CREEM_API_KEY_TEST : env.CREEM_API_KEY;
+const creemSecret = env => creemTest(env) ? env.CREEM_WEBHOOK_SECRET_TEST : env.CREEM_WEBHOOK_SECRET;
+const creemProducts = env => {
+  try { return JSON.parse((creemTest(env) ? env.CREEM_PRODUCTS_TEST : env.CREEM_PRODUCTS) || "{}"); }
+  catch { return {}; }
+};
+// Pull the MoR customer id out of whatever shape an event object carries it in.
+const custId = o => (o && ((o.customer && o.customer.id) || o.customer_id ||
+  (o.order && o.order.customer) || (typeof o.customer === "string" ? o.customer : ""))) || "";
+
+const creem = {
+  async createCheckout(env, { plan, uid, returnUrl }) {
+    const productId = creemProducts(env)[plan];
+    if (!creemKey(env) || !productId) return null;
+    try {
+      const r = await fetch(creemBase(env) + "/checkouts", {
+        method: "POST",
+        headers: { "x-api-key": creemKey(env), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id: productId, units: 1,
+          success_url: returnUrl,
+          metadata: { uid, plan },
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      return (j && j.checkout_url) || null;
+    } catch { return null; }
+  },
+  async verify(env, rawBody, headers) {
+    const sig = headers.get("creem-signature") || "";
+    const secret = creemSecret(env);
+    if (!secret || !sig) return false;
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", enc.encode(secret),
       { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const mac = await crypto.subtle.sign("HMAC", key, enc.encode(t + ":" + payload));
+    const mac = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
     const hex = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, "0")).join("");
-    if (hex.length !== h1.length) return false;
-    let diff = 0; for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ h1.charCodeAt(i);
-    return diff === 0;
-  } catch { return false; }
-}
-async function billingWebhook(req, env) {
-  const sig = req.headers.get("paddle-signature") || "";
-  const payload = await req.text();
-  if (!paddleWebhookSecret(env) || !(await verifyPaddle(payload, sig, paddleWebhookSecret(env))))
-    return new Response("bad signature", { status: 400 });
-  let evt; try { evt = JSON.parse(payload); } catch { return new Response("bad json", { status: 400 }); }
-  const type = evt.event_type || "";
-  const d = evt.data || {};
-  const cd = d.custom_data || {};
-  const id = cd.sync_id || cd.syncId;
-  const FAR = Date.now() + 100 * 365 * 24 * 3600 * 1000;   // ~forever (lifetime)
-  const GRACE = Date.now() + 8 * 24 * 3600 * 1000;         // provisional window
-  const ts = s => { const t = Date.parse(s || ""); return isNaN(t) ? 0 : t; };
-  try {
-    // Refund / chargeback on a one-time (lifetime) purchase -> revoke. The
-    // adjustment event carries no custom_data, so we resolve the sync account
-    // via the txn:<id> reverse map written when the lifetime was granted.
-    // (Subscriptions revoke themselves through the subscription.* events.)
-    if (type === "adjustment.created" && ["refund", "chargeback"].includes(d.action || "")) {
-      const owner = d.transaction_id && await env.SYNC.get("txn:" + d.transaction_id);
-      if (owner) await setEnt(env, owner, { premium: false, until: 0, plan: "lifetime_refunded" });
-      return new Response("ok", { status: 200 });
+    return tEq(hex, sig);
+  },
+  parse(evt) {
+    const type = evt.eventType || "";
+    const o = evt.object || {};
+    const sub = o.subscription || (o.object === "subscription" ? o : null);
+    const md = o.metadata || (sub && sub.metadata) || {};
+    const customer = custId(o) || custId(sub);
+    const base = { uid: md.uid, plan: md.plan, customer };
+    if (type === "checkout.completed") {
+      if (md.plan === "lifetime")
+        return { ...base, kind: "grant", until: FAR(), plan: "lifetime",
+                 txn: (o.order && o.order.id) || o.id };
+      const ends = tparse(sub && sub.current_period_end_date);
+      return { ...base, kind: "grant", until: ends || GRACE(), plan: "sub" };
     }
-    if (id) {
-      if (type === "transaction.completed") {
-        // One-time purchase (lifetime). Subscriptions are handled by the
-        // subscription.* events, so only grant lifetime here. Store a reverse
-        // map so a later refund/chargeback can find this account to revoke.
-        if (cd.plan === "lifetime") {
-          await setEnt(env, id, { premium: true, until: FAR, plan: "lifetime", customer: d.customer_id || undefined });
-          try { await env.SYNC.put("txn:" + d.id, id); } catch {}
-        }
-      } else if (type.indexOf("subscription.") === 0) {
-        // status: active | trialing | past_due | paused | canceled
-        const s = d.status;
-        const ends = ts(d.current_billing_period && d.current_billing_period.ends_at);
-        const premium = ["active", "trialing", "past_due"].includes(s);
-        await setEnt(env, id, {
-          premium, until: premium ? (ends || GRACE) : 0, plan: "sub",
-          customer: d.customer_id || undefined,
-        });
+    if (type.indexOf("subscription.") === 0) {
+      const s = (sub && sub.status) || o.status || "";
+      const active = ["active", "paid", "trialing", "past_due"].includes(s);
+      const ends = tparse((sub && sub.current_period_end_date) || o.current_period_end_date);
+      return { ...base, kind: active ? "grant" : "revoke",
+               until: active ? (ends || GRACE()) : 0, plan: "sub" };
+    }
+    if (type === "refund.created" || type === "dispute.created")
+      return { kind: "refund", customer, plan: "lifetime_refunded" };
+    return { kind: "ignore" };
+  },
+  async portal(env, customer, ret) {
+    if (!creemKey(env) || !customer) return ret;
+    try {
+      const r = await fetch(creemBase(env) + "/customers/billing", {
+        method: "POST",
+        headers: { "x-api-key": creemKey(env), "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_id: customer }),
+      });
+      const j = await r.json().catch(() => ({}));
+      // Response key is undocumented; accept the common shapes defensively.
+      return (j && (j.customer_portal_link || j.portal_url || j.url ||
+        (j.object && j.object.customer_portal_link))) || ret;
+    } catch { return ret; }
+  },
+};
+
+/* ---- Paddle (kept for switch-freedom) ----------------------------------
+   Checkout stays CLIENT-SIDE (Paddle.js overlay) in the app, so createCheckout
+   is intentionally absent here. Webhook header "paddle-signature" = "ts=..;
+   h1=<hex>", signed payload `${ts}:${rawBody}`, 5-min skew. */
+const paddleSandbox = env => env.PADDLE_ENV === "sandbox";
+const paddleBase = env => paddleSandbox(env) ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+const paddleKey  = env => paddleSandbox(env) ? env.PADDLE_API_KEY_SANDBOX : env.PADDLE_API_KEY;
+const paddleSecret = env => paddleSandbox(env) ? env.PADDLE_WEBHOOK_SECRET_SANDBOX : env.PADDLE_WEBHOOK_SECRET;
+const paddle = {
+  async verify(env, rawBody, headers) {
+    const secret = paddleSecret(env);
+    if (!secret) return false;
+    try {
+      const map = Object.fromEntries(String(headers.get("paddle-signature") || "")
+        .split(";").map(kv => kv.split("=")));
+      const t = map.ts, h1 = map.h1;
+      if (!t || !h1) return false;
+      if (Math.abs(Date.now() / 1000 - (+t)) > 300) return false;
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey("raw", enc.encode(secret),
+        { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const mac = await crypto.subtle.sign("HMAC", key, enc.encode(t + ":" + rawBody));
+      const hex = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, "0")).join("");
+      return tEq(hex, h1);
+    } catch { return false; }
+  },
+  parse(evt) {
+    const type = evt.event_type || "";
+    const d = evt.data || {};
+    const cd = d.custom_data || {};
+    const base = { uid: cd.uid, customer: d.customer_id };
+    if (type === "transaction.completed" && cd.plan === "lifetime")
+      return { ...base, kind: "grant", until: FAR(), plan: "lifetime", txn: d.id };
+    if (type.indexOf("subscription.") === 0) {
+      const active = ["active", "trialing", "past_due"].includes(d.status);
+      const ends = tparse(d.current_billing_period && d.current_billing_period.ends_at);
+      return { ...base, kind: active ? "grant" : "revoke",
+               until: active ? (ends || GRACE()) : 0, plan: "sub" };
+    }
+    if (type === "adjustment.created" && ["refund", "chargeback"].includes(d.action || ""))
+      return { kind: "refund", customer: d.customer_id, plan: "lifetime_refunded" };
+    return { kind: "ignore" };
+  },
+  async portal(env, customer, ret) {
+    if (!paddleKey(env) || !customer) return ret;
+    try {
+      const r = await fetch(paddleBase(env) + "/customers/" + customer + "/portal-sessions", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + paddleKey(env), "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const j = await r.json().catch(() => ({}));
+      return (j && j.data && j.data.urls && j.data.urls.general && j.data.urls.general.overview) || ret;
+    } catch { return ret; }
+  },
+};
+
+const providerOf = env => PROVIDER(env) === "paddle" ? paddle : creem;
+
+async function handleBilling(req, env, parts, sp) {
+  const sub = parts[1];
+  if (sub === "webhook")  return billingWebhook(req, env);
+  if (sub === "checkout") return billingCheckout(req, env);
+  if (sub === "portal")   return billingPortal(env, sp);
+  return new Response("ok", { headers: CORS });
+}
+
+// POST /billing/checkout { uid, plan, return? } -> { url } (server-created,
+// provider-agnostic). The app redirects the browser to the returned URL.
+async function billingCheckout(req, env) {
+  const body = await req.json().catch(() => ({}));
+  const uid = String(body.uid || "");
+  const plan = String(body.plan || "");
+  const returnUrl = String(body.return || "https://frankysworld.skep.co/") + "?billing=success";
+  if (!uid || !plan) return J({ error: "bad_request" }, 400);
+  const prov = providerOf(env);
+  if (!prov.createCheckout) return J({ error: "checkout_client_side" }, 400);  // Paddle overlay
+  const url = await prov.createCheckout(env, { uid, plan, returnUrl });
+  if (!url) return J({ error: "checkout_unavailable" }, 502);
+  return J({ url });
+}
+
+// GET /billing/portal?uid=...&return=...  -> 303 redirect to the MoR portal.
+async function billingPortal(env, sp) {
+  const uid = sp.get("uid"), ret = sp.get("return") || "https://frankysworld.skep.co/";
+  if (!uid) return new Response("bad request", { status: 400, headers: CORS });
+  const ent = await sbSelectOne(env, "entitlements", "user_id=eq." + uid + "&select=customer");
+  if (!ent || !ent.customer) return Response.redirect(ret, 303);
+  const url = await providerOf(env).portal(env, ent.customer, ret);
+  return Response.redirect(url || ret, 303);
+}
+
+async function billingWebhook(req, env) {
+  const rawBody = await req.text();
+  const prov = providerOf(env);
+  if (!(await prov.verify(env, rawBody, req.headers)))
+    return new Response("bad signature", { status: 400 });
+  let evt; try { evt = JSON.parse(rawBody); } catch { return new Response("bad json", { status: 400 }); }
+  const n = prov.parse(evt);
+  try {
+    if (n.kind === "grant" && n.uid) {
+      await setEnt(env, n.uid, { premium: true, until: n.until, plan: n.plan, customer: n.customer });
+      if (n.customer) await linkBilling(env, "cust:" + n.customer, n.uid);
+      if (n.txn)      await linkBilling(env, "txn:" + n.txn, n.uid);
+    } else if (n.kind === "revoke" && n.uid) {
+      await setEnt(env, n.uid, { premium: false, until: 0, plan: n.plan });
+    } else if (n.kind === "refund" && n.customer) {
+      // Refund/dispute carries no metadata: resolve the family via the stored
+      // customer link, and only revoke a LIFETIME grant (subscriptions revoke
+      // themselves through their own status events, so a partial refund there
+      // must not nuke access).
+      const uid = await uidForRef(env, "cust:" + n.customer);
+      if (uid) {
+        const cur = await sbSelectOne(env, "entitlements", "user_id=eq." + uid + "&select=plan");
+        if (cur && cur.plan === "lifetime")
+          await setEnt(env, uid, { premium: false, until: 0, plan: "lifetime_refunded" });
       }
     }
   } catch {}
@@ -386,7 +542,6 @@ export default {
     const parts = pathname.split("/").filter(Boolean);
     if (parts[0] === "sync") return handleSync(req, env, parts);
     if (parts[0] === "billing") return handleBilling(req, env, parts, searchParams);
-    if (pathname === "/entitlement") return entitlementGet(env, searchParams);
     if (pathname !== "/tts") return new Response("ok", { headers: CORS });
 
     // Keep requests tiny and abuse-resistant: short text only.
