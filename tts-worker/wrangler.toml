@@ -10,9 +10,9 @@ compatibility_date = "2025-01-01"
 [vars]
 BILLING_PROVIDER = "creem"
 CREEM_ENV = "test"
-CREEM_PRODUCTS_TEST = '{"annual":"prod_REPLACE","monthly":"prod_REPLACE","lifetime":"prod_REPLACE"}'
+CREEM_PRODUCTS_TEST = '{"annual":"prod_6jLmtvefwokK3td4DXHnS2","monthly":"prod_1fD2fKPq1T5P1zokncSXwA","lifetime":"prod_3YhSltsBhxvVljkMPAYcNC"}'
 # CREEM_PRODUCTS    = '{"annual":"prod_..","monthly":"prod_..","lifetime":"prod_.."}'
-# SUPABASE_URL      = "https://YOURREF.supabase.co"   # set before go-live
+SUPABASE_URL = "https://paynhwqxosinwkzzuytz.supabase.co"
 PADDLE_ENV = "sandbox"
 
 # Secrets are NOT stored here. Set each once with `npx wrangler secret put`:
