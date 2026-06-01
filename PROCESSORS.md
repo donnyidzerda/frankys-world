@@ -6,25 +6,30 @@ Dit is je AVG art. 30 register (verwerkingen) + de DPA-status per verwerker. Hou
 ## Wat we verwerken (samenvatting)
 | Gegeven | Doel | Grondslag | Opslag | Bewaartermijn |
 |---|---|---|---|---|
-| Voornaam + leeftijd kind | App personaliseren | Uitvoering overeenkomst | Lokaal (device) + optioneel sync (Cloudflare KV) | Tot wissen door gebruiker / account inactief |
-| Leervoortgang (sterren, mastery, tekeningen) | Voortgang bewaren | Uitvoering overeenkomst | Lokaal + optioneel sync | idem |
+| Voornaam + leeftijd kind | App personaliseren | Uitvoering overeenkomst | Lokaal (device) + cloud-sync (Supabase, EU/Ierland) | Tot wissen door gebruiker |
+| Leervoortgang (sterren, mastery, tekeningen) | Voortgang bewaren + herstel na apparaatverlies | Uitvoering overeenkomst | Lokaal + cloud-sync (Supabase, EU/Ierland) | idem |
 | Spraak goed/fout-uitkomst | Leesoefening | Gerechtvaardigd belang | **Alleen lokaal** | Lokaal |
 | Stem-audio/transcript | (n.v.t. — verlaat device nooit) | — | **Nooit verzonden** | — |
-| Ouder-e-mail + betaalgegevens | Betaling premium | Uitvoering overeenkomst | Bij Paddle (MoR) | Per Paddle-beleid |
-| Entitlement (premium ja/nee, syncId) | Toegang premium | Uitvoering overeenkomst | Cloudflare KV | Account-leven |
+| Account-id (anoniem) | Data + premium koppelen aan een herstelbaar account | Uitvoering overeenkomst | Supabase Auth (EU/Ierland) | Tot account-verwijdering |
+| Ouder-e-mail + wachtwoord (optioneel) | Account beveiligen/herstellen over apparaten | Uitvoering overeenkomst | Supabase Auth (EU/Ierland) | Tot account-verwijdering |
+| Ouder-betaalgegevens | Betaling premium | Uitvoering overeenkomst | Bij Creem (MoR) | Per Creem-beleid |
+| Entitlement (premium ja/nee, account-id) | Toegang premium | Uitvoering overeenkomst | Supabase (EU/Ierland) | Account-leven |
+
+> **Let op — cloud-sync staat standaard aan (anoniem).** Vanaf het eerste gebruik krijgt elk kindprofiel een **anoniem** account-id en wordt voornaam + leervoortgang naar Supabase (EU) gesynct, zodat data een apparaatverlies/herinstallatie overleeft. Een e-mailadres is **optioneel** en alleen nodig om het account te beveiligen/herstellen. Geen e-mail = nog steeds een (anoniem) cloud-record. "Verwijder al mijn gegevens" wist lokaal én cloud.
 
 Geen advertenties, geen tracking, geen profilering, geen verkoop van data.
 
 ## Verwerkers (DPA-status — afronden vóór scale)
 | Verwerker | Rol | DPA | Datalocatie | Actie |
 |---|---|---|---|---|
-| **Cloudflare** (Workers/KV/DO) | Hosting, sync-opslag, TTS-proxy | DPA via Cloudflare-voorwaarden (accepteren in dashboard) | EU mogelijk (KV global) | ☐ DPA bevestigen + EU-data waar kan |
-| **Paddle.com Market Ltd** | Merchant of Record: betalingen, btw, abonnementen | Paddle is MoR → eigen verwerkersrol; DPA in Paddle-account | UK/EU | ☐ DPA/voorwaarden accepteren in Paddle |
+| **Supabase** (Auth + Postgres + Realtime) | Accounts (anoniem→e-mail/SSO), cloud-opslag leervoortgang, entitlement-opslag | DPA via Supabase (supabase.com/legal/dpa) | **EU — AWS eu-west-1 (Ierland)** | ☐ DPA accepteren; SMTP + e-mailconfirm aan vóór launch |
+| **Cloudflare** (Workers) | TTS-proxy + billing-webhook relay (geen opslag van PII meer) | DPA via Cloudflare-voorwaarden | EU mogelijk | ☐ DPA bevestigen |
+| **Creem** | Merchant of Record: betalingen, btw, abonnementen | Creem is MoR → eigen verwerkersrol; DPA/voorwaarden in Creem-account | EU/US (controleer) | ☐ DPA/voorwaarden accepteren; bevestig acceptatie kinder-educatie-categorie; bevestig exacte juridische entiteit voor de documenten |
 | **ElevenLabs** | TTS-generatie (vaste zinnen, geen PII) | DPA via ElevenLabs | US/EU | ☐ DPA bevestigen; bevestig geen PII in input |
 | **OpenAI** | TTS-fallback (vaste zinnen, geen PII) | DPA via OpenAI (Zero-retention API mogelijk) | US | ☐ DPA + zero-retention aanvragen |
 | **GitHub Pages** | Statische hosting app + landing | Microsoft/GitHub voorwaarden | US/CDN | ☐ akkoord voorwaarden |
 
-> Sleutels die ooit chat-historie zagen (OpenAI/ElevenLabs) rouleren vóór publieke launch (zie GO-LIVE.md).
+> Sleutels die ooit chat-historie zagen (OpenAI/ElevenLabs + de Creem **test**-key) rouleren vóór publieke launch (zie GO-LIVE.md). De Supabase service-role-key en Creem-keys staan als Worker-secrets, nooit in de app/repo.
 
 ## Datalek / rechten
 - **Datalek:** binnen 72u melden bij AP indien risico; betrokkenen informeren bij hoog risico. Houd een incidentenlog.

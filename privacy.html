@@ -32,10 +32,10 @@
   <h2>1. Welke gegevens verwerken we?</h2>
   <ul>
     <li><strong>Op het apparaat (lokaal):</strong> de voornaam en leeftijd die je voor je kind invult, en de leervoortgang (sterren, beheerste klanken, gemaakte tekeningen). Dit staat in de lokale opslag van je browser/apparaat.</li>
-    <li><strong>Cloud-sync (optioneel):</strong> als je apparaten koppelt met een sync-code, wordt de leervoortgang versleuteld opgeslagen bij onze verwerker (Cloudflare) onder een willekeurige sync-id. Geen naam-koppeling aan een persoonsregister, geen e-mail.</li>
+    <li><strong>Cloud-account &amp; sync:</strong> vanaf het eerste gebruik krijgt elk kindprofiel een <strong>anoniem</strong> account en worden voornaam + leervoortgang gesynct naar onze verwerker <strong>Supabase</strong> (opgeslagen in de EU — Ierland), zodat de voortgang een verloren, opnieuw geïnstalleerd of gewist apparaat overleeft. Een e-mailadres + wachtwoord toevoegen (of inloggen met Google/Apple) is <strong>optioneel</strong> en alleen nodig om het account te beveiligen en op een nieuw apparaat te herstellen.</li>
     <li><strong>Spraakherkenning:</strong> de "luister mee"-functie gebruikt de spraakherkenning van het apparaat zelf. <strong>Audio en transcripten van de stem van je kind verlaten het apparaat nooit</strong> en worden niet naar ons verzonden. Alleen een goed/fout-uitkomst wordt lokaal bewaard.</li>
-    <li><strong>Betalingen (premium):</strong> als je een abonnement afsluit, verwerkt <strong>Paddle</strong> (onze Merchant of Record) je betaalgegevens en e-mailadres, en draagt btw af. Wij ontvangen géén kaartgegevens — alleen of je account premium is.</li>
-    <li><strong>Geen analytics/ad-SDK's, geen tracking-cookies, geen profilering.</strong> Alleen tijdens het afrekenen kan onze betaalpartner Paddle noodzakelijke (functionele) cookies plaatsen om de transactie veilig af te ronden.</li>
+    <li><strong>Betalingen (premium):</strong> als je een abonnement afsluit, verwerkt <strong>Creem</strong> (onze Merchant of Record) je betaalgegevens en e-mailadres, en draagt btw af. Wij ontvangen géén kaartgegevens — alleen of je account premium is.</li>
+    <li><strong>Geen analytics/ad-SDK's, geen tracking-cookies, geen profilering.</strong> Alleen tijdens het afrekenen kan onze betaalpartner Creem noodzakelijke (functionele) cookies plaatsen om de transactie veilig af te ronden.</li>
   </ul>
 
   <h2>2. Waarom (grondslag)</h2>
@@ -50,9 +50,10 @@
 
   <h2>4. Verwerkers</h2>
   <ul>
-    <li><strong>Cloudflare</strong> — hosting, sync-opslag en spraakgeneratie-proxy.</li>
+    <li><strong>Supabase</strong> — accounts (anoniem, daarna optioneel e-mail/SSO) en cloud-opslag van leervoortgang, opgeslagen in de <strong>EU (Ierland)</strong>.</li>
+    <li><strong>Cloudflare</strong> — hosting van statische bestanden en de spraakgeneratie- + billing-proxy (hier worden geen persoonsgegevens opgeslagen).</li>
     <li><strong>ElevenLabs</strong> en <strong>OpenAI</strong> — genereren Franky's stem uit een <em>vaste set tekstzinnen</em> (geen kinderstemmen, geen persoonsgegevens).</li>
-    <li><strong>Paddle</strong> (Merchant of Record) — betalingen, btw en abonnementsbeheer.</li>
+    <li><strong>Creem</strong> (Merchant of Record) — betalingen, btw en abonnementsbeheer.</li>
   </ul>
   <p class="muted">Met elke verwerker is/wordt een verwerkersovereenkomst (DPA) gesloten. We streven naar EU-dataopslag waar mogelijk.</p>
 

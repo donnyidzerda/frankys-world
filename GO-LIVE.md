@@ -1,46 +1,56 @@
 # GO-LIVE — first sale checklist
 
-Everything technical is built. The **critical path to a real sale** is Paddle
-approving your production account/domain — that's the only thing that can block
-"tomorrow", and it's on Paddle's side.
+Stack now: **Supabase** (accounts + data + entitlements, EU/Ireland) · **Creem**
+(Merchant of Record, VAT) · **Cloudflare Worker** (TTS + billing proxy) ·
+**GitHub Pages** (static hosting).
 
-## A. Paddle production (YOU — do first, may need Paddle review time)
-- ☐ Complete **seller verification** in your live Paddle account (business details, payout/bank). Paddle reviews new sellers — this can take hours to a few days, so start now.
-- ☐ **Checkout settings → Default payment link** = `https://frankysworld.skep.co/`.
-- ☐ **Checkout settings → Domains** → `frankysworld.skep.co` status = **Approved** (not pending).
-- ☐ Confirm a payment method is enabled (cards) for the account.
+The engineering is built and verified. What's left is a short list of
+account-gated steps (yours) + a paired deploy.
 
-Already done for production (by me, via API): product + 3 prices (€89/€11.99/€199) + webhook; worker secrets `PADDLE_API_KEY` / `PADDLE_WEBHOOK_SECRET` set; live client token + price ids in the app config.
+> ⚠️ **Deploy the worker and the app TOGETHER.** The new worker drops the old
+> `/entitlement` route (the app now reads Supabase directly). Deploying either
+> alone breaks billing. Nothing is deployed yet — the live site still runs the
+> old (Paddle/pair-code) version.
 
-## B. Flip the app to production (ONE change — I can do it on your word)
-Currently `PADDLE_ENV` = **sandbox** (for testing). To go live:
-1. `index.html`: `const PADDLE_ENV = "production";`
-2. `tts-worker/wrangler.toml`: set `[vars] PADDLE_ENV = "production"` (or remove the var) → `wrangler deploy`.
+## A. YOU — three Worker secrets (I can't store keys; safety rule)
+In `tts-worker/`:
+```
+npx wrangler secret put SUPABASE_SERVICE_KEY      # Supabase → Settings → API Keys → secret key
+npx wrangler secret put CREEM_API_KEY_TEST        # Creem → Developers → API key (Test)
+npx wrangler secret put CREEM_WEBHOOK_SECRET_TEST # from the webhook in step B
+```
 
-That's it — production token/prices/webhook are already wired behind the switch.
+## B. YOU — Creem webhook (no API for this; ~2 min in dashboard)
+Creem → Developers → Webhooks → Add endpoint:
+- URL: `https://scribble-tts.donny-idzerda.workers.dev/billing/webhook`
+- Events: `checkout.completed, subscription.active, subscription.paid, subscription.canceled, subscription.expired, subscription.past_due, refund.created, dispute.created`
+- Copy the signing secret → that's `CREEM_WEBHOOK_SECRET_TEST` in step A.
 
-## C. Smoke test the real flow (YOU, ~2 min, refundable)
-1. Open `https://frankysworld.skep.co/`, reach the paywall, pick **Monthly €11.99**.
-2. Parent gate → Paddle overlay → pay with your **real card**.
-3. Confirm Premium unlocks (app polls entitlement).
-4. Settings → Premium → **Manage subscription** → cancel; refund via Paddle dashboard if you want the €11.99 back.
-   (Server chain webhook→entitlement→unlock is already proven with signed test webhooks.)
+## C. Optional now
+- 7-day trial on the Annual product (Creem dashboard — the product API has no trial field).
+- **Google / Apple SSO:** create OAuth clients (Google Cloud / Apple Developer), add them in Supabase → Authentication → Providers (redirect `https://paynhwqxosinwkzzuytz.supabase.co/auth/v1/callback`), then flip `SSO.google` / `SSO.apple` to `true` in `index.html`. Email/password recovery works without this.
 
-## D. Security before public launch
-- ☐ Rotate API keys that ever appeared in chat: **OpenAI**, **ElevenLabs** (worker `wrangler secret put`), and the **Lemon Squeezy** key (revoke in LS, unused).
-- ☐ The Paddle keys you pasted are fine (stored as worker secrets); rotate later if you want.
+## D. Then I verify + we deploy (test mode)
+- I verify Creem **test** checkout → webhook → Supabase entitlement → premium unlock (needs A+B done). Checkout *creation* is already proven via the Creem API; the worker webhook→entitlement path is reviewed and ready.
+- Deploy: `wrangler deploy` (worker) **and** `git push` (app) in the same window.
 
-## E. Distribution (to actually get the first sale)
-- ☐ Share the **landing page**: `https://frankysworld.skep.co/landing.html` (or make it the root later).
-- ☐ Post your founder story / to parent communities; DM friends with kids.
-- ☐ "Add to Home Screen" works (PWA) — tell users.
+## E. Go-live hardening (before public / real money)
+- **Creem → Live mode:** recreate the 3 products live, set `CREEM_API_KEY` + `CREEM_WEBHOOK_SECRET` (live) as secrets, set `CREEM_PRODUCTS` (live ids) + `CREEM_ENV="live"` in `wrangler.toml`.
+- **Supabase:** turn **off** `mailer_autoconfirm` and configure **custom SMTP** (so account/confirmation emails deliver); review RLS once more.
+- **Rotate keys** that touched chat: OpenAI, ElevenLabs, the Creem **test** key; revoke the unused Lemon Squeezy key.
+- **Wipe test data:** clear any dev rows in Supabase (`profiles`/`entitlements`/`auth.users`) before launch.
+- Confirm **Creem accepts the young-children educational category** and put Creem's exact **legal entity name** into the legal docs.
+- **Lawyer review** of privacy/terms/refund (NL+EN+ES) before scaling.
 
-## Status of everything else (DONE)
-- App: paywall, per-family entitlement (unlimited kids+devices), free-taste gating (5 sounds / 5 creations / math start), premium unlock, manage subscription, "delete all my data".
-- Legal: privacy / terms / refund in **NL + EN + ES**, language-aware links, consent-on-splash, processor register (`PROCESSORS.md`).
-- Billing: Paddle (MoR, handles VAT). Sandbox + production both wired; switch via `PADDLE_ENV`.
-- Worker: signed webhook → entitlement (proven), customer portal, GDPR delete.
+## What's DONE (verified)
+- Supabase: schema + RLS + anonymous/email auth + EU region — live.
+- Creem: 3 products (€89/yr +trial-todo · €11,99/mo · €199 lifetime), test mode — live.
+- App: anonymous play (no signup wall) → secure with email/SSO (uid preserved) → recover by login on a fresh device → grow-only multi-device sync → entitlement read → Creem checkout redirect. Verified end-to-end against the live Supabase project.
+- Worker: provider-agnostic billing (Creem default, Paddle fallback), entitlement → Supabase, refund/dispute revoke, rate-limited TTS.
+- Legal: privacy/terms/refund (NL+EN+ES) + PROCESSORS.md updated for Supabase + Creem + account/email + EU storage.
 
-## Honest blockers (can't be me)
-1. **Paddle seller/domain approval** (section A) — gates real checkout. Start ASAP.
-2. **Lawyer review** of the policies before scaling (not strictly before the very first sale, but soon).
+## Privacy posture note (decision worth a glance)
+Cloud sync is now **on by default** under an **anonymous** account (first name +
+progress sync to Supabase/EU from first use) so data survives device loss. Email
+is optional (recovery only). This is disclosed in the privacy pages. If you'd
+rather make cloud sync opt-in, say so — it's a small change to gate `SupaSync`.

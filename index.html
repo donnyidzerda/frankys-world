@@ -714,6 +714,10 @@ const SUPABASE_URL = "https://paynhwqxosinwkzzuytz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_IWHZu0N2X9x4G8FQ0kHoOA_PNlg65rE";
 const BILLING_PROVIDER = "creem";          // must match the Worker's BILLING_PROVIDER
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+// Flip a provider true once it's configured in Supabase (Authentication ->
+// Providers) with its OAuth client id + secret. Until then its button is
+// hidden. Email/password works regardless.
+const SSO = { google: false, apple: false };
 let _sb = null, _sbReady = null;
 const sb = () => _sb;
 function loadSupabase() {
@@ -784,7 +788,15 @@ const Account = (() => {
     _apply(data.session);
     return data;
   }
-  return { init, uid, email, isAnon, linkEmail, signIn };
+  // OAuth (Google/Apple). On an anonymous account we LINK the identity so the
+  // uid - and thus data + premium - is preserved; otherwise a normal sign-in.
+  // Redirects back to the app, where boot re-runs SupaSync.start() (restore).
+  async function oauth(provider) {
+    const client = await loadSupabase();
+    const opts = { provider, options: { redirectTo: location.origin + location.pathname } };
+    return isAnon() ? client.auth.linkIdentity(opts) : client.auth.signInWithOAuth(opts);
+  }
+  return { init, uid, email, isAnon, linkEmail, signIn, oauth };
 })();
 // Cloud sync over Supabase: localStorage stays the offline cache; each profile
 // is one row in `profiles` (matched by state->>id), reconciled with the same
@@ -2088,6 +2100,7 @@ const I18N_X = {
     acctLinkGo:"Opslaan", acctSignInGo:"Inloggen", acctLinkTitle:"Gegevens veiligstellen", acctSignInTitle:"Inloggen",
     acctErr:"Er ging iets mis. Controleer je gegevens en probeer opnieuw.",
     acctLinkedOk:"Je gegevens zijn nu veiliggesteld.", acctRestored:"Welkom terug! Je profielen worden geladen.",
+    acctOr:"of", acctGoogle:"Doorgaan met Google", acctApple:"Doorgaan met Apple",
     syncLinkedHint:"De voortgang van dit kind wordt automatisch gedeeld met andere gekoppelde apparaten.",
     syncIntro:"Koppel iPad, iPhone en oma's tablet zodat sterren en sticker overal hetzelfde zijn.",
     syncStart:"Sync aanzetten", syncPair:"Code invullen",
@@ -2183,6 +2196,7 @@ const I18N_X = {
     acctLinkGo:"Save", acctSignInGo:"Sign in", acctLinkTitle:"Secure your data", acctSignInTitle:"Sign in",
     acctErr:"Something went wrong. Check your details and try again.",
     acctLinkedOk:"Your data is now secured.", acctRestored:"Welcome back! Your profiles are loading.",
+    acctOr:"or", acctGoogle:"Continue with Google", acctApple:"Continue with Apple",
     syncLinkedHint:"This child's progress is shared automatically with linked devices.",
     syncIntro:"Link iPad, iPhone and grandma's tablet so stars and stickers stay in step.",
     syncStart:"Turn on sync", syncPair:"Enter code",
@@ -2278,6 +2292,7 @@ const I18N_X = {
     acctLinkGo:"Guardar", acctSignInGo:"Entrar", acctLinkTitle:"Proteger mis datos", acctSignInTitle:"Iniciar sesión",
     acctErr:"Algo salió mal. Revisa tus datos e inténtalo de nuevo.",
     acctLinkedOk:"Tus datos ya están protegidos.", acctRestored:"¡Bienvenido de nuevo! Cargando tus perfiles.",
+    acctOr:"o", acctGoogle:"Continuar con Google", acctApple:"Continuar con Apple",
     syncLinkedHint:"El progreso de este niño se comparte automáticamente entre los dispositivos vinculados.",
     syncIntro:"Vincula iPad, iPhone y la tablet de la abuela para que las estrellas y pegatinas vayan juntas.",
     syncStart:"Activar sincronía", syncPair:"Introducir código",
@@ -5599,6 +5614,16 @@ function Settings() {
     };
     row.append(cancel, ok);
     c.append(row);
+    if (SSO.google || SSO.apple) {
+      c.append(el("div", { cls: "t-body muted", css: "text-align:center;font-size:13px", textContent: t("acctOr") }));
+      const oauthBtn = (label, prov) => {
+        const b = el("button", { cls: "btn btn-quiet", css: "width:100%", textContent: label });
+        b.onclick = async () => { try { await Account.oauth(prov); } catch { err.style.display = "block"; err.textContent = t("acctErr"); } };
+        return b;
+      };
+      if (SSO.google) c.append(oauthBtn(t("acctGoogle"), "google"));
+      if (SSO.apple)  c.append(oauthBtn(t("acctApple"), "apple"));
+    }
     ov.append(c); APP.append(ov);
     setTimeout(() => email.focus(), 50);
   }

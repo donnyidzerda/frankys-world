@@ -26,10 +26,10 @@
   <h2>1. What data we process</h2>
   <ul>
     <li><strong>On the device (local):</strong> the first name and age you enter for your child, and learning progress (stars, mastered sounds, drawings). Stored in your browser/device local storage.</li>
-    <li><strong>Cloud sync (optional):</strong> if you link devices with a sync code, learning progress is stored at our processor (Cloudflare) under a random sync id. No link to a name registry, no email.</li>
+    <li><strong>Cloud account &amp; sync:</strong> from first use, each child profile gets an <strong>anonymous</strong> account and the first name + learning progress are synced to our processor <strong>Supabase</strong> (stored in the EU — Ireland), so progress survives a lost, reinstalled or cleared device. Adding an email + password (or signing in with Google/Apple) is <strong>optional</strong> and only needed to secure the account and recover it on a new device.</li>
     <li><strong>Speech recognition:</strong> the "listen along" feature uses the device's own speech recognition. <strong>Audio and transcripts of your child's voice never leave the device</strong> and are not sent to us. Only a pass/fail result is stored locally.</li>
-    <li><strong>Payments (premium):</strong> if you subscribe, <strong>Paddle</strong> (our Merchant of Record) processes your payment details and email and remits VAT. We never receive card details — only whether your account is premium.</li>
-    <li><strong>No analytics/ad SDKs, no tracking cookies, no profiling.</strong> Only during checkout may our payment partner Paddle set necessary (functional) cookies to complete the transaction securely.</li>
+    <li><strong>Payments (premium):</strong> if you subscribe, <strong>Creem</strong> (our Merchant of Record) processes your payment details and email and remits VAT. We never receive card details — only whether your account is premium.</li>
+    <li><strong>No analytics/ad SDKs, no tracking cookies, no profiling.</strong> Only during checkout may our payment partner Creem set necessary (functional) cookies to complete the transaction securely.</li>
   </ul>
   <h2>2. Why (legal basis)</h2>
   <ul>
@@ -41,9 +41,10 @@
   <p>This app is intended for use by a child <strong>under the guidance of a parent/guardian</strong>. Purchases and external links are behind a parental gate. We do not collect a child's personal data for ads or profiling. We follow GDPR/GDPR-K principles and the UK Children's Code (high-privacy by default).</p>
   <h2>4. Processors</h2>
   <ul>
-    <li><strong>Cloudflare</strong> — hosting, sync storage and the voice-generation proxy.</li>
+    <li><strong>Supabase</strong> — accounts (anonymous, then optional email/SSO) and cloud storage of learning progress, stored in the <strong>EU (Ireland)</strong>.</li>
+    <li><strong>Cloudflare</strong> — static-asset hosting and the voice-generation + billing proxy (no personal data stored there).</li>
     <li><strong>ElevenLabs</strong> and <strong>OpenAI</strong> — generate Franky's voice from a <em>fixed set of text phrases</em> (no children's voices, no personal data).</li>
-    <li><strong>Paddle</strong> (Merchant of Record) — payments, VAT and subscription management.</li>
+    <li><strong>Creem</strong> (Merchant of Record) — payments, VAT and subscription management.</li>
   </ul>
   <p class="muted">A data processing agreement (DPA) is/will be in place with each processor. We aim for EU data storage where possible.</p>
   <h2>5. Retention</h2>
