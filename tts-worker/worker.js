@@ -512,12 +512,19 @@ async function billingWebhook(req, env) {
   let evt; try { evt = JSON.parse(rawBody); } catch { return new Response("bad json", { status: 400 }); }
   const n = prov.parse(evt);
   try {
-    if (n.kind === "grant" && n.uid) {
-      await setEnt(env, n.uid, { premium: true, until: n.until, plan: n.plan, customer: n.customer });
-      if (n.customer) await linkBilling(env, "cust:" + n.customer, n.uid);
-      if (n.txn)      await linkBilling(env, "txn:" + n.txn, n.uid);
-    } else if (n.kind === "revoke" && n.uid) {
-      await setEnt(env, n.uid, { premium: false, until: 0, plan: n.plan });
+    if (n.kind === "grant" || n.kind === "revoke") {
+      // The first checkout carries our uid in metadata; later subscription
+      // renewal/cancel events from the MoR may NOT. Fall back to the stored
+      // customer link so recurring grants/revokes still find the family.
+      let uid = n.uid;
+      if (!uid && n.customer) uid = await uidForRef(env, "cust:" + n.customer);
+      if (uid && n.kind === "grant") {
+        await setEnt(env, uid, { premium: true, until: n.until, plan: n.plan, customer: n.customer });
+        if (n.customer) await linkBilling(env, "cust:" + n.customer, uid);
+        if (n.txn)      await linkBilling(env, "txn:" + n.txn, uid);
+      } else if (uid && n.kind === "revoke") {
+        await setEnt(env, uid, { premium: false, until: 0, plan: n.plan });
+      }
     } else if (n.kind === "refund" && n.customer) {
       // Refund/dispute carries no metadata: resolve the family via the stored
       // customer link, and only revoke a LIFETIME grant (subscriptions revoke
@@ -534,6 +541,35 @@ async function billingWebhook(req, env) {
   return new Response("ok", { status: 200 });
 }
 
+// POST /account/delete   (Authorization: Bearer <the caller's own access token>)
+// GDPR right-to-erasure. We never trust a client-sent id: the caller is resolved
+// from their OWN JWT, then the auth user is admin-deleted with the service role.
+// ON DELETE CASCADE on profiles/entitlements/billing_links wipes the whole
+// family's data (learning state + premium + billing links) in one shot.
+async function accountDelete(req, env) {
+  if (req.method !== "POST") return new Response("method", { status: 405, headers: CORS });
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return J({ error: "not_configured" }, 501);
+  const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return J({ error: "unauthorized" }, 401);
+  let uid = "";
+  try {
+    const r = await fetch(env.SUPABASE_URL + "/auth/v1/user", {
+      headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: "Bearer " + token },
+    });
+    if (!r.ok) return J({ error: "unauthorized" }, 401);
+    const u = await r.json().catch(() => ({}));
+    uid = (u && u.id) || "";
+  } catch { return J({ error: "unauthorized" }, 401); }
+  if (!uid) return J({ error: "unauthorized" }, 401);
+  try {
+    const r = await fetch(env.SUPABASE_URL + "/auth/v1/admin/users/" + uid, {
+      method: "DELETE", headers: sbHeaders(env),
+    });
+    if (!r.ok && r.status !== 404) return J({ error: "delete_failed" }, 502);
+  } catch { return J({ error: "delete_failed" }, 502); }
+  return J({ ok: true });
+}
+
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -542,6 +578,7 @@ export default {
     const parts = pathname.split("/").filter(Boolean);
     if (parts[0] === "sync") return handleSync(req, env, parts);
     if (parts[0] === "billing") return handleBilling(req, env, parts, searchParams);
+    if (parts[0] === "account" && parts[1] === "delete") return accountDelete(req, env);
     if (pathname !== "/tts") return new Response("ok", { headers: CORS });
 
     // Keep requests tiny and abuse-resistant: short text only.

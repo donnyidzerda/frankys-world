@@ -799,7 +799,32 @@ const Account = (() => {
     const opts = { provider, options: { redirectTo: location.origin + location.pathname } };
     return isAnon() ? client.auth.linkIdentity(opts) : client.auth.signInWithOAuth(opts);
   }
-  return { init, uid, email, isAnon, linkEmail, signIn, oauth };
+  // GDPR right-to-erasure. Ask the Worker (service role) to delete the auth
+  // user, which cascade-wipes this family's cloud data (profiles, entitlement,
+  // billing links). If the Worker is unreachable, fall back to deleting our own
+  // profile rows via RLS. ALWAYS sign out after, so the next boot starts a
+  // brand-new anonymous identity and never restores the just-deleted data.
+  async function deleteAccount() {
+    if (!USE_SUPABASE) return;
+    let client; try { client = await loadSupabase(); } catch { return; }
+    let token = null;
+    try { const { data } = await client.auth.getSession();
+      token = data && data.session && data.session.access_token; } catch {}
+    let serverDeleted = false;
+    if (token) {
+      try {
+        const r = await fetch(BILLING_URL() + "/account/delete", {
+          method: "POST", headers: { Authorization: "Bearer " + token } });
+        serverDeleted = r.ok;
+      } catch {}
+    }
+    if (!serverDeleted && _uid) {
+      try { await client.from("profiles").delete().eq("user_id", _uid); } catch {}
+    }
+    try { await client.auth.signOut(); } catch {}
+    _uid = null; _email = null; _anon = true;
+  }
+  return { init, uid, email, isAnon, linkEmail, signIn, oauth, deleteAccount };
 })();
 // Cloud sync over Supabase: localStorage stays the offline cache; each profile
 // is one row in `profiles` (matched by state->>id), reconciled with the same
@@ -1061,12 +1086,22 @@ async function deleteProfile(id) {
 // all local data, and return to a clean first run. Parent-gated by the caller.
 async function wipeEverything() {
   const ids = ((loadIdx() || {}).ids) || [];
-  for (const pid of ids) {
-    const s = readProfile(pid);
-    if (s && s.syncId) {
-      try { await fetch(BILLING_URL() + "/sync/delete", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: s.syncId }) }); } catch {}
+  // Cloud erasure first. Supabase path: delete the auth user (cascades to all
+  // profiles/entitlement/billing links) and sign out so boot can't restore it.
+  // Legacy path: erase each family's KV/DO sync record by its pair-code id.
+  if (USE_SUPABASE) {
+    try { await Account.deleteAccount(); } catch {}
+  } else {
+    for (const pid of ids) {
+      const s = readProfile(pid);
+      if (s && s.syncId) {
+        try { await fetch(BILLING_URL() + "/sync/delete", { method: "POST",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: s.syncId }) }); } catch {}
+      }
     }
+  }
+  // Local gallery art (both paths).
+  for (const pid of ids) {
     try { (await galleryAll(pid)).forEach(r => galleryDel(r.id)); } catch {}
   }
   try { Object.keys(localStorage)
