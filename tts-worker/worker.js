@@ -593,14 +593,17 @@ export default {
       en: "EXAVITQu4vr4xnSDxMaL",
     };
     const VOICE_ID = VOICE_BY_LANG[(searchParams.get("l") || "en").slice(0, 2)] || VOICE_BY_LANG.en;
-    if (env.ELEVENLABS_API_KEY) {
+    // TEACH MODE ALWAYS GOES TO OPENAI. ElevenLabs has no prompt support,
+    // so it ignored every Dutch pronunciation rule we wrote (short 'a' drifted
+    // toward 'e' in "tas/kat", a bare 's' came out as "susss" with a schwa,
+    // numeric "1" was read as the article "een" not the number). OpenAI's
+    // gpt-4o-mini-tts obeys the `instructions` block below where those rules
+    // live, so phonics gets the right phonemes. Chat mode still uses
+    // ElevenLabs for its warmer, more natural voice.
+    if (!teach && env.ELEVENLABS_API_KEY) {
       const voiceId = VOICE_ID;
       try {
-        // Premade voices hold up at higher stability without going flat, so
-        // teach mode can be a touch steadier for clean, repeatable phonemes.
-        const settings = teach
-          ? { stability: 0.6,  similarity_boost: 0.8, style: 0.15, use_speaker_boost: true, speed: slow ? 0.85 : 0.92 }
-          : { stability: 0.5,  similarity_boost: 0.8, style: 0.3,  use_speaker_boost: true, speed: slow ? 0.9  : 1.0  };
+        const settings = { stability: 0.5,  similarity_boost: 0.8, style: 0.3,  use_speaker_boost: true, speed: slow ? 0.9 : 1.0 };
         const r = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
           {
@@ -672,7 +675,13 @@ export default {
           "/ŋ/; 'c' is /k/ before a/o/u/consonant and /s/ before e/i; 'r' " +
           "is a clear Dutch r. When a single sound is stretched (for " +
           "example 'sssss' or 'mmmm'), keep it the pure consonant or vowel " +
-          "with no added 'uh' schwa. ",
+          "with no added 'uh' schwa - never say 'su-sss', 'mu-mmm' or any " +
+          "vowel before/after the consonant. A single bare letter (e.g. 's', " +
+          "'a', 't', 'm') must be a clipped Dutch phoneme of about half a " +
+          "second, no schwa, no English letter-name. Bare digits or number " +
+          "words must be the Dutch counting word ('een' said as the NUMBER " +
+          "een /eːn/ with stress, never as the unstressed article; 'twee' " +
+          "/tʋeː/, 'drie' /dri/, 'vier' /fir/, 'vijf' /vɛif/). ",
         English:
           "Language: speak entirely in clear, standard, neutral English " +
           "with a gentle neutral accent. This audio teaches a young child " +
