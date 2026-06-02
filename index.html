@@ -274,9 +274,12 @@
   body.evening #paper{ background:var(--cream); }
 
   /* Accessibility modes */
-  body.hc{ --bg:#000; --surface:#fff; --surface-2:#fff; --ink:#000; --ink-soft:#222;
+  /* High-contrast = black text on a white page (so text sitting directly on
+     the background, like the Home greeting or labels, stays readable). Cards
+     get a 2px black border to separate them from the white page. */
+  body.hc{ --bg:#fff; --surface:#fff; --surface-2:#fff; --ink:#000; --ink-soft:#222;
     --line:#000; --cream:#fff; }
-  body.hc{ background:#000; }
+  body.hc{ background:#fff; }
   body.hc #ghost path{ stroke:#000; stroke-opacity:.7; }
   body.hc .card,body.hc .btn{ border:2px solid #000; }
   @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
