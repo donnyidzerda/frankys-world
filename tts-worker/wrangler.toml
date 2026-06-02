@@ -2,6 +2,15 @@ name = "scribble-tts"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
+# Serve the worker on our OWN domain (no *.workers.dev account-subdomain exposed).
+# Cloudflare auto-provisions the DNS record + edge cert for this hostname since
+# the skep.co zone is on this account. Keep workers_dev enabled until the custom
+# domain is verified, then flip it off to retire the old URL entirely.
+workers_dev = false          # retire the *.workers.dev URL; serve only on api.skep.co
+[[routes]]
+pattern = "api.skep.co"
+custom_domain = true
+
 # Billing. BILLING_PROVIDER picks the Merchant of Record (default "creem").
 # CREEM_ENV "test" uses test-api.creem.io + the *_TEST secrets/products; set to
 # "live" at go-live. CREEM_PRODUCTS[_TEST] maps our plan keys to Creem product

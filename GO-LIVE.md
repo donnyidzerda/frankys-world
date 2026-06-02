@@ -22,7 +22,7 @@ npx wrangler secret put CREEM_WEBHOOK_SECRET_TEST # from the webhook in step B
 
 ## B. YOU - Creem webhook (no API for this; ~2 min in dashboard)
 Creem → Developers → Webhooks → Add endpoint:
-- URL: `https://scribble-tts.donny-idzerda.workers.dev/billing/webhook`
+- URL: `https://api.skep.co/billing/webhook`
 - Events: `checkout.completed, subscription.active, subscription.paid, subscription.canceled, subscription.expired, subscription.past_due, refund.created, dispute.created`
 - Copy the signing secret → that's `CREEM_WEBHOOK_SECRET_TEST` in step A.
 

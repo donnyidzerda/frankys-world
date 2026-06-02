@@ -26,7 +26,7 @@ Create a sandbox account at sandbox-vendors.paddle.com (separate from live).
    - **Client-side token** (`test_...`) - publishable, goes in the app.
    - **API key** (`apikey_...` / secret) - goes in the Worker (for the portal).
 3. **Developer Tools → Notifications** → create a destination:
-   - URL: `https://scribble-tts.donny-idzerda.workers.dev/billing/webhook`
+   - URL: `https://api.skep.co/billing/webhook`
    - Events: `transaction.completed`, `subscription.created`, `subscription.updated`,
      `subscription.activated`, `subscription.canceled`, `subscription.past_due`,
      `subscription.paused`, `subscription.trialing`

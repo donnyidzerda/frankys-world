@@ -70,7 +70,7 @@ Supabase **anon** key (it's designed to live in the browser).
 - `wrangler secret put CREEM_API_KEY_TEST`
 
 ### 2.4 Webhook (Developers → Webhooks → add endpoint)
-- URL: `https://scribble-tts.donny-idzerda.workers.dev/billing/webhook`
+- URL: `https://api.skep.co/billing/webhook`
 - Subscribe these events: `checkout.completed`, `subscription.active`,
   `subscription.paid`, `subscription.canceled`, `subscription.expired`,
   `subscription.past_due`, `refund.created`, `dispute.created`.

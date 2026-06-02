@@ -9,7 +9,7 @@ Dutch-first, also English + Spanish. Single-file vanilla JS app, offline-capable
 - **App:** one big file `index.html` (~5900 lines, vanilla JS, no framework). PWA via `manifest.webmanifest` + `sw.js`.
 - **Hosting:** GitHub Pages, repo `github.com/donnyidzerda/frankys-world` (branch `main`, deploy from root). Pushing to `main` auto-deploys (~30-60s).
 - **Custom domain:** `https://frankysworld.skep.co` (live, valid HTTPS). DNS is on **Cloudflare** (NOT one.com - that was a red herring). CNAME `frankysworld` -> `donnyidzerda.github.io`, DNS-only. Cloudflare account id `c59458255c9bea66023a271b9c541874`, zone `skep.co` id `840c2f87cfb5412313b281623ba8f0f0`.
-- **Backend:** Cloudflare Worker `scribble-tts` at `https://scribble-tts.donny-idzerda.workers.dev` (code in `tts-worker/worker.js`, `wrangler.toml`). Bindings: KV `SYNC`, Durable Object `PROFILE` (legacy pair-code sync). `wrangler` is logged in (account donny.idzerda@gmail.com). Deploy: `cd tts-worker && npx wrangler deploy`.
+- **Backend:** Cloudflare Worker `scribble-tts` at `https://api.skep.co` (code in `tts-worker/worker.js`, `wrangler.toml`). Bindings: KV `SYNC`, Durable Object `PROFILE` (legacy pair-code sync). `wrangler` is logged in (account donny.idzerda@gmail.com). Deploy: `cd tts-worker && npx wrangler deploy`.
 - Worker does: **TTS** (`/tts`, ElevenLabs per-language voices + OpenAI fallback), **legacy sync** (`/sync/*`, KV + DO pair-codes, kept until the Supabase path is fully retired), **billing** (`/billing/*`, provider-agnostic), and **GDPR account deletion** (`/account/delete`).
 
 ## Identity + data: Supabase (the durable layer)
