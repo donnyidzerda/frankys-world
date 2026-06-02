@@ -2180,6 +2180,7 @@ const I18N_X = {
     acctSecureBtn:"Gegevens veiligstellen", acctHaveBtn:"Ik heb al een account",
     acctOnHint:e=>`Ingelogd als ${e}. De voortgang wordt op je account bewaard en gedeeld over apparaten.`,
     acctSignOut:"Uitloggen", acctEmail:"E-mail", acctPw:"Wachtwoord",
+    acctShow:"Toon", acctHide:"Verberg", acctPwHint:"Minimaal 6 tekens — tip: maak hem zichtbaar om typefouten te voorkomen.",
     acctLinkGo:"Opslaan", acctSignInGo:"Inloggen", acctLinkTitle:"Gegevens veiligstellen", acctSignInTitle:"Inloggen",
     acctErr:"Er ging iets mis. Controleer je gegevens en probeer opnieuw.",
     acctLinkedOk:"Je gegevens zijn nu veiliggesteld.", acctRestored:"Welkom terug! Je profielen worden geladen.",
@@ -2280,6 +2281,7 @@ const I18N_X = {
     acctSecureBtn:"Secure my data", acctHaveBtn:"I already have an account",
     acctOnHint:e=>`Signed in as ${e}. Your progress is saved to your account and syncs across devices.`,
     acctSignOut:"Sign out", acctEmail:"Email", acctPw:"Password",
+    acctShow:"Show", acctHide:"Hide", acctPwHint:"At least 6 characters — tip: reveal it to avoid typos.",
     acctLinkGo:"Save", acctSignInGo:"Sign in", acctLinkTitle:"Secure your data", acctSignInTitle:"Sign in",
     acctErr:"Something went wrong. Check your details and try again.",
     acctLinkedOk:"Your data is now secured.", acctRestored:"Welcome back! Your profiles are loading.",
@@ -2380,6 +2382,7 @@ const I18N_X = {
     acctSecureBtn:"Proteger mis datos", acctHaveBtn:"Ya tengo una cuenta",
     acctOnHint:e=>`Sesión iniciada como ${e}. Tu progreso se guarda en tu cuenta y se sincroniza entre dispositivos.`,
     acctSignOut:"Cerrar sesión", acctEmail:"Correo", acctPw:"Contraseña",
+    acctShow:"Mostrar", acctHide:"Ocultar", acctPwHint:"Mínimo 6 caracteres — consejo: muéstrala para evitar errores.",
     acctLinkGo:"Guardar", acctSignInGo:"Entrar", acctLinkTitle:"Proteger mis datos", acctSignInTitle:"Iniciar sesión",
     acctErr:"Algo salió mal. Revisa tus datos e inténtalo de nuevo.",
     acctLinkedOk:"Tus datos ya están protegidos.", acctRestored:"¡Bienvenido de nuevo! Cargando tus perfiles.",
@@ -5858,8 +5861,19 @@ function Settings() {
       css: "padding:13px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none;font-size:16px" });
     const email = mk(t("acctEmail"), "email", "email");
     const pw = mk(t("acctPw"), "password", mode === "link" ? "new-password" : "current-password");
+    // Reveal toggle: one password field is fine when the parent can verify it.
+    pw.style.width = "100%"; pw.style.paddingRight = "76px";
+    const pwWrap = el("div", { css: "position:relative;display:flex" });
+    const eye = el("button", { type: "button",
+      css: "position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:7px 11px;border-radius:9px;border:none;background:transparent;color:var(--ink-soft);font-weight:800;font-size:13px;cursor:pointer",
+      textContent: t("acctShow") });
+    eye.onclick = () => { const hidden = pw.type === "password"; pw.type = hidden ? "text" : "password";
+      eye.textContent = hidden ? t("acctHide") : t("acctShow"); pw.focus(); };
+    pwWrap.append(pw, eye);
     const err = el("div", { cls: "t-body", css: "color:var(--clay);display:none" });
-    c.append(email, pw, err);
+    c.append(email, pwWrap);
+    if (mode === "link") c.append(el("div", { cls: "t-body muted", css: "font-size:13px;margin-top:-4px", textContent: t("acctPwHint") }));
+    c.append(err);
     const row = el("div", { css: "display:flex;gap:10px" });
     const cancel = el("button", { cls: "btn btn-quiet", css: "flex:1", html: `<span>${t("cancel")}</span>` });
     cancel.onclick = () => ov.remove();
