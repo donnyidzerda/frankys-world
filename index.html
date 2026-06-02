@@ -2120,6 +2120,9 @@ const I18N_X = {
     pwMaybe:"Misschien later", pwManage:"Abonnement beheren",
     pwThanks:n=>`Dank je wel! Premium staat aan voor ${n}.`,
     pwChecking:"Even je aankoop bevestigen…",
+    thanksTitle:"Hoera!", thanksGo:"Aan de slag",
+    thanksSub:n=>n?`Premium staat nu aan voor ${n}.`:"Premium staat nu aan.",
+    thanksPending:"We bevestigen je aankoop. Dit kan heel even duren — premium verschijnt vanzelf.",
     pwLockedRead:"Dit hoort bij Premium. Open de volledige leerreis voor je kind.",
     pwLockedProfiles:"Meerdere kinderprofielen horen bij Premium.",
     pwPremiumOn:"Premium is actief", pwPremiumOff:"Gratis versie",
@@ -2217,6 +2220,9 @@ const I18N_X = {
     pwMaybe:"Maybe later", pwManage:"Manage subscription",
     pwThanks:n=>`Thank you! Premium is on for ${n}.`,
     pwChecking:"Confirming your purchase…",
+    thanksTitle:"Hooray!", thanksGo:"Let's go",
+    thanksSub:n=>n?`Premium is now on for ${n}.`:"Premium is now on.",
+    thanksPending:"We're confirming your purchase. This can take a moment — premium will appear by itself.",
     pwLockedRead:"This is part of Premium. Unlock the full learning journey.",
     pwLockedProfiles:"Multiple child profiles are part of Premium.",
     pwPremiumOn:"Premium is active", pwPremiumOff:"Free version",
@@ -2314,6 +2320,9 @@ const I18N_X = {
     pwMaybe:"Quizá más tarde", pwManage:"Gestionar suscripción",
     pwThanks:n=>`¡Gracias! Premium está activo para ${n}.`,
     pwChecking:"Confirmando tu compra…",
+    thanksTitle:"¡Hurra!", thanksGo:"¡Vamos!",
+    thanksSub:n=>n?`Premium está activo para ${n}.`:"Premium está activo.",
+    thanksPending:"Estamos confirmando tu compra. Puede tardar un momento; premium aparecerá solo.",
     pwLockedRead:"Esto es parte de Premium. Desbloquea el aprendizaje completo.",
     pwLockedProfiles:"Varios perfiles son parte de Premium.",
     pwPremiumOn:"Premium activo", pwPremiumOff:"Versión gratuita",
@@ -4298,17 +4307,73 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 // After returning from a successful Paddle checkout: poll the entitlement
 // (the webhook may lag a second) and show a warm thank-you when it lands.
+// One-time CSS for the celebratory purchase-return sheet.
+function ensureThanksCSS() {
+  if (document.getElementById("thanksCSS")) return;
+  const s = document.createElement("style"); s.id = "thanksCSS";
+  s.textContent = `
+    @keyframes thanksPop{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.03)}100%{transform:scale(1);opacity:1}}
+    .thanks-pop{animation:thanksPop .42s cubic-bezier(.2,.9,.3,1.2) both}
+    .thanks-hero{position:relative;height:150px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;
+      background:linear-gradient(160deg,var(--sage,#7d9b6e),#6b8a5e)}
+    .thanks-franky{position:relative;z-index:2;transform:translateY(14px);filter:drop-shadow(0 6px 10px rgba(0,0,0,.18))}
+    .thanks-badge{position:absolute;top:14px;right:18px;width:54px;height:54px;border-radius:50%;z-index:3;
+      background:var(--ochre,#e0a93b);display:flex;align-items:center;justify-content:center;
+      box-shadow:0 4px 12px rgba(0,0,0,.22);animation:thanksPulse 1.6s ease-in-out infinite}
+    @keyframes thanksPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+    .thanks-star{position:absolute;animation:thanksTwinkle 2.4s ease-in-out infinite}
+    @keyframes thanksTwinkle{0%,100%{opacity:.18;transform:translateY(0) scale(.9)}50%{opacity:.95;transform:translateY(-4px) scale(1.12)}}
+    .thanks-star.s0{left:11%;top:26%;animation-delay:0s}.thanks-star.s1{left:27%;top:58%;animation-delay:.3s}
+    .thanks-star.s2{left:71%;top:30%;animation-delay:.6s}.thanks-star.s3{left:85%;top:60%;animation-delay:.2s}
+    .thanks-star.s4{left:45%;top:16%;animation-delay:.9s}.thanks-star.s5{left:60%;top:64%;animation-delay:.5s}
+    .thanks-dots{display:flex;gap:6px}
+    .thanks-dots span{width:8px;height:8px;border-radius:50%;background:var(--sage,#7d9b6e);animation:thanksDot 1s ease-in-out infinite}
+    .thanks-dots span:nth-child(2){animation-delay:.15s}.thanks-dots span:nth-child(3){animation-delay:.3s}
+    @keyframes thanksDot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}`;
+  document.head.appendChild(s);
+}
 async function billingReturn() {
+  ensureThanksCSS();
   const ov = el("div", { css: "position:fixed;inset:0;z-index:70;background:rgba(52,48,42,.55);display:flex;align-items:center;justify-content:center;padding:18px" });
-  const card = el("div", { cls: "card", css: "max-width:420px;width:100%;padding:24px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center" });
-  card.innerHTML = `<span>${Franky("happy",72)}</span><div class="t-body muted">${t("pwChecking")}</div>`;
+  const card = el("div", { cls: "card thanks-pop", css: "max-width:430px;width:100%;padding:0;overflow:hidden;display:flex;flex-direction:column;text-align:center" });
+  card.innerHTML =
+    `<div style="padding:30px 24px;display:flex;flex-direction:column;align-items:center;gap:16px">
+       <span>${Franky("happy",78)}</span>
+       <div class="t-body muted">${t("pwChecking")}</div>
+       <div class="thanks-dots"><span></span><span></span><span></span></div>
+     </div>`;
   ov.append(card); document.body.append(ov);
   const ok = await Ent.refreshSoon();
-  card.innerHTML = `<span>${Franky("happy",84)}</span><div class="t-title">${ok ? t("pwThanks")(S.name || "") : t("pwChecking")}</div>`;
-  const close = el("button", { cls: "btn btn-go t-head", css: "margin-top:6px", textContent: "OK" });
-  close.onclick = () => { Sound.fx.tap(); ov.remove(); if (_currentScreen) go(_currentScreen); };
-  card.append(close);
-  if (ok) { Sound.fx.win(); buzz([20,40,20]); burst(.7); }
+  if (ok) {
+    const stars = [0,1,2,3,4,5].map(i => `<span class="thanks-star s${i}">${ic("star", i % 2 ? 14 : 20, "#fff")}</span>`).join("");
+    const bullets = ["pwBul2","pwBul1","pwBul3"].map(k =>
+      `<div style="display:flex;gap:11px;align-items:center;text-align:left">
+         <span style="flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--sage);display:inline-flex;align-items:center;justify-content:center">${ic("check",16,"#fff")}</span>
+         <span class="t-body">${t(k)}</span></div>`).join("");
+    card.innerHTML =
+      `<div class="thanks-hero">${stars}
+         <div class="thanks-badge">${ic("star",30,"#fff")}</div>
+         <span class="thanks-franky">${Franky("happy",98)}</span></div>
+       <div style="padding:22px 24px 6px;display:flex;flex-direction:column;gap:14px">
+         <div><div class="t-display" style="color:var(--sage)">${t("thanksTitle")}</div>
+           <div class="t-body muted" style="margin-top:3px">${t("thanksSub")(S.name || "")}</div></div>
+         <div style="display:flex;flex-direction:column;gap:10px;margin-top:2px">${bullets}</div></div>`;
+    const wrap = el("div", { css: "padding:16px 24px 24px" });
+    const goBtn = el("button", { cls: "btn btn-go t-head", css: "width:100%;justify-content:center;padding:15px",
+      html: `<span>${t("thanksGo")}</span> ${ic("next",22,"#fff")}` });
+    goBtn.onclick = () => { Sound.fx.tap(); ov.remove(); if (_currentScreen) go(_currentScreen); };
+    wrap.append(goBtn); card.append(wrap);
+    Sound.fx.win(); buzz([20,40,20]); burst(.9); setTimeout(() => burst(.6), 320);
+  } else {
+    card.innerHTML =
+      `<div style="padding:30px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:14px">
+         <span>${Franky("warm",84)}</span>
+         <div class="t-title">${t("pwChecking")}</div>
+         <div class="t-body muted">${t("thanksPending")}</div></div>`;
+    const close = el("button", { cls: "btn btn-go t-head", css: "margin:8px 24px 24px;justify-content:center", textContent: "OK" });
+    close.onclick = () => { Sound.fx.tap(); ov.remove(); if (_currentScreen) go(_currentScreen); };
+    card.append(close);
+  }
 }
 window.addEventListener("pointerdown", function once() {
   Sound.ensure(); unlockAudio();
