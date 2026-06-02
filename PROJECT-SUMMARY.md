@@ -7,7 +7,7 @@ Dutch-first, also English + Spanish. Single-file vanilla JS app, offline-capable
 
 ## Stack & infra
 - **App:** one big file `index.html` (~5000 lines, vanilla JS, no framework). PWA via `manifest.webmanifest` + `sw.js`.
-- **Hosting:** GitHub Pages, repo `github.com/donnyidzerda/frankys-world` (branch `main`, deploy from root). Pushing to `main` auto-deploys (~30–60s).
+- **Hosting:** GitHub Pages, repo `github.com/donnyidzerda/frankys-world` (branch `main`, deploy from root). Pushing to `main` auto-deploys (~30-60s).
 - **Custom domain:** `https://frankysworld.skep.co` (live, valid HTTPS). DNS is on **Cloudflare** (NOT one.com - that was a red herring). CNAME `frankysworld` → `donnyidzerda.github.io`, DNS-only. Cloudflare account id `c59458255c9bea66023a271b9c541874`, zone `skep.co` id `840c2f87cfb5412313b281623ba8f0f0`.
 - **Backend:** Cloudflare Worker `scribble-tts` at `https://scribble-tts.donny-idzerda.workers.dev` (code in `tts-worker/worker.js`, `wrangler.toml`). Bindings: KV `SYNC`, Durable Object `PROFILE`. `wrangler` is logged in (account donny.idzerda@gmail.com). Deploy: `cd tts-worker && npx wrangler deploy`.
 - Worker does: **TTS** (`/tts`, ElevenLabs per-language voices + OpenAI fallback), **cross-device sync** (`/sync/*`, KV + DO, pair-codes), **billing** (`/billing/*`, `/entitlement`).
@@ -57,6 +57,6 @@ Dutch-first, also English + Spanish. Single-file vanilla JS app, offline-capable
 ## Recent version log
 v95 Rekenen in spoken greeting · v96 fix overlapping voices · v97 numbers in-language ·
 v98 cache-bust · v99 fix Belgian device voice + held greeting · v100/101 paid MVP (Stripe) ·
-v103 switch to Lemon Squeezy · v104 switch to Paddle · v105–108 Paddle wiring + sandbox ·
+v103 switch to Lemon Squeezy · v104 switch to Paddle · v105-108 Paddle wiring + sandbox ·
 v109 prices €89/€11.99/€199 · v110 free-taste gating · v111 legal hygiene · v112 EN/ES legal + go-live docs.
 See `GO-LIVE.md` for the launch checklist.
