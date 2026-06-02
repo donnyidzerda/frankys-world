@@ -1,6 +1,6 @@
-# Franky's World — Paid MVP setup (Paddle Billing)
+# Franky's World - Paid MVP setup (Paddle Billing)
 
-Payments run through **Paddle Billing** (Merchant of Record — Paddle handles
+Payments run through **Paddle Billing** (Merchant of Record - Paddle handles
 global VAT/sales tax for you, so no Stripe Tax/VAT/OSS setup needed).
 
 The code is **built and deployed**:
@@ -15,16 +15,16 @@ publishable values in the app, secret values in the Worker.
 
 ---
 
-## 1. In the Paddle dashboard (you) — use **Sandbox** first
+## 1. In the Paddle dashboard (you) - use **Sandbox** first
 Create a sandbox account at sandbox-vendors.paddle.com (separate from live).
 1. **Catalog → Products** → create products, then add **Prices**:
-   - *Premium — Yearly*: recurring, €69 / year (optionally a 7-day trial).
-   - *Premium — Monthly*: recurring, €8.99 / month.
-   - *Premium — Lifetime*: **one-time** price, €149.
+   - *Premium - Yearly*: recurring, €69 / year (optionally a 7-day trial).
+   - *Premium - Monthly*: recurring, €8.99 / month.
+   - *Premium - Lifetime*: **one-time** price, €149.
    Copy each **Price id** (`pri_...`).
 2. **Developer Tools → Authentication**:
-   - **Client-side token** (`test_...`) — publishable, goes in the app.
-   - **API key** (`apikey_...` / secret) — goes in the Worker (for the portal).
+   - **Client-side token** (`test_...`) - publishable, goes in the app.
+   - **API key** (`apikey_...` / secret) - goes in the Worker (for the portal).
 3. **Developer Tools → Notifications** → create a destination:
    - URL: `https://scribble-tts.donny-idzerda.workers.dev/billing/webhook`
    - Events: `transaction.completed`, `subscription.created`, `subscription.updated`,
@@ -34,7 +34,7 @@ Create a sandbox account at sandbox-vendors.paddle.com (separate from live).
 4. **Checkout → set the approved domain** to your app domain
    (`frankysworld.skep.co`) so the overlay is allowed there.
 
-## 2. App config (publishable — I can paste these in `index.html` for you)
+## 2. App config (publishable - I can paste these in `index.html` for you)
 Near the top of the billing block in `index.html`:
 ```js
 const PADDLE_ENV = "sandbox";                 // "production" at go-live
@@ -85,7 +85,7 @@ npx wrangler deploy
   taps a plan. It passes `custom_data.sync_id` (+ plan).
 - **Entitlement = one record per sync account** (`syncId`) in the sync KV (`ent:<id>`),
   set by the signed Paddle webhook, read by the app via `/entitlement?id=`. The app
-  caches it and **fails open to free** — a paying child is never locked out offline;
+  caches it and **fails open to free** - a paying child is never locked out offline;
   an expired sub lapses via the cached `until`.
 - **Lifetime** is granted on `transaction.completed` (custom_data.plan==="lifetime");
   **subscriptions** are driven by the `subscription.*` events.

@@ -1,4 +1,4 @@
-# GO-LIVE — first sale checklist
+# GO-LIVE - first sale checklist
 
 Stack now: **Supabase** (accounts + data + entitlements, EU/Ireland) · **Creem**
 (Merchant of Record, VAT) · **Cloudflare Worker** (TTS + billing proxy) ·
@@ -9,10 +9,10 @@ account-gated steps (yours) + a paired deploy.
 
 > ⚠️ **Deploy the worker and the app TOGETHER.** The new worker drops the old
 > `/entitlement` route (the app now reads Supabase directly). Deploying either
-> alone breaks billing. Nothing is deployed yet — the live site still runs the
+> alone breaks billing. Nothing is deployed yet - the live site still runs the
 > old (Paddle/pair-code) version.
 
-## A. YOU — three Worker secrets (I can't store keys; safety rule)
+## A. YOU - three Worker secrets (I can't store keys; safety rule)
 In `tts-worker/`:
 ```
 npx wrangler secret put SUPABASE_SERVICE_KEY      # Supabase → Settings → API Keys → secret key
@@ -20,14 +20,14 @@ npx wrangler secret put CREEM_API_KEY_TEST        # Creem → Developers → API
 npx wrangler secret put CREEM_WEBHOOK_SECRET_TEST # from the webhook in step B
 ```
 
-## B. YOU — Creem webhook (no API for this; ~2 min in dashboard)
+## B. YOU - Creem webhook (no API for this; ~2 min in dashboard)
 Creem → Developers → Webhooks → Add endpoint:
 - URL: `https://scribble-tts.donny-idzerda.workers.dev/billing/webhook`
 - Events: `checkout.completed, subscription.active, subscription.paid, subscription.canceled, subscription.expired, subscription.past_due, refund.created, dispute.created`
 - Copy the signing secret → that's `CREEM_WEBHOOK_SECRET_TEST` in step A.
 
 ## C. Optional now
-- 7-day trial on the Annual product (Creem dashboard — the product API has no trial field).
+- 7-day trial on the Annual product (Creem dashboard - the product API has no trial field).
 - **Google / Apple SSO:** create OAuth clients (Google Cloud / Apple Developer), add them in Supabase → Authentication → Providers (redirect `https://paynhwqxosinwkzzuytz.supabase.co/auth/v1/callback`), then flip `SSO.google` / `SSO.apple` to `true` in `index.html`. Email/password recovery works without this.
 
 ## D. Then I verify + we deploy (test mode)
@@ -43,8 +43,8 @@ Creem → Developers → Webhooks → Add endpoint:
 - **Lawyer review** of privacy/terms/refund (NL+EN+ES) before scaling.
 
 ## What's DONE (verified)
-- Supabase: schema + RLS + anonymous/email auth + EU region — live.
-- Creem: 3 products (€89/yr +trial-todo · €11,99/mo · €199 lifetime), test mode — live.
+- Supabase: schema + RLS + anonymous/email auth + EU region - live.
+- Creem: 3 products (€89/yr +trial-todo · €11,99/mo · €199 lifetime), test mode - live.
 - App: anonymous play (no signup wall) → secure with email/SSO (uid preserved) → recover by login on a fresh device → grow-only multi-device sync → entitlement read → Creem checkout redirect. Verified end-to-end against the live Supabase project.
 - Worker: provider-agnostic billing (Creem default, Paddle fallback), entitlement → Supabase, refund/dispute revoke, rate-limited TTS.
 - Legal: privacy/terms/refund (NL+EN+ES) + PROCESSORS.md updated for Supabase + Creem + account/email + EU storage.
@@ -53,4 +53,4 @@ Creem → Developers → Webhooks → Add endpoint:
 Cloud sync is now **on by default** under an **anonymous** account (first name +
 progress sync to Supabase/EU from first use) so data survives device loss. Email
 is optional (recovery only). This is disclosed in the privacy pages. If you'd
-rather make cloud sync opt-in, say so — it's a small change to gate `SupaSync`.
+rather make cloud sync opt-in, say so - it's a small change to gate `SupaSync`.

@@ -5,7 +5,7 @@ build the app cutover + verify end-to-end once they exist. Nothing here touches
 the live app until we deploy the new worker **and** app together (the new worker
 drops `/entitlement`, so they must ship as a pair).
 
-Secrets you set with `wrangler secret put` are **never** pasted to me — I only
+Secrets you set with `wrangler secret put` are **never** pasted to me - I only
 need them *set*, not their values. The only client-safe value I need is the
 Supabase **anon** key (it's designed to live in the browser).
 
@@ -15,7 +15,7 @@ Supabase **anon** key (it's designed to live in the browser).
 
 ### 1.1 Create the project
 - supabase.com → New project.
-- **Region: EU (Frankfurt / `eu-central-1`)** — GDPR, your users are EU-first.
+- **Region: EU (Frankfurt / `eu-central-1`)** - GDPR, your users are EU-first.
 - Save the database password somewhere safe (not needed by the app).
 
 ### 1.2 Apply the schema
@@ -54,7 +54,7 @@ Supabase **anon** key (it's designed to live in the browser).
 ## 2 · Creem
 
 > First confirm with Creem support that they **accept young-children
-> educational content** as a category — do this before investing setup time.
+> educational content** as a category - do this before investing setup time.
 
 ### 2.1 Account + test mode
 - creem.io → sign up → stay in **Test mode** for now.
@@ -63,8 +63,8 @@ Supabase **anon** key (it's designed to live in the browser).
 | Plan | Type | Price | Notes |
 |------|------|-------|-------|
 | `annual`   | subscription | €89 / year   | 7-day free trial |
-| `monthly`  | subscription | €11,99 / month | — |
-| `lifetime` | one-time     | €199         | — |
+| `monthly`  | subscription | €11,99 / month | - |
+| `lifetime` | one-time     | €199         | - |
 
 ### 2.3 API key (Developers → API key, **test**)
 - `wrangler secret put CREEM_API_KEY_TEST`
@@ -92,14 +92,14 @@ npx wrangler secret put CREEM_WEBHOOK_SECRET_TEST
 - Set `CREEM_PRODUCTS_TEST` to the 3 product ids:
   `'{"annual":"prod_..","monthly":"prod_..","lifetime":"prod_.."}'`
 - `BILLING_PROVIDER="creem"` and `CREEM_ENV="test"` are already set.
-- **Do not `wrangler deploy` yet** — the new worker pairs with the new app.
+- **Do not `wrangler deploy` yet** - the new worker pairs with the new app.
 
 ---
 
 ## 4 · Hand back to me (only these 3)
-1. **Supabase Project URL** — `https://<ref>.supabase.co`
-2. **Supabase anon public key** — the long `eyJ...` anon (not service_role) key
-3. **The 3 Creem test product ids** — annual / monthly / lifetime
+1. **Supabase Project URL** - `https://<ref>.supabase.co`
+2. **Supabase anon public key** - the long `eyJ...` anon (not service_role) key
+3. **The 3 Creem test product ids** - annual / monthly / lifetime
 
 With those I wire the app, flip the feature flag on, and verify the full flow
 (anon play → link account → multi-device sync → Creem test checkout → webhook →

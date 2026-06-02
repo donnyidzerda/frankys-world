@@ -1,9 +1,9 @@
-# Franky's World — Commercialization Plan
+# Franky's World - Commercialization Plan
 **Target: €1M ARR minimum. Working doc, not investor-facing yet.**
 
 This plan is specific to the current stack: single-file vanilla PWA, Cloudflare
 Workers + Durable Objects + KV, ElevenLabs + OpenAI TTS, GitHub Pages hosting.
-Code is ~20% of the work — legal/compliance, content, pricing, distribution and
+Code is ~20% of the work - legal/compliance, content, pricing, distribution and
 growth dominate.
 
 ---
@@ -28,7 +28,7 @@ Duolingo ABC free. Kids-reading subscriptions sustain €60–120/yr.
 ## 1. Positioning & moat
 
 - **One-liner:** "The calm, ad-free app where toddlers learn to read, write and
-  draw — guided by Franky." 
+  draw - guided by Franky." 
 - **Wedge:** the reading engine (Mentava/Hoven-style mastery + decoding + speech
   verification) is genuinely differentiated vs. "edutainment" apps. Lead with
   *learning outcomes*, not games.
@@ -36,7 +36,7 @@ Duolingo ABC free. Kids-reading subscriptions sustain €60–120/yr.
   offline-first PWA, (c) multilingual from day one, (d) the curriculum depth.
 - **Beachhead market:** Netherlands/Flanders first (NL native, your network,
   cheaper to test), then EN and ES. NL is small (~€ niche) so plan the EN
-  expansion early — that's where the €1M scale lives.
+  expansion early - that's where the €1M scale lives.
 
 ---
 
@@ -47,7 +47,7 @@ Duolingo ABC free. Kids-reading subscriptions sustain €60–120/yr.
 - **Premium (€69/yr or €8.99/mo):** full reading curriculum (all sounds, words,
   sentences, sight words), all worlds, multiple child profiles, cross-device
   sync, parent dashboard, printable sheets.
-- **Family/founder lifetime** (€149 one-time, limited) — early cash + advocates.
+- **Family/founder lifetime** (€149 one-time, limited) - early cash + advocates.
 - **Annual default, monthly available.** Annual = better LTV + cashflow. 7-day
   free trial → card required (higher conversion) or no-card trial (more
   top-of-funnel). Test both.
@@ -55,7 +55,7 @@ Duolingo ABC free. Kids-reading subscriptions sustain €60–120/yr.
 
 ---
 
-## 3. Legal & compliance — THE blocker (do first, with a lawyer)
+## 3. Legal & compliance - THE blocker (do first, with a lawyer)
 
 Children's apps are the most regulated consumer software. Get a specialist
 privacy lawyer (NL/EU + US) for a fixed-scope review (~€3–8k). Non-negotiable.
@@ -65,7 +65,7 @@ privacy lawyer (NL/EU + US) for a fixed-scope review (~€3–8k). Non-negotiabl
   processor (Cloudflare, OpenAI, ElevenLabs, Stripe), records of processing,
   EU data residency where possible.
 - **UK Age Appropriate Design Code (Children's Code):** high-privacy defaults,
-  no nudge techniques, no profiling — you already comply by design (no ads/
+  no nudge techniques, no profiling - you already comply by design (no ads/
   tracking). Document it; it's a selling point.
 - **COPPA (US):** verifiable parental consent before collecting personal info
   from under-13; privacy policy; no behavioral ads. Required for US launch +
@@ -74,23 +74,23 @@ privacy lawyer (NL/EU + US) for a fixed-scope review (~€3–8k). Non-negotiabl
   parental gate for purchases/external links, strict. You're well-positioned.
 - **Voice recordings = sensitive.** The speech-recognition transcripts
   (`readHeard`) are children's voice-derived data. For commercial:
-  - Keep recognition **on-device** (Web Speech API already is) — never send
+  - Keep recognition **on-device** (Web Speech API already is) - never send
     audio to a server.
   - Reconsider syncing `readHeard` transcripts to KV/DO. Safer: keep them
     device-local, or make them opt-in with explicit parental consent, or store
     only the pass/fail boolean (drop the transcript text). **Recommend: drop
     the transcript, sync only the boolean.**
 - **Deliverables:** Privacy Policy, Terms, Parental Consent flow, Cookie/Data
-  notice (you set none — easy), DPA register, a "delete my family's data"
+  notice (you set none - easy), DPA register, a "delete my family's data"
   button (you have per-profile delete; add account-level delete).
 
 ---
 
 ## 4. Product gaps to close before paid launch
 
-- [ ] **Default voice only** — remove the cloned "Loïs" voice (can't ship one
+- [ ] **Default voice only** - remove the cloned "Loïs" voice (can't ship one
       parent's voice commercially). Premade per-language voices already wired.
-- [ ] **Pre-generated audio corpus** (see §6) — kills per-user TTS cost and
+- [ ] **Pre-generated audio corpus** (see §6) - kills per-user TTS cost and
       makes pronunciation 100% consistent + fully offline.
 - [ ] **Accounts + billing + entitlement gating** (see §5).
 - [ ] **Account-level data export + delete** (legal).
@@ -98,7 +98,7 @@ privacy lawyer (NL/EU + US) for a fixed-scope review (~€3–8k). Non-negotiabl
 - [ ] **Parent dashboard** worth paying for: progress over time, what Lucy
       mastered this week, suggested next step (you have the data: readBox,
       readLat, readHeard, completed).
-- [ ] **Content depth** for retention (see §8) — a 2-week curriculum churns.
+- [ ] **Content depth** for retention (see §8) - a 2-week curriculum churns.
 - [ ] **QA matrix**: iOS Safari (PWA), iPadOS, Android Chrome, desktop;
       offline; low-end devices.
 - [ ] **Accessibility pass** (color-only feedback, tap targets, captions).
@@ -158,7 +158,7 @@ that's a lot of duplicate generation and a real bill.
 
 - **Hosting:** migrate GitHub Pages → **Cloudflare Pages** (custom domain, same
   account as Workers/DO/KV/R2, better cache/headers control). Buy a domain
-  (e.g. frankysworld.com / frankys.world) — check trademark + the existing
+  (e.g. frankysworld.com / frankys.world) - check trademark + the existing
   "Franky's World" Steam game (different category, low risk, but clear it with
   the lawyer before spending on brand).
 - **Already scalable:** Durable Objects (one per profile, hibernate idle) +
@@ -191,7 +191,7 @@ non-engineers can add lessons (data-driven, you already are).
 
 ## 9. Distribution
 
-- **Web first:** SEO landing site (separate from the app) — "leren lezen app
+- **Web first:** SEO landing site (separate from the app) - "leren lezen app
   peuters", "learn to read toddler app". Blog/parent content for organic.
 - **PWA install** prompts (you have the manifest + icon now).
 - **App stores (phase 2):** Capacitor wrap → App Store + Play, Kids category.
@@ -218,14 +218,14 @@ Build a tiny first-party event pipe to your own Worker (no third-party SDKs):
 
 - **Organic:** parent SEO content, "free learn-to-read" tier ranking, school/
   speech-therapist word of mouth, Reddit/parenting communities (carefully).
-- **Referral:** "give a month, get a month" — you already have family sharing
+- **Referral:** "give a month, get a month" - you already have family sharing
   primitives.
 - **Paid:** Meta/Instagram + TikTok (parents), Apple Search Ads (high intent).
   Track CAC; keep CAC payback < 12 months (at €69/yr LTV ~€100–150 with
   retention, CAC target < €25–40).
 - **Partnerships:** preschools, libraries, pediatric/SLT channels, B2B2C
   bundles. NL: consultatiebureau / kinderopvang pilots.
-- **PR:** "Dutch dad builds ad-free reading app for his kids" — a real,
+- **PR:** "Dutch dad builds ad-free reading app for his kids" - a real,
   tellable founder story.
 
 ---
@@ -254,7 +254,7 @@ Build a tiny first-party event pipe to your own Worker (no third-party SDKs):
 
 ## 14. Phased roadmap & sequencing
 
-**Phase A — Make it sellable (foundations).** ~6–10 weeks.
+**Phase A - Make it sellable (foundations).** ~6–10 weeks.
 1. Remove cloned voice; lock premade per-language voices.
 2. Pre-generated audio corpus → R2 + manifest (margin + offline + consistency).
 3. Accounts (magic-link) + Stripe subscription + entitlement gating.
@@ -263,18 +263,18 @@ Build a tiny first-party event pipe to your own Worker (no third-party SDKs):
 6. Legal pack: privacy policy, terms, parental consent, DPAs. (Parallel, lawyer.)
 7. Rotate exposed API keys.
 
-**Phase B — Make it worth paying for (retention).** ~6–12 weeks, overlaps A.
+**Phase B - Make it worth paying for (retention).** ~6–12 weeks, overlaps A.
 8. Parent dashboard (progress over time, weekly summary, next step).
 9. Content depth: reading units + decodable stories; EN/ES parity.
 10. First-party analytics + funnel instrumentation.
 11. Onboarding/first-run + paywall + trial.
 
-**Phase C — Get users (growth).** ongoing.
+**Phase C - Get users (growth).** ongoing.
 12. SEO landing site + content; PWA install funnel.
 13. Capacitor wrap → App Store + Play (Kids category), ASO.
 14. Referral + paid acquisition; measure CAC/LTV; scale what pays back.
 
-**Phase D — Scale & harden.** ongoing.
+**Phase D - Scale & harden.** ongoing.
 15. Rate-limits, WAF, monitoring, backups, on-call basics.
 16. Localization beyond NL/EN/ES as demand shows.
 17. Efficacy study + PR for credibility.
@@ -291,7 +291,7 @@ Build a tiny first-party event pipe to your own Worker (no third-party SDKs):
 ElevenLabs (only on content changes, pre-generated) ~€0–22 · OpenAI fallback
 ~€0–10 · Stripe 1.5%+€0.25/txn · Sentry/monitoring ~€0–26 · email (magic-link)
 ~€0–15 · accounting ~€50–150.
-→ **~€100–300/mo** until volume — the pre-generated corpus is why infra stays
+→ **~€100–300/mo** until volume - the pre-generated corpus is why infra stays
 cheap. Variable cost per paying family is cents; gross margin > 95%.
 
 **To €1M ARR:** dominant cost becomes **CAC** (paid acquisition) and **content/
@@ -320,7 +320,7 @@ person as revenue allows.
 
 ### Immediate next 5 (highest leverage, mostly buildable now)
 1. Pre-generated audio corpus → R2 (margin + consistency + offline). *(I can build.)*
-2. Remove cloned voice from the worker. *(I can build — 1 line.)*
+2. Remove cloned voice from the worker. *(I can build - 1 line.)*
 3. Accounts (magic-link) + Stripe + entitlement gating. *(I can build.)*
 4. Drop voice transcript from sync (boolean only). *(I can build.)*
 5. Engage a kids-privacy lawyer + buy domain + start BV. *(You.)*
