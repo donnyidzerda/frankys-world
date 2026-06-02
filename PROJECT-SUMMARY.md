@@ -37,7 +37,7 @@ Dutch-first, also English + Spanish. Single-file vanilla JS app, offline-capable
 - `FREE_SOUNDS=5` (reading), `FREE_CREATIONS=5` (guided drawings/writing/numbers via DrawScreen), `FREE_MATH=3` (number range). Free-draw + 1 child profile free. Past limits -> paywall. Multiple profiles, full curriculum, cross-device sync = premium.
 
 ## Legal (all in repo, served at domain root)
-- `privacy.html`/`terms.html`/`refund.html` (NL) + `-en`/`-es` versions = 9 pages. Filled: **Donny Idzerda, Amperestraat 11 Kudelstaart, KvK 72255269, info@skep.co**. Disclose **Creem** as MoR and **Supabase** (EU/Ireland) as the identity+data processor, email/account PII, cloud-sync-on-by-default (anonymous) posture.
+- `privacy.html`/`terms.html`/`refund.html` (NL) + `-en`/`-es` versions = 9 pages. Filled: **Donny, KvK 72255269, info@skep.co**. Disclose **Creem** as MoR and **Supabase** (EU/Ireland) as the identity+data processor, email/account PII, cloud-sync-on-by-default (anonymous) posture.
 - In-app links language-aware (`legalUrl()`); consent-to-terms on splash; "Delete all my data" (local + cloud) in Settings = GDPR right-to-erasure: deletes the Supabase auth user (cascades all rows) via `/account/delete`, with an RLS profile-delete fallback, then signs out and clears local. Voice transcripts never synced.
 - `PROCESSORS.md` = GDPR art.30 register + DPA checklist. `COMMERCIALIZATION.md` = full EUR 1M ARR plan. `GO-LIVE.md` = launch checklist for the Creem/Supabase stack.
 

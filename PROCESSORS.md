@@ -1,6 +1,6 @@
 # Verwerkersregister & DPA-checklist - Franky's World
 
-Verwerkingsverantwoordelijke: **Donny Idzerda**, Amperestraat 11, Kudelstaart, KvK 72255269 · info@skep.co.
+Verwerkingsverantwoordelijke: **Donny**, KvK 72255269 · info@skep.co.
 Dit is je AVG art. 30 register (verwerkingen) + de DPA-status per verwerker. Houd bij; toon op verzoek aan de AP.
 
 ## Wat we verwerken (samenvatting)

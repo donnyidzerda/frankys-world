@@ -353,6 +353,7 @@ const deviceLang = () => {
 const defaultState = () => ({
   id: null, name: "", age: 2, onboarded: false, lang: deviceLang(),
   caseMode: "upper", drawDiff: 1, writeDiff: 1, sayName: "", worldSeenStars: 0,
+  customWords: [],                     // parent-added words/names to trace (A-Z only)
   readBox: {}, readIntro: 1, readProd: {},
   readLat: {}, readPlaced: false, readHeard: {},   // Hoven: latency, placement, heard-log
   mathBox: {}, mathIntro: 3, mathLat: {},          // number sense mastery (start range 1-3)
@@ -1703,7 +1704,7 @@ const CAT_GROUP = {
 const LANGS = [["nl","Nederlands"],["en","English"],["es","Español"]];
 const I18N = {
   nl: {
-    madeBy:"Gemaakt door papa, voor Lucy & Josh",
+    madeBy:"Met liefde gemaakt voor kleine ontdekkers",
     whoPlaying:"Wie speelt er?", orType:"of typ een naam", typeName:"Typ een naam",
     howOld:"Hoe oud ben je?", start:"Start", language:"Taal",
     splashIntro:"Hallo, ik ben Franky. Hoe heet jij? Tik op je naam of typ 'm hieronder.",
@@ -1768,10 +1769,10 @@ const I18N = {
       <p class="t-body"><b>Tip:</b> ga ernaast zitten en benoem wat je ziet
       ("wat een lange kronkellijn") in plaats van te vragen "wat is het?".
       Geen advertenties, geen tracking, geen profilering. De voortgang wordt in je account bewaard (EU) en de app werkt ook offline.</p>
-      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Met liefde gemaakt door papa, voor Lucy &amp; Josh. Bij "Letters met Franky" oefent je kind mama, papa, oma, opa en de eigen naam, net als jouw schrift natekenen op papier.</p>`,
+      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Met liefde gemaakt voor nieuwsgierige kleintjes. Bij "Letters met Franky" oefent je kind mama, papa, oma, opa en de eigen naam, net als jouw schrift natekenen op papier.</p>`,
   },
   en: {
-    madeBy:"Made by Papa, for Lucy & Josh",
+    madeBy:"Made with love for little explorers",
     whoPlaying:"Who is playing?", orType:"or type a name", typeName:"Type a name",
     howOld:"How old are you?", start:"Start", language:"Language",
     splashIntro:"Hello, I'm Franky. What's your name? Tap it below or type it in.",
@@ -1836,10 +1837,10 @@ const I18N = {
       <p class="t-body"><b>Tip:</b> sit alongside and describe what you see
       ("you made a long curvy line") rather than asking "what is it?".
       No ads, no tracking, no profiling. Progress is saved to your account (EU) and the app still works offline.</p>
-      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Made with love by Papa, for Lucy &amp; Josh. In "Letters with Franky" your child traces mama, papa, oma, opa and their own name, just like copying your writing on paper.</p>`,
+      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Made with love for curious little ones. In "Letters with Franky" your child traces mama, papa, oma, opa and their own name, just like copying your writing on paper.</p>`,
   },
   es: {
-    madeBy:"Hecho por papá, para Lucy & Josh",
+    madeBy:"Hecho con cariño para pequeños exploradores",
     whoPlaying:"¿Quién juega?", orType:"o escribe un nombre", typeName:"Escribe un nombre",
     howOld:"¿Cuántos años tienes?", start:"Empezar", language:"Idioma",
     splashIntro:"Hola, soy Franky. ¿Cómo te llamas? Toca tu nombre o escríbelo aquí.",
@@ -1904,7 +1905,7 @@ const I18N = {
       <p class="t-body"><b>Consejo:</b> siéntate al lado y describe lo que ves
       ("hiciste una línea larga y curva") en vez de preguntar "¿qué es?".
       Sin anuncios, sin rastreo, sin perfilado. El progreso se guarda en tu cuenta (UE) y la app también funciona sin conexión.</p>
-      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Hecho con amor por papá, para Lucy &amp; Josh. En "Letras con Franky" tu hijo traza mama, papa, oma, opa y su propio nombre, como copiar tu letra en papel.</p>`,
+      <p class="t-body" style="margin-top:12px;color:var(--ink-soft)">Hecho con cariño para pequeños curiosos. En "Letras con Franky" tu hijo traza mama, papa, oma, opa y su propio nombre, como copiar tu letra en papel.</p>`,
   },
 };
 // Per-drawing step text. English is read from the DRAWINGS data itself.
@@ -2130,7 +2131,7 @@ const I18N_X = {
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
     sayNameLabel:"Hoe spreek je de naam uit?",
-    sayNameHint:"Schrijf het zoals het klinkt, bijvoorbeeld \"Loesie\" voor Lucy. Op het scherm blijft de echte naam staan.",
+    sayNameHint:"Schrijf het zoals het klinkt, bijvoorbeeld \"Sjaan\" voor Jeanne. Op het scherm blijft de echte naam staan.",
     sayNameTry:"Probeer",
     worldTitle:"De wereld van Franky groeit met je mee",
     worldNext:n=>`Nog ${n} ${n===1?"ster":"sterren"} tot iets nieuws`,
@@ -2191,6 +2192,7 @@ const I18N_X = {
     syncPairGo:"Koppel", syncPairError:"Code klopt niet of is verlopen.",
     syncError:"Geen verbinding. Probeer het zo nog eens.",
     done:"Klaar",
+    cwTitle:"Eigen schrijfwoorden", cwHint:"Voeg namen of woorden toe om te oefenen. Alleen letters worden nagetekend (accenten en cijfers vallen weg).", cwEmpty:"Nog geen eigen woorden.", cwPlaceholder:"Naam of woord", cwManage:"Eigen schrijfwoorden", cwAdd:"Eigen woord",
   },
   en: {
     pgTitle:"Just for grown-ups", pgQ:(a,b)=>`What is ${a} + ${b}?`,
@@ -2226,7 +2228,7 @@ const I18N_X = {
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
     sayNameLabel:"How is the name pronounced?",
-    sayNameHint:"Write it the way it sounds, e.g. \"Loosie\" for Lucy. The real name still shows on screen.",
+    sayNameHint:"Write it the way it sounds, e.g. \"Sara\" for Sarah. The real name still shows on screen.",
     sayNameTry:"Try it",
     worldTitle:"Franky's world grows as you play",
     worldNext:n=>`${n} more ${n===1?"star":"stars"} until something new`,
@@ -2287,6 +2289,7 @@ const I18N_X = {
     syncPairGo:"Pair", syncPairError:"That code doesn't work or has expired.",
     syncError:"No connection. Try again in a moment.",
     done:"Done",
+    cwTitle:"Your writing words", cwHint:"Add names or words to practise. Only letters are traced (accents and numbers are dropped).", cwEmpty:"No words yet.", cwPlaceholder:"Name or word", cwManage:"Your writing words", cwAdd:"Your word",
   },
   es: {
     pgTitle:"Solo para adultos", pgQ:(a,b)=>`¿Cuánto es ${a} + ${b}?`,
@@ -2322,7 +2325,7 @@ const I18N_X = {
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
     sayNameLabel:"¿Cómo se pronuncia el nombre?",
-    sayNameHint:"Escríbelo como suena, p. ej. \"Lusi\" para Lucy. El nombre real sigue en pantalla.",
+    sayNameHint:"Escríbelo como suena, p. ej. \"Sofi\" para Sofía. El nombre real sigue en pantalla.",
     sayNameTry:"Probar",
     worldTitle:"El mundo de Franky crece al jugar",
     worldNext:n=>`${n} ${n===1?"estrella":"estrellas"} más para algo nuevo`,
@@ -2383,6 +2386,7 @@ const I18N_X = {
     syncPairGo:"Vincular", syncPairError:"Ese código no funciona o ha caducado.",
     syncError:"Sin conexión. Inténtalo en un momento.",
     done:"Listo",
+    cwTitle:"Tus palabras de escritura", cwHint:"Añade nombres o palabras para practicar. Solo se trazan letras (se quitan acentos y números).", cwEmpty:"Aún no hay palabras.", cwPlaceholder:"Nombre o palabra", cwManage:"Tus palabras de escritura", cwAdd:"Tu palabra",
   },
 };
 for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
@@ -2916,21 +2920,78 @@ WORDS.forEach(wd => DRAWINGS.push({
   pen: true, clearEachStep: true,
   build: () => letterSteps(wd), steps: [],
 }));
-// A child should trace THEIR OWN name (and siblings on this device), not the
-// maker's kids. Names are added at render time (the active profile isn't known
-// at module load). Only A-Z letters - all of which have a glyph - are kept.
+// Reduce any user word/name to traceable letters: the glyph table only covers
+// A-Z (no accents or digits), so strip the rest and cap the length. é -> e is
+// NOT done (we just drop accented chars) to keep it predictable.
+function cleanWord(w) { return String(w || "").replace(/[^A-Za-z]/g, "").slice(0, 14); }
+
+// Dynamic writing words = the child's own name + siblings on this device +
+// the parent's custom list. Added at render time (the active profile isn't
+// known at module load) and reconciled each call so removals disappear too.
 function ensureWriteNames() {
-  const names = new Set();
-  if (S && S.name) names.add(S.name);
-  try { profileList().forEach(p => p.name && names.add(p.name)); } catch {}
-  names.forEach(nm => {
-    const clean = String(nm).replace(/[^A-Za-z]/g, "");
-    if (!clean) return;
-    const id = "word_" + clean.toLowerCase();
+  const want = new Map();                       // id(lowercase) -> display word
+  const add = w => { const c = cleanWord(w); if (c) want.set("word_" + c.toLowerCase(), c); };
+  if (S && S.name) add(S.name);
+  try { profileList().forEach(p => add(p.name)); } catch {}
+  if (S && Array.isArray(S.customWords)) S.customWords.forEach(add);
+  // Drop dynamic words that are no longer wanted (e.g. a removed custom word).
+  for (let i = DRAWINGS.length - 1; i >= 0; i--) {
+    const d = DRAWINGS[i];
+    if (d._dynWord && !want.has(d.id)) DRAWINGS.splice(i, 1);
+  }
+  // Add any wanted word that isn't already a lesson.
+  want.forEach((disp, id) => {
     if (DRAWINGS.some(d => d.id === id)) return;
-    DRAWINGS.push({ id, name: clean, category: "writing", accent: "var(--sky)",
-      pen: true, clearEachStep: true, build: () => letterSteps(clean), steps: [] });
+    DRAWINGS.push({ id, name: disp, category: "writing", accent: "var(--sky)",
+      pen: true, clearEachStep: true, build: () => letterSteps(disp), steps: [], _dynWord: true });
   });
+}
+// Parent-facing editor for the custom writing words. Used from Settings and
+// from a button on the Writing page. onDone re-renders the caller.
+function CustomWordsSheet(onDone) {
+  Sound.fx.tap();
+  const ov = el("div", { css: "position:fixed;inset:0;z-index:70;background:rgba(52,48,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto" });
+  const card = el("div", { cls: "card", css: "max-width:460px;width:100%;padding:22px;display:flex;flex-direction:column;gap:14px;max-height:92vh;overflow:auto" });
+  card.append(el("div", { cls: "t-title", textContent: t("cwTitle") }));
+  card.append(el("div", { cls: "t-body muted", textContent: t("cwHint") }));
+  const list = el("div", { css: "display:flex;flex-wrap:wrap;gap:8px" });
+  const MAX = 20;
+  function renderList() {
+    list.innerHTML = "";
+    const words = (S.customWords || []);
+    if (!words.length) { list.append(el("div", { cls: "t-body muted", textContent: t("cwEmpty") })); return; }
+    words.forEach(w => {
+      const chip = el("div", { css: "display:flex;align-items:center;gap:6px;background:var(--surface-2);border:2px solid var(--line);border-radius:999px;padding:7px 8px 7px 14px" });
+      chip.append(el("span", { cls: "t-head", css: "font-size:16px", textContent: w }));
+      const x = el("button", { cls: "btn-icon", css: "width:26px;height:26px;border-radius:50%;background:var(--clay);color:#fff;font-weight:900;line-height:1;border:none;font-size:16px", textContent: "×" });
+      x.onclick = () => { Sound.fx.tap(); S.customWords = (S.customWords || []).filter(z => z !== w); save(); renderList(); };
+      chip.append(x); list.append(chip);
+    });
+  }
+  renderList();
+  card.append(list);
+  const row = el("div", { css: "display:flex;gap:8px" });
+  const input = el("input", { maxLength: 14, placeholder: t("cwPlaceholder"),
+    css: "flex:1;min-width:0;font:inherit;font-size:18px;font-weight:800;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
+  const addBtn = el("button", { cls: "btn btn-primary t-head", css: "padding:12px 18px", textContent: "＋" });
+  function doAdd() {
+    const c = cleanWord(input.value);
+    input.value = "";
+    if (!c) return;
+    S.customWords = S.customWords || [];
+    if (S.customWords.length >= MAX) return;
+    if (!S.customWords.some(w => w.toLowerCase() === c.toLowerCase())) { S.customWords.push(c); save(); }
+    renderList(); input.focus();
+  }
+  addBtn.onclick = doAdd;
+  input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+  row.append(input, addBtn);
+  card.append(row);
+  const done = el("button", { cls: "btn btn-go t-head", css: "align-self:center;margin-top:2px", textContent: t("done") });
+  done.onclick = () => { Sound.fx.tap(); ov.remove(); ensureWriteNames(); if (onDone) onDone(); };
+  card.append(done);
+  ov.append(card); document.body.append(ov);
+  setTimeout(() => input.focus(), 50);
 }
 // Alphabet: one traceable lesson per letter, A to Z.
 ABC.forEach(L => DRAWINGS.push({
@@ -4316,18 +4377,13 @@ function Splash() {
   // is still recomputed from their birthday so it stays correct as they
   // grow.
   const profRow = el("div", { css: "display:flex;gap:10px;flex-wrap:wrap" });
-  const BIRTHDAYS = { lucy: [2022, 11, 30], josh: [2024, 12, 16] };
   const prof = (nm, age) => {
     const b = el("button", { cls: "btn btn-primary t-head", css: "flex:1;min-width:120px", textContent: nm });
     b.onclick = () => { Sound.fx.tap(); buzz(12); input.value = nm; setAge(age); };
     return b;
   };
   const onDevice = profileList();
-  onDevice.forEach(p => {
-    const bd = BIRTHDAYS[p.name.toLowerCase()];
-    const a = bd ? ageOf(bd[0], bd[1], bd[2]) : (p.age || 2);
-    profRow.append(prof(p.name, a));
-  });
+  onDevice.forEach(p => profRow.append(prof(p.name, p.age || 2)));
 
   const start = el("button", { cls: "btn btn-go t-head", css: "margin-top:2px",
     html: `${t("start")} ${ic("next", 22, "#fff")}` });
@@ -4605,6 +4661,12 @@ function Home(mode) {
        <div style="background:rgba(255,255,255,.2);border-radius:50%;padding:12px;display:inline-flex">${ic("next", 26, "#fff")}</div>`;
     hero.onclick = () => { Sound.fx.tap(); buzz(14); go("draw", nid); };
     wrap.append(hero);
+    // Quick "add your own word" entry (parent-gated, since a child can reach it).
+    const cwAdd = el("button", { cls: "btn btn-quiet",
+      css: "width:100%;margin:2px 0 4px;padding:13px;justify-content:center",
+      html: ic("write", 18) + `<span>＋ ${t("cwAdd")}</span>` });
+    cwAdd.onclick = () => parentGate(() => CustomWordsSheet(() => go("home", "write")));
+    wrap.append(cwAdd);
   }
   if (mode === "draw") {
     const fd = el("button", { cls: "card pop",
@@ -5575,6 +5637,11 @@ function Settings() {
     html: ic("sound", 18) + `<span>${t("sayNameTry")}</span>` });
   tryBtn.onclick = () => { commit(); speak(t("hello")(S.name)); };
   prof.append(sayIn, el("div", { cls: "t-body muted", textContent: t("sayNameHint") }), tryBtn);
+  // Parent-managed custom writing words/names (Settings is already gated).
+  const cwBtn = el("button", { cls: "btn btn-quiet", css: "align-self:flex-start;padding:10px 16px",
+    html: ic("write", 18) + `<span>${t("cwManage")}</span>` });
+  cwBtn.onclick = () => CustomWordsSheet(() => Settings());
+  prof.append(el("div", { cls: "t-label", css: "margin-top:6px", textContent: t("cwTitle") }), cwBtn);
   const reset = el("button", { cls: "btn", css: "background:var(--clay);color:#fff;border-color:transparent;margin-top:4px",
     html: ic("eraser", 18, "#fff") + `<span>${t("reset")}</span>` });
   reset.onclick = async () => {
