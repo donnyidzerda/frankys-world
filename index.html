@@ -70,6 +70,12 @@
   .cap{ max-width:680px; margin-inline:auto; width:100%; }
   .cap-wide{ max-width:980px; margin-inline:auto; width:100%; }
 
+  /* Home worlds: one column on phones, two once the scroll area is wide
+     enough (tablets / landscape) so all four fit without the bottom ones
+     scrolling under the nav bar. The parent .scroll is the query container. */
+  .home-pillars{ display:grid; gap:12px; grid-template-columns:1fr; }
+  @container (min-width:560px){ .home-pillars{ grid-template-columns:1fr 1fr; } }
+
   /* Desktop: a touch app must not stretch across a monitor. Present it as
      a centred device panel floating on the textured backdrop. Phones and
      tablets (coarse pointer) stay edge-to-edge fullscreen, as a PWA should. */
@@ -4680,9 +4686,13 @@ function Home(mode) {
     if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
     const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:12px 20px 130px;container-type:inline-size" });
+    // Two-column grid once there's width (tablets/landscape) so all four
+    // worlds fit without the bottom ones hiding under the nav bar; one column
+    // on phones (see .home-pillars @container rule).
+    const grid = el("div", { cls: "home-pillars" });
     const pillar = (key, col, fn) => {
       const b = el("button", { cls: "card pop",
-        css: `padding:18px 24px;display:flex;align-items:center;gap:20px;background:${col};color:#fff;width:100%;margin-bottom:12px;min-height:92px` });
+        css: `padding:18px 24px;display:flex;align-items:center;gap:20px;background:${col};color:#fff;width:100%;min-height:92px` });
       b.innerHTML =
         `<div style="background:rgba(255,255,255,.20);border-radius:22px;padding:13px;display:inline-flex">${pillarScene(key)}</div>
          <div style="text-align:left;flex:1"><div class="t-title">${t("pill_" + key)}</div>
@@ -4690,12 +4700,13 @@ function Home(mode) {
       b.onclick = () => { Sound.fx.tap(); buzz(14); fn(); };
       return b;
     };
-    wrap.append(
+    grid.append(
       pillar("read", "var(--sky)", () => go("read")),
       pillar("math", "var(--ochre)", () => go("math")),
       pillar("write", "var(--sage)", () => go("home", "write")),
       pillar("draw", "var(--clay)", () => go("home", "draw")),
     );
+    wrap.append(grid);
     s.append(wrap, nav("home"));
     APP.append(s);
     frankySay("warm", _greeted ? "" : t("buddyHome")(S.name));
