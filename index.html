@@ -970,20 +970,23 @@ const Ent = (() => {
   // family hasn't linked yet. Then open the Paddle overlay checkout, passing
   // the account id as custom data so the webhook can grant the entitlement.
   async function startCheckout(plan) {
-    if (navigator.onLine === false) return;       // checkout needs the network
+    if (navigator.onLine === false) { toast(t("billingError"), "error"); return; }  // checkout needs the network
     if (USE_SUPABASE && BILLING_PROVIDER === "creem") {
       // Server-creates a Creem hosted checkout tied to this family's uid, then
-      // redirects. The signed webhook grants the entitlement on return.
+      // redirects. The signed webhook grants the entitlement on return. The
+      // veil + toast mean the parent always sees progress, never a dead tap.
+      busy(true);
       try { if (!Account.uid()) await Account.init(); } catch {}
-      if (!Account.uid()) return;
+      if (!Account.uid()) { busy(false); toast(t("billingError"), "error"); return; }
       try {
         const r = await fetch(BILLING_URL() + "/billing/checkout", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uid: Account.uid(), plan, return: location.origin + location.pathname }),
         });
         const j = await r.json().catch(() => ({}));
-        if (j && j.url) location.href = j.url;
-      } catch {}
+        if (j && j.url) { location.href = j.url; return; }   // leaving the page; veil stays until nav
+        busy(false); toast(t("billingError"), "error");
+      } catch { busy(false); toast(t("billingError"), "error"); }
       return;
     }
     // Legacy Paddle.js overlay (Supabase/Creem not configured).
@@ -2154,6 +2157,9 @@ const I18N_X = {
     delAllDone:"Alle gegevens zijn gewist.",
     delConfirm:n=>`Profiel van ${n} en al hun werk verwijderen?`,
     resetConfirm:"Alle gegevens van dit kind wissen?",
+    okBtn:"Oké", confirmDelete:"Verwijderen", linkCopied:"Link gekopieerd", a11ySound:"Geluid aan of uit",
+    billingWait:"Een moment…", billingError:"De betaalpagina kon niet openen. Probeer het opnieuw.",
+    galleryDelConfirm:"Deze tekening weggooien?",
     sayNameLabel:"Hoe spreek je de naam uit?",
     sayNameHint:"Schrijf het zoals het klinkt, bijvoorbeeld \"Sjaan\" voor Jeanne. Op het scherm blijft de echte naam staan.",
     sayNameTry:"Probeer",
@@ -2255,6 +2261,9 @@ const I18N_X = {
     delAllDone:"All data has been erased.",
     delConfirm:n=>`Delete ${n}'s profile and all their work?`,
     resetConfirm:"Erase this child's data?",
+    okBtn:"OK", confirmDelete:"Delete", linkCopied:"Link copied", a11ySound:"Turn sound on or off",
+    billingWait:"One moment…", billingError:"Couldn't open the checkout page. Please try again.",
+    galleryDelConfirm:"Throw this drawing away?",
     sayNameLabel:"How is the name pronounced?",
     sayNameHint:"Write it the way it sounds, e.g. \"Sara\" for Sarah. The real name still shows on screen.",
     sayNameTry:"Try it",
@@ -2356,6 +2365,9 @@ const I18N_X = {
     delAllDone:"Todos los datos han sido borrados.",
     delConfirm:n=>`¿Borrar el perfil de ${n} y todo su trabajo?`,
     resetConfirm:"¿Borrar los datos de este niño?",
+    okBtn:"Vale", confirmDelete:"Borrar", linkCopied:"Enlace copiado", a11ySound:"Activar o silenciar el sonido",
+    billingWait:"Un momento…", billingError:"No se pudo abrir la página de pago. Inténtalo de nuevo.",
+    galleryDelConfirm:"¿Tirar este dibujo?",
     sayNameLabel:"¿Cómo se pronuncia el nombre?",
     sayNameHint:"Escríbelo como suena, p. ej. \"Sofi\" para Sofía. El nombre real sigue en pantalla.",
     sayNameTry:"Probar",
@@ -2426,6 +2438,67 @@ for (const lc in I18N_X) Object.assign(I18N[lc], I18N_X[lc]);
 
 // Real parent gate: a tiny sum a toddler cannot answer. Resolves cb() on
 // success; used for Settings, "5 more minutes", and reset.
+/* ----- In-app dialogs (never fall back to the OS's grey browser pop-ups) -
+   toast()    : a brief, non-blocking message that fades itself out.
+   uiConfirm(): an on-brand modal returning Promise<bool>. Destructive
+                prompts pass {danger:true} so the safe choice (Cancel) is the
+                one focused - a stray Enter never wipes a child's work. */
+function toast(msg, kind) {
+  const host = APP || document.body;
+  let wrap = host.querySelector(":scope > .toast-host");
+  if (!wrap) {
+    wrap = el("div", { cls: "toast-host", css: "position:absolute;left:0;right:0;bottom:calc(96px + env(safe-area-inset-bottom));z-index:90;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding:0 16px" });
+    host.append(wrap);
+  }
+  const bg = kind === "error" ? "var(--clay)" : "var(--ink)";
+  const node = el("div", { cls: "toast pop", role: "status", "aria-live": "polite",
+    css: `pointer-events:auto;max-width:min(440px,92vw);background:${bg};color:#fff;font-weight:700;font-size:15px;line-height:1.35;padding:12px 18px;border-radius:16px;box-shadow:var(--sh);text-align:center`,
+    textContent: msg });
+  wrap.append(node);
+  setTimeout(() => {
+    node.style.transition = "opacity .3s, transform .3s";
+    node.style.opacity = "0"; node.style.transform = "translateY(8px)";
+    setTimeout(() => { node.remove(); if (!wrap.children.length) wrap.remove(); }, 320);
+  }, kind === "error" ? 3400 : 2200);
+}
+// A blocking "working…" veil for the few moments a tap waits on the network
+// (creating a checkout session). Removed on success-redirect or on error.
+let _busyVeil;
+function busy(on, label) {
+  if (on) {
+    if (_busyVeil) return;
+    _busyVeil = el("div", { css: "position:absolute;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.42);backdrop-filter:blur(3px)" });
+    _busyVeil.append(el("div", { cls: "card pop", css: "background:var(--surface);padding:18px 26px;font-weight:800;color:var(--ink)", textContent: label || t("billingWait") }));
+    (APP || document.body).append(_busyVeil);
+  } else if (_busyVeil) { _busyVeil.remove(); _busyVeil = null; }
+}
+function uiConfirm(msg, opts = {}) {
+  return new Promise(resolve => {
+    const ov = el("div", { role: "dialog", "aria-modal": "true",
+      css: "position:absolute;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
+    const card = el("div", { cls: "card pop", css: "background:var(--surface);padding:22px 22px 18px;width:min(400px,92vw);display:flex;flex-direction:column;gap:16px;text-align:center" });
+    if (opts.title) card.append(el("div", { cls: "t-title", textContent: opts.title }));
+    card.append(el("div", { cls: "t-body", css: "line-height:1.4", textContent: msg }));
+    const row = el("div", { css: "display:flex;gap:10px;justify-content:center;flex-wrap:wrap" });
+    const cancel = el("button", { cls: "btn", css: "background:var(--surface-2);flex:1;min-width:120px", textContent: opts.cancelLabel || t("cancel") });
+    const ok = el("button", { cls: opts.danger ? "btn" : "btn btn-go",
+      css: `flex:1;min-width:120px;${opts.danger ? "background:var(--clay);color:#fff;border-color:transparent" : ""}`,
+      textContent: opts.okLabel || t("okBtn") });
+    let done = false;
+    const close = (val) => { if (done) return; done = true; document.removeEventListener("keydown", onKey); ov.remove(); resolve(val); };
+    cancel.onclick = () => { Sound.fx.soft(); close(false); };
+    ok.onclick = () => { Sound.fx.tap(); close(true); };
+    ov.onclick = (e) => { if (e.target === ov) close(false); };       // tap backdrop = cancel
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(false); } };
+    document.addEventListener("keydown", onKey);
+    row.append(cancel, ok);
+    card.append(row);
+    ov.append(card); (APP || document.body).append(ov);
+    // Danger → focus Cancel (the safe choice); otherwise focus the action.
+    setTimeout(() => (opts.danger ? cancel : ok).focus(), 50);
+  });
+}
+
 function parentGate(onPass) {
   const a = 2 + ((Math.random() * 7) | 0), b = 3 + ((Math.random() * 6) | 0);
   const ov = el("div", { css: "position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.55);backdrop-filter:blur(4px);padding:24px" });
@@ -2467,9 +2540,9 @@ function ProfilePicker() {
     row.append(pick);
     if (list.length > 1) {
       const del = el("button", { cls: "btn btn-quiet btn-icon", html: ic("eraser", 18) });
-      del.onclick = () => parentGate(() => {
-        if (confirm(t("delConfirm")(p.name))) { ov.remove(); deleteProfile(p.id); }
-      });
+      del.onclick = () => parentGate(() =>
+        uiConfirm(t("delConfirm")(p.name), { danger: true, okLabel: t("confirmDelete") })
+          .then(ok => { if (ok) { ov.remove(); deleteProfile(p.id); } }));
       row.append(del);
     }
     card.append(row);
@@ -4559,7 +4632,7 @@ function splashPair() {
       ok.disabled = false;
       ok.innerHTML = ic("check", 18, "#fff") + `<span>${t("syncPairGo")}</span>`;
       inp.style.borderColor = "var(--clay)";
-      alert(t("syncPairError"));
+      toast(t("syncPairError"), "error");
     }
   };
   row.append(cancel, ok);
@@ -5216,7 +5289,7 @@ function toolbar(engine, opts = {}) {
   // mistakes - tracing still never blocks.
   if (opts.actions) {
     const row = el("div", { css: "display:flex;gap:10px;align-items:stretch" });
-    const undoB = el("button", { cls: "btn btn-quiet btn-icon", css: "flex:none", html: ic("undo", 24) });
+    const undoB = el("button", { cls: "btn btn-quiet btn-icon", css: "flex:none", "aria-label": t("undo"), html: ic("undo", 24) });
     undoB.onclick = () => { Sound.fx.tap(); buzz(12); engine.undo(); };
     eraseBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:0;padding:13px 8px;gap:7px",
       html: ic("eraser", 20) + `<span>${t("modeErase")}</span>` });
@@ -5499,8 +5572,9 @@ async function GalleryScreen() {
       dl.onclick = () => { const f = new File([rec.blob], rec.name + ".png", { type: "image/png" });
         if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f] }).catch(() => {});
         else el("a", { href: url, download: rec.name + ".png" }).click(); };
-      const del = el("button", { cls: "btn btn-quiet", css: "flex:1;padding:11px", html: ic("eraser", 18) });
-      del.onclick = async () => { Sound.fx.tap(); await galleryDel(rec.id); GalleryScreen(); };
+      const del = el("button", { cls: "btn btn-quiet", css: "flex:1;padding:11px", "aria-label": t("confirmDelete"), html: ic("eraser", 18) });
+      del.onclick = () => uiConfirm(t("galleryDelConfirm"), { danger: true, okLabel: t("confirmDelete") })
+        .then(async ok => { if (!ok) return; Sound.fx.tap(); await galleryDel(rec.id); GalleryScreen(); });
       r.append(dl, del); c.append(r); grid.append(c);
     });
     wrap.append(grid);
@@ -5619,7 +5693,7 @@ function FreeDraw() {
   // Actions - compact undo, press-and-hold clear, save.
   const row = el("div", { css: "display:flex;gap:10px;align-items:stretch" });
   const undoBtn = el("button", { cls: "btn btn-quiet btn-icon", css: "flex:none",
-    html: ic("undo", 24) });
+    "aria-label": t("undo"), html: ic("undo", 24) });
   undoBtn.onclick = () => { Sound.fx.tap(); buzz(12); engine.undo(); };
   // "Clear" wipes the whole drawing, so it is gated behind a deliberate
   // press-and-hold - a child tapping around can never erase by accident.
@@ -5727,7 +5801,9 @@ function Settings() {
   legalRow.append(legalLink(t("legalPrivacy"), legalUrl("privacy")), legalLink(t("legalTerms"), legalUrl("terms")), legalLink(t("legalRefund"), legalUrl("refund")));
   const delAllBtn = el("button", { cls: "btn",
     css: "background:var(--clay-soft);color:var(--clay);border:1px solid var(--clay)", textContent: t("delAll") });
-  delAllBtn.onclick = () => parentGate(() => { if (window.confirm(t("delAllConfirm"))) wipeEverything(); });
+  delAllBtn.onclick = () => parentGate(() =>
+    uiConfirm(t("delAllConfirm"), { danger: true, okLabel: t("confirmDelete") })
+      .then(ok => { if (ok) wipeEverything(); }));
   legalCard.append(legalRow, delAllBtn);
 
   // Letter case (caps recommended first; lowercase when ready)
@@ -5811,11 +5887,10 @@ function Settings() {
   const reset = el("button", { cls: "btn", css: "background:var(--clay);color:#fff;border-color:transparent;margin-top:4px",
     html: ic("eraser", 18, "#fff") + `<span>${t("reset")}</span>` });
   reset.onclick = async () => {
-    if (confirm(t("resetConfirm"))) {
-      // Removes only THIS child's profile + gallery; other children are safe.
-      if (S.id) await deleteProfile(S.id);
-      else { S = defaultState(); Splash(); }
-    }
+    if (!(await uiConfirm(t("resetConfirm"), { danger: true, okLabel: t("reset") }))) return;
+    // Removes only THIS child's profile + gallery; other children are safe.
+    if (S.id) await deleteProfile(S.id);
+    else { S = defaultState(); Splash(); }
   };
   prof.append(reset);
 
@@ -5845,7 +5920,7 @@ function Settings() {
         await Sync.push();                       // make sure cloud is current
         const code = await Sync.newCode();
         showCode(code);
-      } catch { alert(t("syncError")); }
+      } catch { toast(t("syncError"), "error"); }
     };
     const stopBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:160px",
       html: ic("eraser", 18) + `<span>${t("syncStop")}</span>` });
@@ -5865,7 +5940,7 @@ function Settings() {
       try {
         const code = await Sync.create();
         showCode(code);
-      } catch { alert(t("syncError")); }
+      } catch { toast(t("syncError"), "error"); }
     };
     const pairBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:160px",
       html: ic("next", 18) + `<span>${t("syncPair")}</span>` });
@@ -5913,7 +5988,7 @@ function Settings() {
         ok.disabled = false;
         ok.innerHTML = ic("check", 18, "#fff") + `<span>${t("syncPairGo")}</span>`;
         inp.style.borderColor = "var(--clay)";
-        alert(t("syncPairError"));
+        toast(t("syncPairError"), "error");
       }
     };
     row.append(cancel, ok);
@@ -6023,7 +6098,7 @@ function Settings() {
     Sound.fx.tap();
     const data = { title: "Franky's World", text: t("shareText"), url: location.href.split("?")[0] };
     try { if (navigator.share) await navigator.share(data);
-      else { await navigator.clipboard.writeText(data.url); alert(data.url); } } catch {}
+      else { await navigator.clipboard.writeText(data.url); toast(t("linkCopied")); } } catch {}
   };
   const sheetBtn = el("button", { cls: "btn btn-quiet", css: "flex:1",
     html: ic("save", 18) + `<span>${t("parentSheet")}</span>` });
@@ -6072,7 +6147,7 @@ function Settings() {
 // go through the parent-gated settings to hush it.
 function muteBtn() {
   const b = el("button", { cls: "btn btn-quiet btn-icon" });
-  b.setAttribute("aria-label", "Turn sound on or off");
+  b.setAttribute("aria-label", t("a11ySound"));
   const render = () => b.innerHTML =
     ic(S.settings.muted ? "mute" : "sound", 22, S.settings.muted ? "var(--ink-soft)" : "var(--clay)");
   render();
