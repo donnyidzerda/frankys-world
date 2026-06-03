@@ -721,7 +721,7 @@ const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 // Flip a provider true once it's configured in Supabase (Authentication ->
 // Providers) with its OAuth client id + secret. Until then its button is
 // hidden. Email/password works regardless.
-const SSO = { google: false, apple: false };
+const SSO = { google: true, apple: false };
 let _sb = null, _sbReady = null;
 const sb = () => _sb;
 function loadSupabase() {
