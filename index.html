@@ -4785,34 +4785,43 @@ function Home(mode) {
 // Landscape 2-col kicks in when the APP BOX (not the window) is clearly
 // wide and landscape - the 1.15 margin keeps a near-square box (e.g. the
 // desktop device panel) in the calmer single-column portrait layout.
-const isLand = () => APP && APP.clientWidth >= 740 && APP.clientWidth > APP.clientHeight * 1.15;
-function applyLandscape(s, sw, stage) {
-  if (!isLand()) return;
-  s.style.flexDirection = "row";
-  s.style.alignItems = "stretch";
-  // Stage fills the column width and its height follows aspect-ratio - this
-  // stops the stage's intrinsic min-height (= sw height) from blowing the
-  // flex item past its basis.
-  sw.style.flex = "0 0 58%";
-  sw.style.minWidth = "0";
-  sw.style.height = "100%";
-  sw.style.padding = "8px";
-  stage.style.height = "auto";
-  stage.style.width = "100%";
-  stage.style.maxWidth = "100%";
-  stage.style.maxHeight = "100%";
-  stage.style.margin = "auto";
-  // Right column scrolls; bottom padding clears any absolute nav bar.
-  const rcol = el("div", { cls: "rcol",
-    css: "flex:1 1 42%;min-width:0;height:100%;overflow-y:auto;display:flex;flex-direction:column;padding:8px 12px calc(96px + env(safe-area-inset-bottom))" });
-  [...s.children].forEach(ch => {
-    if (ch !== sw && !ch.classList.contains("navbar")) rcol.append(ch);
-  });
-  s.append(sw, rcol);
-  // Force flex children inside rcol to shrink to the column width so the
-  // FreeDraw action buttons (Undo/Clear/Save) don't overflow horizontally.
-  rcol.style.overflowX = "hidden";
-  rcol.querySelectorAll("*").forEach(e => { e.style.minWidth = "0"; });
+// Side-by-side once the box is landscape and wide enough for two columns -
+// covers phones in landscape too (the old >=740 gate left them in the squished
+// single column with a tiny canvas).
+const isLand = () => APP && APP.clientWidth >= 560 && APP.clientWidth > APP.clientHeight * 1.05;
+// Drawing screens: canvas on one side at full height (so the square is as big
+// as the height allows), controls beside it. Re-runs on every viewport change
+// so ROTATING mid-draw reflows instead of freezing at the open-time layout.
+function applyLandscape(s, sw, stage, engine) {
+  const original = [...s.children];
+  // Snapshot the exact original inline styles so portrait can be restored
+  // perfectly (sw/stage get their flex + square sizing from inline CSS, so
+  // they must be put back verbatim, not just cleared).
+  const sCss = s.style.cssText, swCss = sw.style.cssText, stageCss = stage.style.cssText;
+  // The DOM is built portrait, so we start "known portrait" and only touch the
+  // DOM on a real transition - re-appending the canvas at build time would
+  // briefly detach it and collapse the engine canvas to 0.
+  let rcol = null, landNow = false;
+  const toLand = () => {
+    s.style.flexDirection = "row"; s.style.alignItems = "stretch";
+    sw.style.flex = "0 0 56%"; sw.style.minWidth = "0"; sw.style.height = "100%"; sw.style.padding = "8px";
+    stage.style.height = "auto"; stage.style.width = "100%"; stage.style.maxWidth = "100%"; stage.style.maxHeight = "100%"; stage.style.margin = "auto";
+    if (!rcol) rcol = el("div", { cls: "rcol",
+      css: "flex:1 1 44%;min-width:0;height:100%;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:8px 12px calc(16px + env(safe-area-inset-bottom))" });
+    original.forEach(ch => { if (ch !== sw && !ch.classList.contains("navbar")) rcol.append(ch); });
+    s.append(sw, rcol);
+    rcol.querySelectorAll("*").forEach(e => { e.style.minWidth = "0"; });
+  };
+  const toPortrait = () => {
+    s.style.cssText = sCss; sw.style.cssText = swCss; stage.style.cssText = stageCss;
+    original.forEach(ch => s.append(ch));   // restore exact original order
+    if (rcol) { rcol.remove(); rcol = null; }
+  };
+  const apply = () => { const land = isLand(); if (land === landNow) return; landNow = land;
+    land ? toLand() : toPortrait(); engine && engine.resize(); };
+  apply();
+  const ro = new ResizeObserver(() => { if (!s.isConnected) { ro.disconnect(); return; } apply(); });
+  ro.observe(APP);
 }
 
 function nav(active) {
@@ -4867,13 +4876,24 @@ function makeEngine(stage, opts = {}) {
   let DPR = 1, size = 0;
   function resize() {
     const r = stage.getBoundingClientRect();
-    size = Math.min(r.width, r.height);
+    const newSize = Math.max(1, Math.min(r.width, r.height));
     DPR = Math.min(window.devicePixelRatio || 1, 2.5);
-    const prev = (size && cv.width) ? ctx.getImageData(0, 0, cv.width, cv.height) : null;
-    cv.width = size * DPR; cv.height = size * DPR;
+    // Preserve the drawing across a resize/rotation by RESCALING it into the
+    // new square. putImageData ignores the transform and never scales, so on
+    // an orientation change it dumped the old pixels at the top-left -> the
+    // art looked shifted, cropped and "verdraaid". Snapshot -> drawImage keeps
+    // it centred and proportional (square -> square = no distortion).
+    let prevCv = null;
+    if (size && cv.width) {
+      prevCv = document.createElement("canvas");
+      prevCv.width = cv.width; prevCv.height = cv.height;
+      prevCv.getContext("2d").drawImage(cv, 0, 0);
+    }
+    size = newSize;
+    cv.width = Math.round(size * DPR); cv.height = Math.round(size * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    if (prev) ctx.putImageData(prev, 0, 0);
+    if (prevCv) ctx.drawImage(prevCv, 0, 0, size, size);
     // Pin every layer to an EXACT centred square. The stage box can come
     // out slightly non-square (aspect-ratio vs the max-width cap), which
     // would stretch the square canvas onto a non-square CSS box - making
@@ -4888,6 +4908,10 @@ function makeEngine(stage, opts = {}) {
     }
   }
   new ResizeObserver(resize).observe(stage); resize();
+  // The engine is built while the screen is still detached, so the first
+  // resize() can see a 0-sized stage. Re-run once it's connected + laid out
+  // (don't rely solely on ResizeObserver firing on connect).
+  requestAnimationFrame(resize);
   const L2P = v => (v / 1000) * size;
   // Brush sizes are tuned for a 560px reference canvas; scale to the
   // actual canvas so strokes look right on small phones (not huge).
@@ -5116,34 +5140,46 @@ function makeEngine(stage, opts = {}) {
   }
   // Per-stroke history: snapshot the canvas before each new mark so undo
   // restores exactly the previous state (cap at 6 to keep memory bounded).
-  const _hist = []; const HMAX = 6;
+  // Snapshots are stored as CANVASES (not ImageData) so undo can rescale them
+  // into the current square after an orientation change - ImageData/putImageData
+  // can't scale and would misplace the restored art on a rotated canvas.
+  const _hist = []; const HMAX = 8;
   const snap = () => { try {
-    _hist.push(ctx.getImageData(0, 0, cv.width, cv.height));
-    if (_hist.length > HMAX) _hist.shift();
+    const c = document.createElement("canvas"); c.width = cv.width; c.height = cv.height;
+    c.getContext("2d").drawImage(cv, 0, 0);
+    _hist.push(c); if (_hist.length > HMAX) _hist.shift();
   } catch {} };
   const clear = () => { ctx.clearRect(0, 0, cv.width, cv.height); _hist.length = 0; };
   const undo = () => {
-    if (!_hist.length) { ctx.clearRect(0, 0, cv.width, cv.height); return; }
     ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
-    ctx.putImageData(_hist.pop(), 0, 0);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const c = _hist.pop();
+    if (c) ctx.drawImage(c, 0, 0, size, size);   // rescale into the current square
   };
   const toPNG = () => { const o = document.createElement("canvas");
     o.width = cv.width; o.height = cv.height; const c = o.getContext("2d");
     c.fillStyle = "#FBF3E7"; c.fillRect(0, 0, o.width, o.height); c.drawImage(cv, 0, 0);
     return new Promise(r => o.toBlob(r, "image/png")); };
-  return { st, setGhost, helpMe, playDemo, setDemoFactor, score, clear, undo, toPNG, cfg,
+  return { st, setGhost, helpMe, playDemo, setDemoFactor, score, clear, undo, toPNG, cfg, resize,
            get strokes() { return st.strokes; } };
 }
 
 function toolbar(engine, opts = {}) {
   // One centred panel of a fixed width so every row lines up.
   const bar = el("div", { css: "display:flex;flex-direction:column;gap:12px;width:100%;max-width:460px;margin:0 auto;padding:6px 16px" });
+  let eraseBtn = null;
+  // Picking a colour or brush always returns to draw mode and de-selects the
+  // eraser, so a child can never get "stuck" erasing.
+  const setDraw = () => {
+    engine.st.mode = "draw";
+    if (eraseBtn) { eraseBtn.classList.remove("sel"); const sv = eraseBtn.querySelector("svg"); sv && sv.setAttribute("stroke", "var(--ink)"); }
+  };
   // Colours - 3x2 grid.
   const cols = el("div", { css: "display:grid;grid-template-columns:repeat(3,1fr);gap:14px;justify-items:center" });
   COLORS.forEach((c, i) => {
     const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
-    b.onclick = () => { engine.st.color = c; Sound.fx.tap(); buzz(12);
+    b.onclick = () => { engine.st.color = c; setDraw(); Sound.fx.tap(); buzz(12);
       [...cols.children].forEach(x => x.classList.remove("sel")); b.classList.add("sel"); };
     cols.append(b);
   });
@@ -5152,14 +5188,48 @@ function toolbar(engine, opts = {}) {
   [["crayon", t("toolCrayon"), "brush"], ["marker", t("toolMarker"), "write"], ["glow", t("toolGlow"), "star"]].forEach(([k, label, icon], i) => {
     const b = el("button", { cls: "chip" + (i === 0 ? " sel" : ""),
       html: ic(icon, 18, i === 0 ? "var(--cream)" : "var(--ink)") + `<span>${label}</span>` });
-    b.onclick = () => { engine.st.brush = k; Sound.fx.tap(); buzz(12);
+    b.onclick = () => { engine.st.brush = k; setDraw(); Sound.fx.tap(); buzz(12);
       [...br.children].forEach(x => { x.classList.remove("sel"); x.querySelector("svg").setAttribute("stroke", "var(--ink)"); });
       b.classList.add("sel"); b.querySelector("svg").setAttribute("stroke", "var(--cream)"); };
     br.append(b);
   });
-  // Writing mode uses a single fine pen, so the brush chips are hidden.
   bar.append(cols);
+  // Writing mode uses a single fine pen, so the brush chips are hidden.
   if (opts.brushes !== false) bar.append(br);
+  // Actions row: undo (step back), erase toggle (rub out), clear (wipe).
+  // Guided drawing accumulates marks across steps, so a child needs to fix
+  // mistakes - tracing still never blocks.
+  if (opts.actions) {
+    const row = el("div", { css: "display:flex;gap:10px;align-items:stretch" });
+    const undoB = el("button", { cls: "btn btn-quiet btn-icon", css: "flex:none", html: ic("undo", 24) });
+    undoB.onclick = () => { Sound.fx.tap(); buzz(12); engine.undo(); };
+    eraseBtn = el("button", { cls: "btn btn-quiet", css: "flex:1;min-width:0;padding:13px 8px;gap:7px",
+      html: ic("eraser", 20) + `<span>${t("modeErase")}</span>` });
+    eraseBtn.onclick = () => {
+      const on = engine.st.mode !== "erase";
+      engine.st.mode = on ? "erase" : "draw";
+      eraseBtn.classList.toggle("sel", on);
+      const sv = eraseBtn.querySelector("svg"); sv && sv.setAttribute("stroke", on ? "var(--cream)" : "var(--ink)");
+      Sound.fx.tap(); buzz(12);
+    };
+    // Clear wipes everything, so it's a deliberate press-and-hold (a child
+    // tapping around can never wipe the whole drawing by accident).
+    const clearB = el("button", { cls: "btn btn-quiet",
+      css: "flex:1;min-width:0;padding:13px 8px;gap:7px;position:relative;overflow:hidden",
+      html: ic("eraser", 20) + `<span>${t("clear")}</span>` });
+    let _cT, _cFill;
+    const cClear = () => { clearTimeout(_cT); if (_cFill) { _cFill.remove(); _cFill = null; } };
+    clearB.addEventListener("pointerdown", () => {
+      cClear();
+      _cFill = el("i", { css: "position:absolute;left:0;top:0;bottom:0;width:0;background:var(--clay);opacity:.3;transition:width .65s linear;pointer-events:none" });
+      clearB.append(_cFill);
+      requestAnimationFrame(() => { if (_cFill) _cFill.style.width = "100%"; });
+      _cT = setTimeout(() => { cClear(); engine.clear(); setDraw(); Sound.fx.soft(); buzz([18, 28]); }, 650);
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(ev => clearB.addEventListener(ev, cClear));
+    row.append(undoB, eraseBtn, clearB);
+    bar.append(row);
+  }
   return bar;
 }
 
@@ -5211,7 +5281,7 @@ function DrawScreen(id) {
     const gh = stage.querySelector("#ghost");
     if (gh) gh.classList.add("pen");
   }
-  s.append(toolbar(engine, { brushes: !D.pen }));
+  s.append(toolbar(engine, { brushes: !D.pen, actions: true }));
 
   // Helpers in a compact row; Next is a full-width primary button on its
   // own line so it can never be pushed off-screen on narrow phones.
@@ -5234,7 +5304,8 @@ function DrawScreen(id) {
   nextWrap.append(next);
   s.append(helpers, nextWrap);
   APP.append(s);
-  applyLandscape(s, sw, stage);
+  applyLandscape(s, sw, stage, engine);
+  engine.resize();                 // size the canvas now it's connected + laid out
 
   // Continuous coverage feedback. Within step i the bar fills by how much
   // of the ghost the child has actually covered (capped at the pass mark).
@@ -5565,7 +5636,8 @@ function FreeDraw() {
   panel.append(colGrid, toolGrid, stampTray, row);
   s.append(panel);
   APP.append(s);
-  applyLandscape(s, sw, stage);
+  applyLandscape(s, sw, stage, engine);
+  engine.resize();                 // size the canvas now it's connected + laid out
   frankySay("warm", t("freeIntro")(S.name));
 }
 
