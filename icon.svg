@@ -59,7 +59,7 @@
     <circle cx="58" cy="138" r="8" fill="#F0B5B5" opacity=".35"/>
     <circle cx="142" cy="138" r="8" fill="#F0B5B5" opacity=".35"/>
   </svg></g>
-  <g transform="rotate(28 352 372)">
+  <g transform="rotate(28 352 372) translate(352 325) scale(.7) translate(-352 -325)">
     <rect x="335" y="250" width="34" height="150" rx="7" fill="#D9A24A"/>
     <rect x="335" y="250" width="12" height="150" fill="#000" opacity=".08"/>
     <rect x="335" y="234" width="34" height="18" fill="#c9ced3"/>

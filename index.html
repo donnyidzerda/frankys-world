@@ -231,7 +231,7 @@
   /* Colour wells + brush chips */
   /* Colour wells - fat, easy targets for small fingers. The selected ring
      is kept tight so it never bleeds into a neighbour or off-screen. */
-  .well{ width:clamp(62px,15vw,78px); height:clamp(62px,15vw,78px); border-radius:50%;
+  .well{ width:100%; max-width:66px; aspect-ratio:1/1; height:auto; border-radius:50%;
     box-shadow:var(--sh-sm), inset 0 0 0 3px rgba(255,255,255,.55);
     transition:transform .14s cubic-bezier(.2,.7,.3,1); position:relative; }
   .well.sel{ transform:scale(1.1); }
@@ -2012,17 +2012,32 @@ const DRAW_NAMES = {
        rocket:"Een raket", apple:"Een appel", happy:"Een blij gezicht", star:"Een ster",
        monster:"Een lief monster", horse:"Een paard", dog:"Een hond", rabbit:"Een konijn",
        bird:"Een vogel", butterfly:"Een vlinder", boat:"Een boot", train:"Een trein",
-       tree:"Een boom", icecream:"Een ijsje" },
+       tree:"Een boom", icecream:"Een ijsje",
+       elephant:"Een olifant", duck:"Een eend", owl:"Een uil", bee:"Een bij",
+       ladybug:"Een lieveheersbeestje", pig:"Een varken", frog:"Een kikker",
+       plane:"Een vliegtuig", truck:"Een vrachtwagen", cloud:"Een wolk",
+       mushroom:"Een paddenstoel", rainbow:"Een regenboog", banana:"Een banaan",
+       cupcake:"Een cupcake", strawberry:"Een aardbei", moon:"De maan", franky:"Franky" },
   en:{ sun:"The Sun", cat:"A Cat", fish:"A Fish", flower:"A Flower", car:"A Car",
        rocket:"A Rocket", apple:"An Apple", happy:"A Happy Face", star:"A Star",
        monster:"A Friendly Monster", horse:"A Horse", dog:"A Dog", rabbit:"A Rabbit",
        bird:"A Bird", butterfly:"A Butterfly", boat:"A Boat", train:"A Train",
-       tree:"A Tree", icecream:"An Ice Cream" },
+       tree:"A Tree", icecream:"An Ice Cream",
+       elephant:"An Elephant", duck:"A Duck", owl:"An Owl", bee:"A Bee",
+       ladybug:"A Ladybug", pig:"A Pig", frog:"A Frog", plane:"A Plane",
+       truck:"A Truck", cloud:"A Cloud", mushroom:"A Mushroom", rainbow:"A Rainbow",
+       banana:"A Banana", cupcake:"A Cupcake", strawberry:"A Strawberry",
+       moon:"The Moon", franky:"Franky" },
   es:{ sun:"El sol", cat:"Un gato", fish:"Un pez", flower:"Una flor", car:"Un coche",
        rocket:"Un cohete", apple:"Una manzana", happy:"Una cara feliz", star:"Una estrella",
        monster:"Un monstruo amable", horse:"Un caballo", dog:"Un perro", rabbit:"Un conejo",
        bird:"Un pájaro", butterfly:"Una mariposa", boat:"Un barco", train:"Un tren",
-       tree:"Un árbol", icecream:"Un helado" },
+       tree:"Un árbol", icecream:"Un helado",
+       elephant:"Un elefante", duck:"Un pato", owl:"Un búho", bee:"Una abeja",
+       ladybug:"Una mariquita", pig:"Un cerdo", frog:"Una rana", plane:"Un avión",
+       truck:"Un camión", cloud:"Una nube", mushroom:"Una seta", rainbow:"Un arcoíris",
+       banana:"Un plátano", cupcake:"Una magdalena", strawberry:"Una fresa",
+       moon:"La luna", franky:"Franky" },
 };
 const LC = () => I18N[S.lang] ? S.lang : "en";
 // Localized legal page URL: privacy.html (nl) / privacy-en.html / privacy-es.html
@@ -5176,7 +5191,7 @@ function toolbar(engine, opts = {}) {
     if (eraseBtn) { eraseBtn.classList.remove("sel"); const sv = eraseBtn.querySelector("svg"); sv && sv.setAttribute("stroke", "var(--ink)"); }
   };
   // Colours - 3x2 grid.
-  const cols = el("div", { css: "display:grid;grid-template-columns:repeat(3,1fr);gap:14px;justify-items:center" });
+  const cols = el("div", { css: "display:grid;grid-template-columns:repeat(6,1fr);gap:9px;justify-items:center;align-items:center" });
   COLORS.forEach((c, i) => {
     const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
     b.onclick = () => { engine.st.color = c; setDraw(); Sound.fx.tap(); buzz(12);
@@ -5267,8 +5282,8 @@ function DrawScreen(id) {
   // No text tip-banner: a toddler can't read it, Franky says it aloud, and
   // the dotted ghost + the pencil demo ARE the instruction. Dropping it
   // hands the freed space straight to the canvas.
-  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
-  const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(92vw,620px);margin:auto" });
+  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:2px 8px" });
+  const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(97vw,760px);margin:auto" });
   sw.append(stage); s.append(sw);
   // Pen-Live: every finished stroke recomputes real coverage so the
   // progress bar fills continuously, not in step-sized jumps. When the
@@ -5526,8 +5541,8 @@ function StickerScreen() {
 function FreeDraw() {
   const s = el("div", { cls: "screen" });
   s.append(header(t("freeTitle")));
-  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px" });
-  const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(90vw,620px);margin:auto" });
+  const sw = el("div", { css: "flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:2px 8px" });
+  const stage = el("div", { cls: "stage", css: "aspect-ratio:1/1;height:100%;max-height:100%;width:auto;max-width:min(97vw,760px);margin:auto" });
   sw.append(stage); s.append(sw);
   // Free expression: Franky stays silent here. The value of free drawing
   // is the absence of any judgement, including positive judgement.
@@ -5539,7 +5554,7 @@ function FreeDraw() {
 
   // Colours - 3x2 grid. minmax(0,1fr) forces truly equal columns, and the
   // gap matches the tool grid below so the two grids line up exactly.
-  const colGrid = el("div", { css: "display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;justify-items:center" });
+  const colGrid = el("div", { css: "display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;justify-items:center;align-items:center" });
   COLORS.forEach((c, i) => {
     const b = el("button", { cls: "well" + (i === 0 ? " sel" : ""), css: `background:${c}` });
     b.onclick = () => { engine.st.color = c; Sound.fx.tap(); buzz(12);
