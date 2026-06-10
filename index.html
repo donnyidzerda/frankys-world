@@ -1012,7 +1012,9 @@ const SupaSync = (() => {
 const Ent = (() => {
   const ent = () => (S && S.ent) || { premium: false, until: 0 };
   // Premium when the server said so AND the cached window hasn't lapsed.
-  const isPremium = () => { const e = ent(); return !!e.premium && (+e.until || 0) > Date.now(); };
+  // Paywall disabled 2026-06-10 (owner request) — everything free until Creem is wired.
+  // Original check: () => { const e = ent(); return !!e.premium && (+e.until || 0) > Date.now(); }
+  const isPremium = () => true;
   function set(e) {
     if (!S) return;
     S.ent = { premium: !!(e && e.premium), until: +(e && e.until) || 0,
