@@ -105,8 +105,13 @@
 
   /* Desktop: a touch app must not stretch across a monitor. Present it as
      a centred device panel floating on the textured backdrop. Phones and
-     tablets (coarse pointer) stay edge-to-edge fullscreen, as a PWA should. */
-  @media (min-width:1024px) and (hover:hover) and (pointer:fine){
+     tablets stay edge-to-edge fullscreen, as a PWA should.
+     any-hover/any-pointer (not hover/pointer): a TOUCHSCREEN laptop reports
+     the touch digitizer as its primary pointer (coarse, no hover), which
+     used to fail this gate and stretch the app edge-to-edge across the
+     screen. The trackpad still counts as any-pointer:fine, so the panel
+     engages; iPads (no fine pointer at all) stay correctly fullscreen. */
+  @media (min-width:1024px) and (any-hover:hover) and (any-pointer:fine){
     body{ display:flex; align-items:center; justify-content:center;
       background-color:#E4D9C2;
       background-image:
@@ -119,6 +124,20 @@
       border:1px solid rgba(226,216,196,.7);
       box-shadow:0 2px 8px rgba(52,48,42,.10),
         0 44px 100px rgba(52,48,42,.30), 0 14px 34px rgba(52,48,42,.18); }
+  }
+  /* Short laptop screens (768-840px tall): the device panel is capped by
+     the viewport height, so compact Home's vertical rhythm - smaller world
+     card, tighter header and tiles - and the whole hub fits above the dock
+     instead of the bottom tile row hiding underneath it. Width-gated to
+     1024+ so phones and iPads are untouched. */
+  @media (min-width:1024px) and (max-height:840px){
+    .home-top{ padding:8px 20px 2px !important; }
+    .home-world{ max-width:330px !important; }
+    .home-world .t-body{ font-size:12px !important; }
+    .home-wrap{ padding-top:8px !important; padding-bottom:104px !important; }
+    .ptile{ min-height:84px !important; padding:12px 20px !important; }
+    .ptile .ptile-ic{ padding:9px; border-radius:18px; }
+    .ptile .ptile-ic svg{ width:44px; height:44px; }
   }
 
   /* Fluid type. Hierarchy comes from BOTH size and weight - heaviest only
@@ -4564,8 +4583,12 @@ function Splash() {
   APP.innerHTML = ""; // Splash is called directly (lang switch, add child,
                       // reset) - clear like go() so screens never stack.
   applyFlags();
-  const s = el("div", { cls: "screen", css: "align-items:center;justify-content:center;text-align:center;padding:24px;gap:14px" });
-  s.append(
+  // The screen scrolls; the column centres itself with margin:auto when it
+  // fits and top-aligns + scrolls when it doesn't (short laptop screens used
+  // to CLIP the logo and legal links with no way to reach them).
+  const s = el("div", { cls: "screen scroll" });
+  const col = el("div", { css: "margin:auto;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:14px" });
+  col.append(
     el("div", { cls: "float", html: Logo(172) }),
     el("div", { cls: "t-display", textContent: "Franky's World" }),
     el("div", { cls: "t-body muted", textContent: t("madeBy") }),
@@ -4579,7 +4602,7 @@ function Splash() {
     b.onclick = () => { S.lang = code; save(); Sound.fx.tap(); buzz(12); Splash(); };
     langRow.append(b);
   });
-  s.append(langRow);
+  col.append(langRow);
   const card = el("div", { cls: "card", css: "padding:22px;width:min(540px,92vw);display:flex;flex-direction:column;gap:14px;margin-top:2px;text-align:left" });
 
   const input = el("input", { id: "nm", cls: "inp", placeholder: t("typeName"), maxLength: 14,
@@ -4650,7 +4673,7 @@ function Splash() {
   haveCode.onclick = () => (USE_SUPABASE ? splashSignIn() : splashPair());
   card.append(haveCode);
 
-  s.append(card);
+  col.append(card);
 
   // Legal footer: agree-to-terms line + links (Paddle/consumer-law hygiene).
   const legal = el("div", { css: "max-width:540px;width:min(540px,92vw);text-align:center;margin-top:4px" });
@@ -4662,8 +4685,9 @@ function Splash() {
   const row = el("div", { css: "display:flex;gap:12px;justify-content:center;font-size:12px" });
   row.append(llink(t("legalTerms"), legalUrl("terms")), llink(t("legalPrivacy"), legalUrl("privacy")), llink(t("legalRefund"), legalUrl("refund")));
   legal.append(row);
-  s.append(legal);
+  col.append(legal);
 
+  s.append(col);
   APP.append(s);
   if (!_splashed) { setTimeout(() => speak(t("splashIntro")), 600); _splashed = true; }
 }
@@ -4809,7 +4833,7 @@ function Home(mode) {
   const s = el("div", { cls: "screen" });
 
   if (!mode) {
-    const top = el("div", { cls: "cap", css: "display:flex;align-items:center;gap:12px;padding:14px 20px 6px" });
+    const top = el("div", { cls: "cap home-top", css: "display:flex;align-items:center;gap:12px;padding:14px 20px 6px" });
     const who = el("button", { css: "flex:1;display:flex;align-items:center;gap:12px;text-align:left;background:none",
       html: `<span id="buddy" data-size="56">${Franky("warm", 56)}</span>
         <span><span class="t-title">${t("hello")(S.name)}</span><br>
@@ -4831,7 +4855,7 @@ function Home(mode) {
     // (width x 150/320) stays modest on desktop - the whole scene shows,
     // uncropped, and the 3 pillars stay above the fold. On phones it just
     // uses the available width.
-    const world = el("div", { cls: "card", css: "margin:6px auto 0;max-width:440px;width:calc(100% - 40px);padding:0;overflow:hidden" });
+    const world = el("div", { cls: "card home-world", css: "margin:6px auto 0;max-width:440px;width:calc(100% - 40px);padding:0;overflow:hidden" });
     world.innerHTML = worldScene(S.stars, prevSeen) +
       `<div style="text-align:center;padding:7px 12px 9px">
          <div class="t-label">${arrived ? t("worldNew")(worldName()) : worldName()}</div>
@@ -4840,7 +4864,7 @@ function Home(mode) {
     s.append(world);
     if (S.worldSeenStars !== S.stars) { S.worldSeenStars = S.stars; save(); }
 
-    const wrap = el("div", { cls: "scroll cap", css: "flex:1;padding:12px 20px 130px;container-type:inline-size" });
+    const wrap = el("div", { cls: "scroll cap home-wrap", css: "flex:1;padding:12px 20px 130px;container-type:inline-size" });
     // Two-column grid once there's width (tablets/landscape) so all four
     // worlds fit without the bottom ones hiding under the nav bar; one column
     // on phones (see .home-pillars @container rule).

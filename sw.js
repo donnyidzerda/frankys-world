@@ -6,7 +6,7 @@
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'frankys-world-v131';
+const CACHE = 'frankys-world-v132';
 
 // Everything needed to boot fully offline after the first visit.
 // (Tailwind CDN removed in v131 - the app's CSS is fully hand-rolled.
