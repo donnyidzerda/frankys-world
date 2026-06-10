@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-<meta name="theme-color" content="#33302B" />
+<meta name="theme-color" content="#EFE7D8" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Franky's World" />
@@ -13,9 +13,16 @@
 <link rel="apple-touch-icon" href="./icon-180.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
 
-<!-- Tailwind v4 browser build + canvas-confetti. Both cached offline by the service worker. -->
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<!-- Confetti, cached offline by the service worker. (The old Tailwind CDN
+     runtime is gone: the app's CSS is 100% hand-rolled, so shipping a 350KB
+     in-browser compiler on every boot was pure parse/JIT waste on iPads.) -->
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
+<!-- Brand type: Fredoka (display/UI chrome) + Nunito (body - the stack below
+     always declared it; now it actually loads). swap = system font until the
+     woff2 lands, then upgrade; offline-first via SW runtime cache. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@430..650&family=Nunito:wght@500..900&display=swap" />
 
 <style>
   /* =======================================================================
@@ -37,6 +44,11 @@
     --sh:0 2px 6px rgba(52,48,42,.06), 0 16px 34px rgba(52,48,42,.10);
     --sh-lg:0 4px 10px rgba(52,48,42,.07), 0 28px 56px rgba(52,48,42,.14);
     --ring:rgba(201,99,63,.35);
+    /* Display face for UI chrome (titles, buttons, nav). Learning content
+       (words, letters, inputs) stays on the body face for legibility. */
+    --font-display:'Fredoka','Nunito',ui-rounded,-apple-system,'SF Pro Rounded',system-ui,sans-serif;
+    /* Pressed-edge shades for the tactile "toy block" buttons. */
+    --edge:rgba(52,48,42,.10); --edge-clay:#A84E2F; --edge-sage:#587549; --edge-sky:#4A7086; --edge-ochre:#B57E25;
   }
   *{ -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; box-sizing:border-box; }
   html,body{ margin:0; height:100%; height:100dvh; overflow:hidden; overscroll-behavior:none; touch-action:manipulation;
@@ -70,11 +82,26 @@
   .cap{ max-width:680px; margin-inline:auto; width:100%; }
   .cap-wide{ max-width:980px; margin-inline:auto; width:100%; }
 
-  /* Home worlds: one column on phones, two once the scroll area is wide
-     enough (tablets / landscape) so all four fit without the bottom ones
-     scrolling under the nav bar. The parent .scroll is the query container. */
-  .home-pillars{ display:grid; gap:12px; grid-template-columns:1fr; }
-  @container (min-width:560px){ .home-pillars{ grid-template-columns:1fr 1fr; } }
+  /* Home worlds: ALWAYS a 2x2 hub, so all four worlds are visible without
+     scrolling on every device - a toddler never has to discover scrolling
+     to find Drawing. Narrow = stacked icon-over-name tiles; wide enough
+     (tablets / landscape) = roomier row tiles with the subtitle back. */
+  .home-pillars{ display:grid; gap:12px; grid-template-columns:1fr 1fr; }
+  .ptile{ display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; padding:18px 10px 20px; min-height:132px; text-align:center;
+    box-shadow:0 5px 0 var(--tile-edge,rgba(52,48,42,.18)), var(--sh); border:none; }
+  .ptile:active{ transform:translateY(4px) scale(.985); box-shadow:0 1px 0 var(--tile-edge,rgba(52,48,42,.18)), var(--sh-sm); }
+  .ptile .ptile-ic{ background:rgba(255,255,255,.22); border-radius:24px; padding:14px; display:inline-flex;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.25); }
+  .ptile .ptile-sub{ display:none; }
+  /* Entrance: the four worlds hop in one after another. */
+  body:not(.calm) .ptile{ animation:pop .34s cubic-bezier(.2,.9,.3,1.15) both; animation-delay:calc(var(--i,0)*50ms); }
+  @container (min-width:560px){
+    .home-pillars{ gap:14px; }
+    .ptile{ flex-direction:row; text-align:left; gap:20px; padding:18px 24px; min-height:96px; }
+    .ptile .ptile-tx{ flex:1; }
+    .ptile .ptile-sub{ display:block; opacity:.92; margin-top:2px; }
+  }
 
   /* Desktop: a touch app must not stretch across a monitor. Present it as
      a centred device panel floating on the textured backdrop. Phones and
@@ -97,28 +124,36 @@
   /* Fluid type. Hierarchy comes from BOTH size and weight - heaviest only
      where it earns it, so the screen has a clear loudest-to-quietest order
      instead of everything shouting at weight 800. */
-  .t-display{ font-size:clamp(30px,6.4vw,52px); font-weight:700; letter-spacing:-.02em; line-height:1.04; }
-  .t-title{ font-size:clamp(20px,4vw,30px); font-weight:700; letter-spacing:-.015em; line-height:1.12; }
-  .t-head{ font-size:clamp(17px,3vw,22px); font-weight:600; letter-spacing:-.01em; }
+  .t-display{ font-family:var(--font-display); font-size:clamp(30px,6.4vw,52px); font-weight:600; letter-spacing:-.01em; line-height:1.06; }
+  .t-title{ font-family:var(--font-display); font-size:clamp(20px,4vw,30px); font-weight:600; letter-spacing:-.005em; line-height:1.14; }
+  .t-head{ font-family:var(--font-display); font-size:clamp(17px,3vw,22px); font-weight:540; letter-spacing:0; }
   .t-body{ font-size:clamp(15px,2.4vw,18px); font-weight:500; line-height:1.55; }
-  .t-label{ font-size:clamp(12px,2vw,14px); font-weight:700; letter-spacing:.04em;
+  .t-label{ font-family:var(--font-display); font-size:clamp(12px,2vw,14px); font-weight:560; letter-spacing:.06em;
     text-transform:uppercase; color:var(--ink-soft); }
   .muted{ color:var(--ink-soft); }
 
   /* Components */
   .card{ background:var(--surface); border-radius:var(--r); box-shadow:var(--sh);
     border:1px solid rgba(226,216,196,.7); }
+  /* Buttons are little toy blocks: a soft pressed-edge underneath that
+     compresses on tap. Tactility a 2-year-old's thumb understands. */
   .btn{ display:inline-flex; align-items:center; justify-content:center; gap:10px;
-    border-radius:999px; font-weight:700; padding:16px 26px; font-size:clamp(15px,2.6vw,18px);
-    background:var(--surface); color:var(--ink); box-shadow:var(--sh-sm);
+    border-radius:999px; font-family:var(--font-display); font-weight:560; padding:16px 26px;
+    font-size:clamp(15px,2.6vw,18px); letter-spacing:.01em;
+    background:var(--surface); color:var(--ink);
+    box-shadow:0 3px 0 var(--edge), var(--sh-sm);
     border:1px solid rgba(226,216,196,.8);
-    transition:transform .14s cubic-bezier(.2,.7,.3,1), box-shadow .14s, background .14s; }
-  .btn:active{ transform:translateY(2px) scale(.99); box-shadow:var(--sh-sm); }
-  .btn:focus-visible{ outline:none; box-shadow:0 0 0 4px var(--ring), var(--sh-sm); }
-  .btn-primary{ background:var(--clay); color:#fff; border-color:transparent; }
-  .btn-go{ background:var(--sage); color:#fff; border-color:transparent; }
+    transition:transform .1s cubic-bezier(.2,.7,.3,1), box-shadow .1s, background .14s; }
+  .btn:active{ transform:translateY(3px); box-shadow:0 0 0 var(--edge), var(--sh-sm); }
+  .btn:focus-visible{ outline:none; box-shadow:0 0 0 4px var(--ring), 0 3px 0 var(--edge), var(--sh-sm); }
+  .btn-primary{ background:var(--clay); color:#fff; border-color:transparent; --edge:var(--edge-clay); }
+  .btn-go{ background:var(--sage); color:#fff; border-color:transparent; --edge:var(--edge-sage); }
   .btn-quiet{ background:var(--surface-2); }
   .btn-icon{ padding:14px; border-radius:var(--r-sm); }
+  /* Every tappable card (answers, lessons, stickers, plans) squishes a
+     touch on press - instant "I felt that" feedback, no JS needed. */
+  button.card{ transition:transform .12s cubic-bezier(.2,.7,.3,1), box-shadow .12s; }
+  button.card:active{ transform:scale(.965); }
   /* Fridge-door gallery */
   .fridge{ background:
       radial-gradient(circle at 30% 20%, rgba(255,255,255,.5), transparent 40%),
@@ -271,6 +306,31 @@
   .row{ display:flex; align-items:center; }
   .stack{ display:flex; flex-direction:column; }
 
+  /* Floating dock nav: lifted off the edges like a tray of wooden tiles,
+     instead of a full-bleed bar glued to the bottom. */
+  .navbar{ left:12px !important; right:12px !important;
+    bottom:calc(10px + env(safe-area-inset-bottom)) !important;
+    padding:8px 10px !important; border-radius:26px;
+    border:1px solid rgba(226,216,196,.85) !important; border-top:1px solid rgba(226,216,196,.85) !important;
+    background:rgba(252,248,240,.94) !important; box-shadow:var(--sh-lg); }
+  .navbar button{ transition:transform .12s cubic-bezier(.2,.7,.3,1); font-family:var(--font-display); }
+  .navbar button:active{ transform:scale(.93); }
+
+  /* Text inputs: friendly focus halo (name, pair code, account). */
+  input.inp{ font:inherit; outline:none;
+    transition:border-color .15s, box-shadow .15s; }
+  input.inp:focus{ border-color:var(--sage) !important; box-shadow:0 0 0 4px rgba(110,140,94,.16); }
+
+  /* Win screen: the three stars land one-by-one with a springy hop. */
+  .winstar{ display:inline-flex; }
+  body:not(.calm) .winstar{ animation:starln .5s cubic-bezier(.2,1.5,.4,1) both;
+    animation-delay:calc(.15s + var(--i,0)*.18s); }
+  @keyframes starln{ 0%{opacity:0; transform:scale(.2) rotate(-30deg)} 70%{opacity:1; transform:scale(1.18) rotate(6deg)} 100%{opacity:1; transform:scale(1) rotate(0)} }
+
+  /* Right-answer micro-bounce (with the green ring), wrong keeps the shake. */
+  body:not(.calm) .rc-ok{ animation:okpop .4s cubic-bezier(.2,1.3,.4,1); }
+  @keyframes okpop{ 0%{transform:scale(1)} 45%{transform:scale(1.055)} 100%{transform:scale(1)} }
+
   /* Evening warmth: from 18:00 to 06:00 the paper drifts a few points
      warmer and the ink softens slightly, so a tired child near bedtime
      isn't looking at a cool, high-contrast screen. Ambient, not a setting.
@@ -288,6 +348,9 @@
   body.hc{ background:#fff; }
   body.hc #ghost path{ stroke:#000; stroke-opacity:.7; }
   body.hc .card,body.hc .btn{ border:2px solid #000; }
+  /* High-contrast keeps shapes flat and unambiguous: no 3D edges/tints. */
+  body.hc .btn,body.hc .ptile{ box-shadow:none; background-image:none; }
+  body.hc .navbar{ background:#fff !important; border:2px solid #000 !important; }
   @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
 </style>
 </head>
@@ -1023,38 +1086,42 @@ const Ent = (() => {
 function Paywall(reasonKey) {
   Sound.fx.tap();
   const ov = el("div", { css: "position:fixed;inset:0;z-index:60;background:rgba(52,48,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto" });
-  const card = el("div", { cls: "card", css: "max-width:520px;width:100%;padding:22px;display:flex;flex-direction:column;gap:14px;max-height:92vh;overflow:auto" });
+  const card = el("div", { cls: "card pop", css: "max-width:520px;width:100%;padding:0;display:flex;flex-direction:column;max-height:92vh;overflow:auto" });
   const reason = reasonKey ? `<div class="t-body" style="background:var(--ochre-soft,#f3e7cf);border-radius:12px;padding:10px 12px">${t(reasonKey)}</div>` : "";
   const bullets = ["pwBul1","pwBul2","pwBul3","pwBul4"]
     .map(k => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--sage)">${ic("check",18,"var(--sage)")}</span><span class="t-body">${t(k)}</span></div>`).join("");
+  // Hero band: Franky on a soft meadow gradient, then the content column.
   card.innerHTML =
-    `<div style="display:flex;align-items:center;gap:12px">
-       <span>${Franky("happy",54)}</span>
+    `<div style="display:flex;align-items:center;gap:14px;padding:20px 22px;background:linear-gradient(135deg,var(--sage-soft),var(--sky-soft))">
+       <span style="background:var(--surface);border-radius:20px;padding:7px;box-shadow:var(--sh-sm)">${Franky("happy",56)}</span>
        <div><div class="t-title">${t("pwTitle")}</div>
-       <div class="t-body muted">${t("pwSub")}</div></div></div>
+       <div class="t-body muted" style="margin-top:1px">${t("pwSub")}</div></div></div>
+     <div style="display:flex;flex-direction:column;gap:14px;padding:16px 22px 22px" id="pwBody">
      ${reason}
-     <div style="display:flex;flex-direction:column;gap:9px;margin-top:2px">${bullets}</div>`;
+     <div style="display:flex;flex-direction:column;gap:9px">${bullets}</div></div>`;
+  const body = card.querySelector("#pwBody");
   const plan = (key, label, price, note, best) => {
     const b = el("button", { cls: "btn",
-      css: `width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 18px;border-radius:16px;border:2px solid ${best ? "var(--sage)" : "var(--line)"};background:${best ? "var(--sage-soft,#e8efe2)" : "var(--surface)"}` });
+      css: `width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:${best ? "17px 18px" : "14px 18px"};border-radius:18px;border:2px solid ${best ? "var(--sage)" : "var(--line)"};background:${best ? "var(--sage-soft,#e8efe2)" : "var(--surface)"};position:relative;${best ? "--edge:var(--edge-sage)" : ""}` });
     b.innerHTML =
-      `<span style="text-align:left"><span class="t-head">${label}</span>${best ? ` <span style="font-size:11px;font-weight:800;color:var(--sage);background:#fff;border-radius:8px;padding:2px 7px">${t("pwBest")}</span>` : ""}
+      `${best ? `<span style="position:absolute;top:-11px;right:14px;font-size:11px;font-weight:800;letter-spacing:.03em;color:#fff;background:var(--sage);border-radius:999px;padding:3px 10px;box-shadow:var(--sh-sm)">${t("pwBest")}</span>` : ""}
+       <span style="text-align:left"><span class="t-head">${label}</span>
         ${note ? `<br><span class="t-body muted" style="font-size:13px">${note}</span>` : ""}</span>
-       <span class="t-head" style="white-space:nowrap">${price}</span>`;
+       <span class="t-head" style="white-space:nowrap;color:${best ? "var(--sage)" : "var(--ink)"}">${price}</span>`;
     b.onclick = () => parentGate(() => Ent.startCheckout(key));
     return b;
   };
-  const plans = el("div", { css: "display:flex;flex-direction:column;gap:10px;margin-top:4px" });
+  const plans = el("div", { css: "display:flex;flex-direction:column;gap:12px;margin-top:2px" });
   plans.append(
     plan("annual", t("pwAnnual"), t("pwAnnualP"), t("pwAnnualNote"), true),
     plan("monthly", t("pwMonthly"), t("pwMonthlyP"), "", false),
     plan("lifetime", t("pwLifetime"), t("pwLifetimeP"), "", false),
   );
-  card.append(plans);
+  body.append(plans);
   const restore = el("div", { cls: "t-body muted", css: "font-size:13px;text-align:center;margin-top:2px", textContent: t("pwRestore") });
   const later = el("button", { cls: "btn btn-quiet", css: "align-self:center", textContent: t("pwMaybe") });
   later.onclick = () => { Sound.fx.tap(); ov.remove(); };
-  card.append(restore, later);
+  body.append(restore, later);
   ov.append(card); document.body.append(ov);
 }
 // Lightweight list for the picker (id, name, age) read from snapshots.
@@ -3077,7 +3144,7 @@ function CustomWordsSheet(onDone) {
   renderList();
   card.append(list);
   const row = el("div", { css: "display:flex;gap:8px" });
-  const input = el("input", { maxLength: 14, placeholder: t("cwPlaceholder"),
+  const input = el("input", { cls: "inp", maxLength: 14, placeholder: t("cwPlaceholder"),
     css: "flex:1;min-width:0;font:inherit;font-size:18px;font-weight:800;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
   const addBtn = el("button", { cls: "btn btn-primary t-head", css: "padding:12px 18px", textContent: "＋" });
   function doAdd() {
@@ -4515,7 +4582,7 @@ function Splash() {
   s.append(langRow);
   const card = el("div", { cls: "card", css: "padding:22px;width:min(540px,92vw);display:flex;flex-direction:column;gap:14px;margin-top:2px;text-align:left" });
 
-  const input = el("input", { id: "nm", placeholder: t("typeName"), maxLength: 14,
+  const input = el("input", { id: "nm", cls: "inp", placeholder: t("typeName"), maxLength: 14,
     css: "font:inherit;font-size:22px;font-weight:800;padding:15px 18px;border-radius:16px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
 
   let age = 2;
@@ -4547,7 +4614,7 @@ function Splash() {
   const onDevice = profileList();
   onDevice.forEach(p => profRow.append(prof(p.name, p.age || 2)));
 
-  const start = el("button", { cls: "btn btn-go t-head", css: "margin-top:2px",
+  const start = el("button", { cls: "btn btn-go t-head", css: "margin-top:2px;width:100%;padding:18px 26px",
     html: `${t("start")} ${ic("next", 22, "#fff")}` });
   start.onclick = () => {
     const nm = (input.value || "friend").trim().slice(0, 14);
@@ -4610,7 +4677,7 @@ function splashPair() {
   c.append(
     el("div", { cls: "t-title", textContent: t("syncPairTitle") }),
     el("div", { cls: "t-body muted", textContent: t("syncPairHint") }));
-  const inp = el("input", { type: "text", inputmode: "numeric",
+  const inp = el("input", { cls: "inp", type: "text", inputmode: "numeric",
     autocomplete: "one-time-code", maxLength: 7, placeholder: "123-456",
     css: "font:900 28px/1 -apple-system,system-ui;letter-spacing:4px;text-align:center;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
   c.append(inp);
@@ -4648,7 +4715,7 @@ function splashSignIn() {
   const ov = el("div", { css: "position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.6);backdrop-filter:blur(4px);padding:24px" });
   const c = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:12px" });
   c.append(el("div", { cls: "t-title", textContent: t("acctSignInTitle") }));
-  const mk = (ph, type, ac) => el("input", { type, autocomplete: ac, placeholder: ph,
+  const mk = (ph, type, ac) => el("input", { cls: "inp", type, autocomplete: ac, placeholder: ph,
     css: "padding:13px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none;font-size:16px" });
   const email = mk(t("acctEmail"), "email", "email");
   const pw = mk(t("acctPw"), "password", "current-password");
@@ -4778,21 +4845,26 @@ function Home(mode) {
     // worlds fit without the bottom ones hiding under the nav bar; one column
     // on phones (see .home-pillars @container rule).
     const grid = el("div", { cls: "home-pillars" });
-    const pillar = (key, col, fn) => {
-      const b = el("button", { cls: "card pop",
-        css: `padding:18px 24px;display:flex;align-items:center;gap:20px;background:${col};color:#fff;width:100%;min-height:92px` });
+    // 2x2 hub tiles: gradient-lit toy blocks with a pressed edge in the
+    // world's own colour. Subtitle is parent-facing, so it only returns on
+    // wide layouts where the tile relaxes into a row (see .ptile CSS).
+    const pillar = (key, col, edge, i, fn) => {
+      const b = el("button", { cls: "card ptile",
+        // Solid colour first: engines without color-mix() drop the gradient
+        // line and keep the flat brand colour instead of a white card.
+        css: `background:${col};background:linear-gradient(180deg, color-mix(in srgb, ${col} 88%, #fff) 0%, ${col} 100%) ${col};color:#fff;width:100%;--tile-edge:${edge};--i:${i}` });
       b.innerHTML =
-        `<div style="background:rgba(255,255,255,.20);border-radius:22px;padding:13px;display:inline-flex">${pillarScene(key)}</div>
-         <div style="text-align:left;flex:1"><div class="t-title">${t("pill_" + key)}</div>
-         <div class="t-body" style="opacity:.92;margin-top:2px">${t("pillSub_" + key)}</div></div>`;
+        `<div class="ptile-ic">${pillarScene(key)}</div>
+         <div class="ptile-tx"><div class="t-title">${t("pill_" + key)}</div>
+         <div class="t-body ptile-sub">${t("pillSub_" + key)}</div></div>`;
       b.onclick = () => { Sound.fx.tap(); buzz(14); fn(); };
       return b;
     };
     grid.append(
-      pillar("read", "var(--sky)", () => go("read")),
-      pillar("math", "var(--ochre)", () => go("math")),
-      pillar("write", "var(--sage)", () => go("home", "write")),
-      pillar("draw", "var(--clay)", () => go("home", "draw")),
+      pillar("read", "var(--sky)", "var(--edge-sky)", 0, () => go("read")),
+      pillar("math", "var(--ochre)", "var(--edge-ochre)", 1, () => go("math")),
+      pillar("write", "var(--sage)", "var(--edge-sage)", 2, () => go("home", "write")),
+      pillar("draw", "var(--clay)", "var(--edge-clay)", 3, () => go("home", "draw")),
     );
     wrap.append(grid);
     s.append(wrap, nav("home"));
@@ -5480,9 +5552,11 @@ function WinScreen({ D, stars, blob }) {
   // the whole celebration screen.
   const url = (blob instanceof Blob) ? URL.createObjectURL(blob) : "";
   s.append(el("div", { cls: "t-display", textContent: t("winTitle")(S.name) }));
-  const starsRow = el("div", { css: "display:flex;gap:6px",
+  // Stars land one-by-one (springy hop, see .winstar) - earning two feels
+  // different from earning three.
+  const starsRow = el("div", { css: "display:flex;gap:8px;margin-top:2px",
     html: Array.from({ length: 3 }, (_, k) =>
-      ic("star", 30, k < stars ? "var(--ochre)" : "rgba(52,48,42,.18)")).join("") });
+      `<span class="winstar" style="--i:${k}">${ic("star", 38, k < stars ? "var(--ochre)" : "rgba(52,48,42,.16)")}</span>`).join("") });
   s.append(starsRow);
   // The child's own drawing is the centerpiece. A slow cream warmth-pulse
   // breathes around the frame once (calm-mode skips it).
@@ -5870,7 +5944,7 @@ function Settings() {
   prof.append(seg);
   // Spoken-name override (fixes e.g. English-sounding "Lucy" -> "Loesie").
   prof.append(el("div", { cls: "t-label", textContent: t("sayNameLabel") }));
-  const sayIn = el("input", { id: "sayNm", value: S.sayName || "", placeholder: S.name, maxLength: 20,
+  const sayIn = el("input", { cls: "inp", id: "sayNm", value: S.sayName || "", placeholder: S.name, maxLength: 20,
     css: "font:inherit;font-size:18px;font-weight:800;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
   const commit = () => { S.sayName = sayIn.value.trim(); save(); };
   sayIn.addEventListener("change", commit);
@@ -5970,7 +6044,7 @@ function Settings() {
     c.append(
       el("div", { cls: "t-title", textContent: t("syncPairTitle") }),
       el("div", { cls: "t-body muted", textContent: t("syncPairHint") }));
-    const inp = el("input", { type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxLength: 7, placeholder: "123-456",
+    const inp = el("input", { cls: "inp", type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxLength: 7, placeholder: "123-456",
       css: "font:900 28px/1 -apple-system,system-ui;letter-spacing:4px;text-align:center;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none" });
     c.append(inp);
     const row = el("div", { css: "display:flex;gap:10px" });
@@ -6030,7 +6104,7 @@ function Settings() {
     const ov = el("div", { css: "position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(52,48,42,.6);backdrop-filter:blur(4px);padding:24px" });
     const c = el("div", { cls: "card", css: "background:var(--surface);padding:24px;width:min(420px,92vw);display:flex;flex-direction:column;gap:12px" });
     c.append(el("div", { cls: "t-title", textContent: mode === "link" ? t("acctLinkTitle") : t("acctSignInTitle") }));
-    const mk = (ph, type, ac) => el("input", { type, autocomplete: ac, placeholder: ph,
+    const mk = (ph, type, ac) => el("input", { cls: "inp", type, autocomplete: ac, placeholder: ph,
       css: "padding:13px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);outline:none;font-size:16px" });
     const email = mk(t("acctEmail"), "email", "email");
     const pw = mk(t("acctPw"), "password", mode === "link" ? "new-password" : "current-password");

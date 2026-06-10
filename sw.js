@@ -6,18 +6,21 @@
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'frankys-world-v130';
+const CACHE = 'frankys-world-v131';
 
 // Everything needed to boot fully offline after the first visit.
+// (Tailwind CDN removed in v131 - the app's CSS is fully hand-rolled.
+// Font woff2 files are picked up by the runtime cross-origin cache on
+// first paint; the css2 stylesheet is precached here.)
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icon-180.png',
   './icon.svg',
-  'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4',
   'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+  'https://fonts.googleapis.com/css2?family=Fredoka:wght@430..650&family=Nunito:wght@500..900&display=swap',
 ];
 
 self.addEventListener('install', (event) => {
