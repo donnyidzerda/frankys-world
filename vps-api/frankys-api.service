@@ -1,0 +1,22 @@
+[Unit]
+Description=Franky's World self-hosted API (TTS disk-cache + pair-code sync)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+EnvironmentFile=/etc/frankys-api.env
+Environment=DATA_DIR=/var/lib/frankys
+ExecStart=/usr/bin/node /home/deploy/apps/frankysworld-revamp/vps-api/server.js
+Restart=always
+RestartSec=2
+# Hardening: the service only needs its data dir and outbound HTTPS.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/frankys
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

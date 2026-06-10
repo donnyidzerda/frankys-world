@@ -6,7 +6,7 @@
      - Navigations: network-first, fall back to cached app shell offline
    ========================================================================= */
 
-const CACHE = 'frankys-world-v133';
+const CACHE = 'frankys-world-v134';
 
 // Everything needed to boot fully offline after the first visit.
 // (Tailwind CDN removed in v131 - the app's CSS is fully hand-rolled.
@@ -19,7 +19,6 @@ const APP_SHELL = [
   './icon-180.png',
   './icon.svg',
   'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://fonts.googleapis.com/css2?family=Fredoka:wght@430..650&family=Nunito:wght@500..900&display=swap',
 ];
 

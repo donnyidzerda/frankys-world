@@ -802,8 +802,10 @@ function loadPaddle() {
    the data AND the premium entitlement - survives a wiped device or deleted
    PWA. When SUPABASE_URL is empty the app falls back to the legacy pair-code
    sync, so the working app is never broken mid-migration. */
-const SUPABASE_URL = "https://paynhwqxosinwkzzuytz.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_IWHZu0N2X9x4G8FQ0kHoOA_PNlg65rE";
+// v2 runs fully on our own VPS — no Supabase. Empty values flip the app to
+// the built-in pair-code sync against /api on the same origin (see vps-api/).
+const SUPABASE_URL = "";
+const SUPABASE_ANON_KEY = "";
 const BILLING_PROVIDER = "creem";          // must match the Worker's BILLING_PROVIDER
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 // Flip a provider true once it's configured in Supabase (Authentication ->
@@ -1348,7 +1350,10 @@ if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = () => {}; }
 // we're offline, or it fails, we fall back to the device voice so the
 // app always talks and stays fully usable offline. Each unique phrase is
 // cached, so it's spoken once then replays free and offline forever.
-const TTS_PROXY_URL = "https://api.skep.co";
+// v2: the API lives on THIS host behind /api (nginx → 127.0.0.1:8787).
+// Absolute (origin-based) so the WebSocket URL derives cleanly, and it
+// survives any future domain cutover without an edit.
+const TTS_PROXY_URL = location.origin + "/api";
 const ttsUrl = () => { try { return localStorage.getItem("tts_url") || TTS_PROXY_URL; } catch { return TTS_PROXY_URL; } };
 // Single source of truth for TTS audio versioning. Rides in the request
 // URL (busts Cloudflare edge cache) AND names the browser Cache Storage
